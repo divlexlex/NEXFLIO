@@ -1,5 +1,16 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
+import '../../models/appointment_model.dart';
+import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
+import '../../utils/page_transitions.dart';
+import '../auth/login_screen.dart';
+import 'book_appointment_screen.dart';
+
+const List<String> _kMonthAbbrev = [
+  'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+];
 
 class BookingTab extends StatefulWidget {
   const BookingTab({super.key});
@@ -10,6 +21,63 @@ class BookingTab extends StatefulWidget {
 
 class _BookingTabState extends State<BookingTab> {
   int _selectedTabIndex = 0; // 0 for Upcoming, 1 for Past
+
+  List<AppointmentModel> _appointments = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    AuthService.instance.addListener(_onAuthChanged);
+    if (AuthService.instance.isLoggedIn) {
+      _fetchAppointments();
+    } else {
+      _isLoading = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    AuthService.instance.removeListener(_onAuthChanged);
+    super.dispose();
+  }
+
+  void _onAuthChanged() {
+    if (!mounted) return;
+    if (AuthService.instance.isLoggedIn) {
+      _fetchAppointments();
+    } else {
+      setState(() {
+        _appointments = [];
+        _isLoading = false;
+        _error = null;
+      });
+    }
+  }
+
+  Future<void> _fetchAppointments() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final data = await ApiService.get('/appointments');
+      final appointments = (data as List)
+          .map((e) => AppointmentModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      appointments.sort((a, b) => b.appointmentDate.compareTo(a.appointmentDate));
+      setState(() {
+        _appointments = appointments;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e is ApiException ? e.message : 'Failed to load appointments.';
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,33 +136,110 @@ class _BookingTabState extends State<BookingTab> {
             ),
 
             // APPOINTMENTS LIST
-            Expanded(
-              child: _selectedTabIndex == 0
-                  ? _buildUpcomingList()
-                  : _buildPastList(),
-            ),
+            Expanded(child: _buildBody()),
           ],
         ),
       ),
 
       // FLOATING "BOOK APPOINTMENT" BUTTON
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // TODO: Open Date/Branch selection flow
-        },
-        backgroundColor: kAccentColor,
-        elevation: 4,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          "Book Appointment",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-      ),
+      floatingActionButton: AuthService.instance.isLoggedIn
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                final booked = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const BookAppointmentScreen(),
+                  ),
+                );
+                if (booked == true) {
+                  setState(() => _selectedTabIndex = 0);
+                  _fetchAppointments();
+                }
+              },
+              backgroundColor: kAccentColor,
+              elevation: 4,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text(
+                "Book Appointment",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            )
+          : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Widget _buildBody() {
+    if (!AuthService.instance.isLoggedIn) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Sign in to view your appointments.",
+              style: TextStyle(color: kTextColor, fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(context, fadeSlideRoute(const LoginScreen()));
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: kAccentColor),
+              child: const Text("Sign In", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: kPrimaryColor),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, style: const TextStyle(color: kTextColor)),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _fetchAppointments,
+              style: ElevatedButton.styleFrom(backgroundColor: kAccentColor),
+              child: const Text("Retry", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final list = _appointments
+        .where((a) => a.isUpcoming == (_selectedTabIndex == 0))
+        .toList();
+
+    if (list.isEmpty) {
+      return Center(
+        child: Text(
+          _selectedTabIndex == 0
+              ? "No upcoming appointments."
+              : "No past appointments.",
+          style: const TextStyle(color: kTextColor, fontSize: 16),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
+      children: [
+        ...list.map((appointment) => _buildAppointmentCard(appointment)),
+        const SizedBox(height: 80), // Padding for Floating Action Button
+      ],
     );
   }
 
@@ -128,62 +273,27 @@ class _BookingTabState extends State<BookingTab> {
     );
   }
 
-  Widget _buildUpcomingList() {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
-      children: [
-        _buildAppointmentCard(
-          month: "AUG",
-          day: "15",
-          time: "10:00 AM",
-          serviceTitle: "Diode Underarm Laser",
-          branch: "NEXFLIO Clinic - SM North",
-          status: "Confirmed",
-          isUpcoming: true,
-        ),
-        _buildAppointmentCard(
-          month: "SEP",
-          day: "02",
-          time: "02:30 PM",
-          serviceTitle: "Hyal-C Facial",
-          branch: "NEXFLIO Clinic - Megamall",
-          status: "Pending",
-          isUpcoming: true,
-        ),
-        const SizedBox(height: 80), // Padding for Floating Action Button
-      ],
-    );
-  }
+  Widget _buildAppointmentCard(AppointmentModel appointment) {
+    final isUpcoming = appointment.isUpcoming;
+    final month = _kMonthAbbrev[appointment.appointmentDate.month - 1];
+    final day = appointment.appointmentDate.day.toString().padLeft(2, '0');
 
-  Widget _buildPastList() {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
-      children: [
-        _buildAppointmentCard(
-          month: "JUL",
-          day: "08",
-          time: "11:00 AM",
-          serviceTitle: "4D QuattroWave",
-          branch: "NEXFLIO Clinic - SM North",
-          status: "Completed",
-          isUpcoming: false,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAppointmentCard({
-    required String month,
-    required String day,
-    required String time,
-    required String serviceTitle,
-    required String branch,
-    required String status,
-    required bool isUpcoming,
-  }) {
-    Color statusColor = status == "Confirmed"
-        ? Colors.green
-        : (status == "Completed" ? kPrimaryColor : Colors.orange);
+    Color statusColor;
+    switch (appointment.status) {
+      case 'confirmed':
+      case 'in-service':
+        statusColor = Colors.green;
+        break;
+      case 'served':
+        statusColor = kPrimaryColor;
+        break;
+      case 'cancelled':
+      case 'no-show':
+        statusColor = Colors.redAccent;
+        break;
+      default:
+        statusColor = Colors.orange;
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
@@ -251,7 +361,7 @@ class _BookingTabState extends State<BookingTab> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        time,
+                        appointment.startTime,
                         style: const TextStyle(
                           color: kAccentColor,
                           fontWeight: FontWeight.bold,
@@ -268,7 +378,7 @@ class _BookingTabState extends State<BookingTab> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          status,
+                          appointment.status.toUpperCase(),
                           style: TextStyle(
                             color: statusColor,
                             fontSize: 10,
@@ -280,7 +390,7 @@ class _BookingTabState extends State<BookingTab> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    serviceTitle,
+                    appointment.serviceName ?? 'Service #${appointment.serviceId}',
                     style: const TextStyle(
                       color: kTextColor,
                       fontSize: 16,
@@ -288,26 +398,27 @@ class _BookingTabState extends State<BookingTab> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on_outlined,
-                        size: 14,
-                        color: kPrimaryColor,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          branch,
-                          style: TextStyle(
-                            color: kTextColor.withOpacity(0.7),
-                            fontSize: 12,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                  if (appointment.personnelName != null)
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.person_outline,
+                          size: 14,
+                          color: kPrimaryColor,
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            "with ${appointment.personnelName}",
+                            style: TextStyle(
+                              color: kTextColor.withOpacity(0.7),
+                              fontSize: 12,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),

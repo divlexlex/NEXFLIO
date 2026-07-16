@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
+import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
+import '../../utils/page_transitions.dart';
+import '../../widgets/auth_transition_screen.dart';
+import '../../widgets/app_logo.dart';
+import '../home/home_screen.dart';
 import 'forgot_password_screen.dart';
 import 'signup_screen.dart';
 
@@ -14,6 +20,34 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isLoading = false;
+
+  Future<void> _handleLogin() async {
+    setState(() => _isLoading = true);
+    try {
+      await AuthService.instance.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        fadeSlideRoute(
+          AuthTransitionScreen(
+            message: 'Welcome back!',
+            icon: Icons.check_circle,
+            nextScreen: const HomeScreen(),
+          ),
+        ),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is ApiException ? e.message : 'Login failed. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,34 +69,8 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const SizedBox(height: 10),
 
-              // LOGO OR BRANDING PLACEHOLDER
-              Center(
-                child: Column(
-                  children: [
-                    const Icon(Icons.spa, size: 60, color: kPrimaryColor),
-                    const SizedBox(height: 10),
-                    const Text(
-                      "NEXFLIO",
-                      style: TextStyle(
-                        color: kTextColor,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    const Text(
-                      "Your best skin\nCREATED BY SCIENCE",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: kPrimaryColor,
-                        fontFamily: 'cursive',
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              // LOGO
+              const Center(child: AppLogo()),
               const SizedBox(height: 40),
 
               // SIGN IN HEADER
@@ -198,9 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // TODO: Implement Login Logic
-                  },
+                  onPressed: _isLoading ? null : _handleLogin,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kAccentColor, // Espresso dark button
                     shape: RoundedRectangleBorder(
@@ -208,14 +214,23 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    "Login",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : const Text(
+                          "Login",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 20),

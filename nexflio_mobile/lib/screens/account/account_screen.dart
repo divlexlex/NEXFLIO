@@ -1,12 +1,32 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
+import '../../services/auth_service.dart';
+import '../../utils/page_transitions.dart';
+import '../../widgets/auth_transition_screen.dart';
 import '../auth/login_screen.dart';
+import '../staff/manage_appointments_screen.dart';
+import '../home/notifications_screen.dart';
+import '../profile/profile_settings_screen.dart';
+import '../profile/transaction_history_screen.dart';
+import '../profile/my_packages_screen.dart';
+import '../profile/help_faq_screen.dart';
+import '../profile/privacy_policy_screen.dart';
+import 'wishlist_screen.dart';
 
 class AccountTab extends StatelessWidget {
   const AccountTab({super.key});
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: AuthService.instance,
+      builder: (context, _) => _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
+    final user = AuthService.instance.currentUser;
+
     return Scaffold(
       backgroundColor: kBackgroundColor,
       body: SafeArea(
@@ -61,9 +81,9 @@ class AccountTab extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            "Guest User",
-                            style: TextStyle(
+                          Text(
+                            user?.name ?? "Guest User",
+                            style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: kTextColor,
@@ -71,28 +91,38 @@ class AccountTab extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            "guest@example.com",
+                            user?.email ?? "Not signed in",
                             style: TextStyle(
                               fontSize: 14,
                               color: kTextColor.withOpacity(0.6),
                             ),
                           ),
                           const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: kPrimaryColor.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              "Edit Profile",
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: kPrimaryColor,
+                          GestureDetector(
+                            onTap: user == null
+                                ? null
+                                : () {
+                                    Navigator.push(
+                                      context,
+                                      fadeSlideRoute(const ProfileSettingsScreen()),
+                                    );
+                                  },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: kPrimaryColor.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                "Edit Profile",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: kPrimaryColor,
+                                ),
                               ),
                             ),
                           ),
@@ -103,6 +133,30 @@ class AccountTab extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 30),
+
+              // STAFF/MANAGER/ADMIN TOOLS
+              if (user != null && user.roleId != kClientRoleId) ...[
+                const Text(
+                  "Staff Tools",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: kPrimaryColor,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _buildMenuItem(
+                  icon: Icons.event_available,
+                  title: "Manage Appointments",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      fadeSlideRoute(const ManageAppointmentsScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 25),
+              ],
 
               // MENU ITEMS
               const Text(
@@ -117,17 +171,32 @@ class AccountTab extends StatelessWidget {
               _buildMenuItem(
                 icon: Icons.history,
                 title: "My Purchases",
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    fadeSlideRoute(const TransactionHistoryScreen()),
+                  );
+                },
               ),
               _buildMenuItem(
                 icon: Icons.inventory_2_outlined,
                 title: "My Packages",
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    fadeSlideRoute(const MyPackagesScreen()),
+                  );
+                },
               ),
               _buildMenuItem(
                 icon: Icons.favorite_border,
                 title: "Wishlist",
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    fadeSlideRoute(const WishlistScreen()),
+                  );
+                },
               ),
 
               const SizedBox(height: 25),
@@ -143,51 +212,96 @@ class AccountTab extends StatelessWidget {
               _buildMenuItem(
                 icon: Icons.notifications_outlined,
                 title: "Notifications",
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    fadeSlideRoute(const NotificationsScreen()),
+                  );
+                },
               ),
               _buildMenuItem(
                 icon: Icons.help_outline,
                 title: "Help & FAQ",
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    fadeSlideRoute(const HelpFaqScreen()),
+                  );
+                },
               ),
               _buildMenuItem(
                 icon: Icons.policy_outlined,
                 title: "Privacy Policy",
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    fadeSlideRoute(const PrivacyPolicyScreen()),
+                  );
+                },
               ),
 
               const SizedBox(height: 40),
 
-              // LOGOUT BUTTON
+              // LOGOUT / SIGN IN BUTTON
               SizedBox(
                 width: double.infinity,
                 height: 55,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    // Navigate to Login Screen
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const LoginScreen(),
+                child: user != null
+                    ? OutlinedButton.icon(
+                        onPressed: () async {
+                          await AuthService.instance.logout();
+                          if (!context.mounted) return;
+                          Navigator.pushReplacement(
+                            context,
+                            fadeSlideRoute(
+                              AuthTransitionScreen(
+                                message: 'Logged out',
+                                icon: Icons.logout,
+                                nextScreen: const LoginScreen(),
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.logout, color: Colors.redAccent),
+                        label: const Text(
+                          "Log Out",
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.redAccent),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      )
+                    : ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            fadeSlideRoute(const LoginScreen()),
+                          );
+                        },
+                        icon: const Icon(Icons.login, color: Colors.white),
+                        label: const Text(
+                          "Sign In",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kAccentColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.logout, color: Colors.redAccent),
-                  label: const Text(
-                    "Log Out",
-                    style: TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.redAccent),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
               ),
               const SizedBox(height: 40),
             ],

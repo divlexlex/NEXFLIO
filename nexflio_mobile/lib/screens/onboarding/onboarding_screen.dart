@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../utils/page_transitions.dart';
+import '../../widgets/app_logo.dart';
 import '../auth/login_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -74,9 +76,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           // Replaces the onboarding screen with the login screen so the user can't go back
                           Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(
-                              builder: (context) => const LoginScreen(),
-                            ),
+                            fadeSlideRoute(const LoginScreen()),
                           );
                         } else {
                           _pageController.nextPage(
@@ -131,17 +131,7 @@ class OnboardingContent extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Spacer(),
-        // We replaced the Placeholder widget with an Image asset wrapper
-        Image.asset(
-          'assets/images/onboarding_logo.png', // Temporary file name
-          height: 250,
-          width: 250,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) {
-            // This displays a fallback icon so your app doesn't crash if the image is missing
-            return const Icon(Icons.image, size: 100, color: Colors.grey);
-          },
-        ),
+        const AppLogo(fontSize: 48),
         const Spacer(),
         Text(
           title,

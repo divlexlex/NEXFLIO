@@ -47,4 +47,31 @@ class AuthController extends Controller
 
         return response()->json(['user' => $user, 'token' => $token]);
     }
+
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json(['message' => 'Logged out successfully']);
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $fields = $request->validate([
+            'name' => 'required|string',
+            'email' => 'required|string|email|unique:users,email,' . $user->id,
+            'password' => 'nullable|string|min:8|confirmed',
+        ]);
+
+        $user->name = $fields['name'];
+        $user->email = $fields['email'];
+        if (!empty($fields['password'])) {
+            $user->password = Hash::make($fields['password']);
+        }
+        $user->save();
+
+        return $user;
+    }
 }

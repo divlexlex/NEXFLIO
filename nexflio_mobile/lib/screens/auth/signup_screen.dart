@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
+import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
+import '../../utils/page_transitions.dart';
+import '../../widgets/auth_transition_screen.dart';
+import '../home/home_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -17,6 +22,43 @@ class _SignupScreenState extends State<SignupScreen> {
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
+
+  Future<void> _handleRegister() async {
+    if (_passwordController.text != _confirmPasswordController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Passwords don't match.")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await AuthService.instance.register(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        passwordConfirmation: _confirmPasswordController.text,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        fadeSlideRoute(
+          AuthTransitionScreen(
+            message: 'Account created!',
+            icon: Icons.check_circle,
+            nextScreen: const HomeScreen(),
+          ),
+        ),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is ApiException ? e.message : 'Registration failed. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,9 +146,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // TODO: Implement Registration Logic
-                  },
+                  onPressed: _isLoading ? null : _handleRegister,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kAccentColor,
                     shape: RoundedRectangleBorder(
@@ -114,14 +154,23 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    "Register",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : const Text(
+                          "Register",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 20),

@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
+import '../../models/service_model.dart';
+import '../../models/promo_model.dart';
+import '../../models/article_model.dart';
+import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
+import '../../utils/page_transitions.dart';
 import '../auth/login_screen.dart'; // Import your login screen
 import '../shop/shop_screen.dart'; // Add this line
 import '../cards/cards_screen.dart';
 import '../booking/booking_screen.dart';
 import '../account/account_screen.dart';
+import '../account/wishlist_screen.dart';
+import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +23,90 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  List<ServiceModel> _recommendedServices = [];
+  List<PromoModel> _promos = [];
+  List<ArticleModel> _articles = [];
+  bool _isLoadingHomeContent = true;
+  int _wishlistCount = 0;
+  int _unreadNotificationCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    AuthService.instance.addListener(_onAuthChanged);
+    _fetchHomeContent();
+    _fetchBadgeCounts();
+  }
+
+  Future<void> _fetchBadgeCounts() async {
+    if (!AuthService.instance.isLoggedIn) {
+      setState(() {
+        _wishlistCount = 0;
+        _unreadNotificationCount = 0;
+      });
+      return;
+    }
+    try {
+      final results = await Future.wait([
+        ApiService.get('/wishlist'),
+        ApiService.get('/notifications'),
+      ]);
+      final wishlist = results[0] as List;
+      final notifications = results[1] as List;
+      final unread = notifications
+          .where((n) => (n as Map<String, dynamic>)['read_at'] == null)
+          .length;
+      if (mounted) {
+        setState(() {
+          _wishlistCount = wishlist.length;
+          _unreadNotificationCount = unread;
+        });
+      }
+    } catch (_) {
+      // Non-critical — badges just stay at their previous values.
+    }
+  }
+
+  Future<void> _fetchHomeContent() async {
+    setState(() => _isLoadingHomeContent = true);
+    try {
+      final results = await Future.wait([
+        ApiService.get('/services'),
+        ApiService.get('/promos'),
+        ApiService.get('/articles'),
+      ]);
+      final services = (results[0] as List)
+          .map((e) => ServiceModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      final promos = (results[1] as List)
+          .map((e) => PromoModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      final articles = (results[2] as List)
+          .map((e) => ArticleModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (mounted) {
+        setState(() {
+          _recommendedServices = services.take(3).toList();
+          _promos = promos;
+          _articles = articles;
+          _isLoadingHomeContent = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingHomeContent = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    AuthService.instance.removeListener(_onAuthChanged);
+    super.dispose();
+  }
+
+  void _onAuthChanged() {
+    if (mounted) setState(() {});
+    _fetchBadgeCounts();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,46 +118,10 @@ class _HomeScreenState extends State<HomeScreen> {
           index: _selectedIndex,
           children: [
             _buildHomeTab(context), // 0: Home Tab
-            const ShopTab(), // 1: Shop (Replaced placeholder!)
-            const Center(
-              child: Text(
-                "Booking Module Coming Soon",
-                style: TextStyle(color: kTextColor, fontSize: 20),
-              ),
-            ),
-            const Center(
-              child: Text(
-                "Shop Module Coming Soon",
-                style: TextStyle(color: kTextColor, fontSize: 20),
-              ),
-            ), // 1: Shop
-            const Center(
-              child: Text(
-                "Booking Module Coming Soon",
-                style: TextStyle(color: kTextColor, fontSize: 20),
-              ),
-            ), // 2: Book
-            const Center(
-              child: Text(
-                "Cards Module Coming Soon",
-                style: TextStyle(color: kTextColor, fontSize: 20),
-              ),
-            ), // 3: Cards
-            const Center(
-              child: Text(
-                "Account Module Coming Soon",
-                style: TextStyle(color: kTextColor, fontSize: 20),
-              ),
-            ), // 4: Account
-            const BookingTab(),
-            const CardsTab(),
-            const AccountTab(), // 3: Cards (Replaced placeholder!)
-            const Center(
-              child: Text(
-                "Account Module Coming Soon",
-                style: TextStyle(color: kTextColor, fontSize: 20),
-              ),
-            ), // 4: Account
+            const ShopTab(), // 1: Shop
+            const BookingTab(), // 2: Book
+            const CardsTab(), // 3: Cards
+            const AccountTab(), // 4: Account
           ],
         ),
       ),
@@ -75,12 +131,21 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedItemColor: kAccentColor,
         unselectedItemColor: kTextColor.withOpacity(0.4),
         currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
+        onTap: (index) {
+          // "Book" (2) and "Account" (4) require a signed-in user; send
+          // guests straight to Login instead of the tab's own sign-in prompt.
+          final requiresAuth = index == 2 || index == 4;
+          if (requiresAuth && !AuthService.instance.isLoggedIn) {
+            Navigator.push(context, fadeSlideRoute(const LoginScreen()));
+            return;
+          }
+          setState(() => _selectedIndex = index);
+        },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
           BottomNavigationBarItem(
             icon: Icon(Icons.shopping_bag),
-            label: "Shop",
+            label: "service",
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.calendar_today),
@@ -129,13 +194,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 // HEADER
                 Row(
                   children: [
-                    CircleAvatar(
-                      radius: 25,
-                      backgroundColor: kSecondaryColor,
-                      child: const Icon(
-                        Icons.person,
-                        color: kAccentColor,
-                        size: 30,
+                    GestureDetector(
+                      onTap: () {
+                        if (AuthService.instance.currentUser == null) {
+                          Navigator.push(
+                            context,
+                            fadeSlideRoute(const LoginScreen()),
+                          );
+                        } else {
+                          setState(() => _selectedIndex = 4); // Account tab
+                        }
+                      },
+                      child: CircleAvatar(
+                        radius: 25,
+                        backgroundColor: kSecondaryColor,
+                        child: const Icon(
+                          Icons.person,
+                          color: kAccentColor,
+                          size: 30,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -143,45 +220,77 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            "Guest Account",
-                            style: TextStyle(
+                          Text(
+                            AuthService.instance.currentUser?.name ??
+                                "Guest Account",
+                            style: const TextStyle(
                               color: kTextColor,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           // ===== SIGN IN BUTTON ROUTING =====
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const LoginScreen(),
+                          if (AuthService.instance.currentUser == null)
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  fadeSlideRoute(const LoginScreen()),
+                                );
+                              },
+                              child: const Text(
+                                "Sign In",
+                                style: TextStyle(
+                                  color: kPrimaryColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration
+                                      .underline, // Added underline so it looks clickable
+                                  decorationColor: kPrimaryColor,
                                 ),
-                              );
-                            },
-                            child: const Text(
-                              "Sign In",
+                              ),
+                            )
+                          else
+                            Text(
+                              AuthService.instance.currentUser!.email,
                               style: TextStyle(
-                                color: kPrimaryColor,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                decoration: TextDecoration
-                                    .underline, // Added underline so it looks clickable
-                                decorationColor: kPrimaryColor,
+                                color: kTextColor.withOpacity(0.6),
+                                fontSize: 13,
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ),
-                    _circleIconButton(Icons.notifications_none, () {}),
+                    _circleIconButton(
+                      Icons.notifications_none,
+                      () async {
+                        if (!AuthService.instance.isLoggedIn) {
+                          Navigator.push(context, fadeSlideRoute(const LoginScreen()));
+                          return;
+                        }
+                        await Navigator.push(
+                          context,
+                          fadeSlideRoute(const NotificationsScreen()),
+                        );
+                        _fetchBadgeCounts();
+                      },
+                      badgeCount: _unreadNotificationCount,
+                    ),
                     const SizedBox(width: 10),
                     _circleIconButton(
-                      Icons.shopping_bag_outlined,
-                      () {},
-                      badgeCount: 1,
+                      Icons.favorite_border,
+                      () async {
+                        if (!AuthService.instance.isLoggedIn) {
+                          Navigator.push(context, fadeSlideRoute(const LoginScreen()));
+                          return;
+                        }
+                        await Navigator.push(
+                          context,
+                          fadeSlideRoute(const WishlistScreen()),
+                        );
+                        _fetchBadgeCounts();
+                      },
+                      badgeCount: _wishlistCount,
                     ),
                   ],
                 ),
@@ -257,75 +366,95 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 15),
                 SizedBox(
                   height: 200,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      _buildRecommendedCard(
-                        Icons.spa,
-                        "Diode Underarm",
-                        "₱800.00",
-                      ),
-                      _buildRecommendedCard(
-                        Icons.face_retouching_natural,
-                        "Hyal-C Facial",
-                        "₱600.00",
-                      ),
-                      _buildRecommendedCard(
-                        Icons.auto_awesome,
-                        "4D QuattroWave",
-                        "₱13,400.00",
-                      ),
-                    ],
-                  ),
+                  child: _isLoadingHomeContent
+                      ? const Center(
+                          child: CircularProgressIndicator(color: kPrimaryColor),
+                        )
+                      : _recommendedServices.isEmpty
+                          ? const Center(
+                              child: Text(
+                                "No recommendations yet.",
+                                style: TextStyle(color: kTextColor),
+                              ),
+                            )
+                          : ListView(
+                              scrollDirection: Axis.horizontal,
+                              children: _recommendedServices
+                                  .map(
+                                    (service) => _buildRecommendedCard(
+                                      Icons.spa,
+                                      service.name,
+                                      service.formattedPrice,
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
                 ),
                 const SizedBox(height: 30),
 
                 // ===== PROMOS =====
                 // Dark espresso banner block, gaya ng "PERFECT PACKAGE" strip
                 // sa reference — white text sa dark brown background.
-                _sectionHeader("Promos"),
-                const SizedBox(height: 15),
-                Container(
-                  width: double.infinity,
-                  height: 130,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: kAccentColor,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        right: -10,
-                        top: -10,
-                        child: Icon(
-                          Icons.spa,
-                          size: 90,
-                          color: Colors.white.withOpacity(0.12),
-                        ),
+                if (!_isLoadingHomeContent && _promos.isNotEmpty) ...[
+                  _sectionHeader("Promos"),
+                  const SizedBox(height: 15),
+                  ..._promos.map(
+                    (promo) => Container(
+                      width: double.infinity,
+                      height: 130,
+                      margin: const EdgeInsets.only(bottom: 15),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: kAccentColor,
+                        borderRadius: BorderRadius.circular(18),
                       ),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          "4D QuattroWave\n₱13,400.00",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            right: -10,
+                            top: -10,
+                            child: Icon(
+                              Icons.spa,
+                              size: 90,
+                              color: Colors.white.withOpacity(0.12),
+                            ),
                           ),
-                        ),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              "${promo.title}\n${promo.formattedPrice}",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 30),
+                  const SizedBox(height: 15),
+                ],
 
                 // ===== BLOGS AND ARTICLES =====
                 _sectionHeader("Blogs and Articles"),
                 const SizedBox(height: 15),
-                Column(
-                  children: List.generate(3, (index) => _buildArticleCard()),
-                ),
+                if (_isLoadingHomeContent)
+                  const Center(
+                    child: CircularProgressIndicator(color: kPrimaryColor),
+                  )
+                else if (_articles.isEmpty)
+                  const Text(
+                    "No articles yet.",
+                    style: TextStyle(color: kTextColor),
+                  )
+                else
+                  Column(
+                    children: _articles
+                        .map((article) => _buildArticleCard(article))
+                        .toList(),
+                  ),
               ],
             ),
           ),
@@ -450,7 +579,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildArticleCard() {
+  Widget _buildArticleCard(ArticleModel article) {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       height: 110,
@@ -490,14 +619,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: kSecondaryColor,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.menu_book, size: 12, color: kAccentColor),
-                          SizedBox(width: 4),
+                          const Icon(Icons.menu_book, size: 12, color: kAccentColor),
+                          const SizedBox(width: 4),
                           Text(
-                            "Articles",
-                            style: TextStyle(
+                            article.category,
+                            style: const TextStyle(
                               fontSize: 11,
                               color: kAccentColor,
                               fontWeight: FontWeight.w600,
@@ -507,12 +636,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  const Text(
-                    "Coming Soon!",
-                    style: TextStyle(
+                  Text(
+                    article.title,
+                    style: const TextStyle(
                       color: kTextColor,
                       fontWeight: FontWeight.w600,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    article.excerpt,
+                    style: TextStyle(
+                      color: kTextColor.withOpacity(0.6),
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

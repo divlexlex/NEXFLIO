@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
+import '../../models/membership_plan_model.dart';
+import '../../models/gift_card_model.dart';
+import '../../services/api_service.dart';
 
 class CardsTab extends StatefulWidget {
   const CardsTab({super.key});
@@ -10,6 +13,46 @@ class CardsTab extends StatefulWidget {
 
 class _CardsTabState extends State<CardsTab> {
   int _selectedTabIndex = 0; // 0 for Membership, 1 for Gift Cards
+
+  List<MembershipPlanModel> _plans = [];
+  List<GiftCardModel> _giftCards = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final results = await Future.wait([
+        ApiService.get('/membership-plans'),
+        ApiService.get('/gift-cards'),
+      ]);
+      final plans = (results[0] as List)
+          .map((e) => MembershipPlanModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      final giftCards = (results[1] as List)
+          .map((e) => GiftCardModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      setState(() {
+        _plans = plans;
+        _giftCards = giftCards;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e is ApiException ? e.message : 'Failed to load cards.';
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,15 +111,38 @@ class _CardsTabState extends State<CardsTab> {
             ),
 
             // CARD LIST CONTENT
-            Expanded(
-              child: _selectedTabIndex == 0
-                  ? _buildMembershipList()
-                  : _buildGiftCardsList(),
-            ),
+            Expanded(child: _buildBody()),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: kPrimaryColor),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, style: const TextStyle(color: kTextColor)),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _fetchData,
+              style: ElevatedButton.styleFrom(backgroundColor: kAccentColor),
+              child: const Text("Retry", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _selectedTabIndex == 0 ? _buildMembershipList() : _buildGiftCardsList();
   }
 
   // ===== HELPER WIDGETS =====
@@ -110,39 +176,108 @@ class _CardsTabState extends State<CardsTab> {
   }
 
   Widget _buildMembershipList() {
+    if (_plans.isEmpty) {
+      return const Center(
+        child: Text(
+          "No membership plans available right now.",
+          style: TextStyle(color: kTextColor, fontSize: 16),
+        ),
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
       children: [
-        _buildVipCard(
-          title: "E L I T E",
-          subtitle: "Elite Version 2.0 (New Member)",
-          badgeText: "New Member",
-          gradientColors: [kAccentColor, kTextColor], // Dark espresso gradient
-        ),
-        _buildVipCard(
-          title: "E L I T E",
-          subtitle: "Elite Version 2.0 (Renewal)",
-          badgeText: "Renewal",
-          gradientColors: [
-            kPrimaryColor,
-            kAccentColor,
-          ], // Gold to espresso gradient
-        ),
+        ...List.generate(_plans.length, (index) {
+          final plan = _plans[index];
+          return _buildVipCard(
+            title: plan.name.toUpperCase(),
+            subtitle: "${plan.description ?? plan.name} — ${plan.formattedPrice}",
+            badgeText: plan.badgeText,
+            gradientColors: index.isEven
+                ? [kAccentColor, kTextColor]
+                : [kPrimaryColor, kAccentColor],
+          );
+        }),
         const SizedBox(height: 20),
       ],
     );
   }
 
   Widget _buildGiftCardsList() {
-    return const Center(
-      child: Text(
-        "Gift Cards coming soon...",
-        style: TextStyle(
-          color: kTextColor,
-          fontSize: 16,
-          fontStyle: FontStyle.italic,
+    if (_giftCards.isEmpty) {
+      return const Center(
+        child: Text(
+          "Gift Cards coming soon...",
+          style: TextStyle(
+            color: kTextColor,
+            fontSize: 16,
+            fontStyle: FontStyle.italic,
+          ),
         ),
-      ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
+      children: [
+        ..._giftCards.map(
+          (card) => Container(
+            margin: const EdgeInsets.only(bottom: 15),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: kCardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: kSecondaryColor),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: kSecondaryColor.withOpacity(0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.card_giftcard, color: kAccentColor),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        card.name,
+                        style: const TextStyle(
+                          color: kTextColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      if (card.description != null)
+                        Text(
+                          card.description!,
+                          style: TextStyle(
+                            color: kTextColor.withOpacity(0.6),
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Text(
+                  card.formattedAmount,
+                  style: const TextStyle(
+                    color: kPrimaryColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
     );
   }
 
@@ -152,6 +287,9 @@ class _CardsTabState extends State<CardsTab> {
     required String badgeText,
     required List<Color> gradientColors,
   }) {
+    final cleanTitle = title.replaceAll(' ', '');
+    final midpoint = (cleanTitle.length / 2).ceil().clamp(1, cleanTitle.length - 1);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       height: 220, // Taller size to match the premium feel in the reference
@@ -195,7 +333,7 @@ class _CardsTabState extends State<CardsTab> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          title.substring(0, 3), // "E L "
+                          cleanTitle.substring(0, midpoint),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 40,
@@ -212,7 +350,7 @@ class _CardsTabState extends State<CardsTab> {
                           ), // Replaces the DNA icon in the center
                         ),
                         Text(
-                          title.substring(3), // "I T E"
+                          cleanTitle.substring(midpoint),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 40,
@@ -266,6 +404,8 @@ class _CardsTabState extends State<CardsTab> {
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
