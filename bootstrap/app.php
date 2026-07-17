@@ -16,10 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
     $middleware->alias([
         'role' => \App\Http\Middleware\CheckRole::class,
     ]);
-    // This is an API-only backend with no web login page, so unauthenticated
-    // requests should always get a 401 JSON response instead of an attempted
-    // redirect to a non-existent "login" route.
-    $middleware->redirectGuestsTo(fn () => null);
+    // API requests get a 401 JSON response; web guests are sent to the
+    // admin portal's login page.
+    $middleware->redirectGuestsTo(
+        fn (Request $request) => $request->is('api/*') ? null : route('login')
+    );
 })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

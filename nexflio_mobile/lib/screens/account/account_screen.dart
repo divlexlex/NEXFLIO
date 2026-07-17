@@ -5,6 +5,7 @@ import '../../utils/page_transitions.dart';
 import '../../widgets/auth_transition_screen.dart';
 import '../auth/login_screen.dart';
 import '../staff/manage_appointments_screen.dart';
+import '../staff/staff_dashboard_screen.dart';
 import '../home/notifications_screen.dart';
 import '../profile/profile_settings_screen.dart';
 import '../profile/transaction_history_screen.dart';
@@ -134,10 +135,37 @@ class AccountTab extends StatelessWidget {
               ),
               const SizedBox(height: 30),
 
-              // STAFF/MANAGER/ADMIN TOOLS
-              if (user != null && user.roleId != kClientRoleId) ...[
+              // STAFF TOOLS (role 3): personal hub — schedule, attendance,
+              // break, leaves, commission.
+              if (user != null && user.roleId == kStaffRoleId) ...[
                 const Text(
                   "Staff Tools",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: kPrimaryColor,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _buildMenuItem(
+                  icon: Icons.badge_outlined,
+                  title: "Staff Dashboard",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      fadeSlideRoute(const StaffDashboardScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 25),
+              ],
+
+              // MANAGEMENT TOOLS (roles 1-2): booking verification queue.
+              if (user != null &&
+                  (user.roleId == kManagerRoleId ||
+                      user.roleId == kSuperAdminRoleId)) ...[
+                const Text(
+                  "Management Tools",
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,

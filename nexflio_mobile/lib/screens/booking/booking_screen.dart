@@ -278,22 +278,7 @@ class _BookingTabState extends State<BookingTab> {
     final month = _kMonthAbbrev[appointment.appointmentDate.month - 1];
     final day = appointment.appointmentDate.day.toString().padLeft(2, '0');
 
-    Color statusColor;
-    switch (appointment.status) {
-      case 'confirmed':
-      case 'in-service':
-        statusColor = Colors.green;
-        break;
-      case 'served':
-        statusColor = kPrimaryColor;
-        break;
-      case 'cancelled':
-      case 'no-show':
-        statusColor = Colors.redAccent;
-        break;
-      default:
-        statusColor = Colors.orange;
-    }
+    final statusColor = appointmentStatusColor(appointment.status);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
@@ -378,7 +363,7 @@ class _BookingTabState extends State<BookingTab> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          appointment.status.toUpperCase(),
+                          appointment.statusLabel.toUpperCase(),
                           style: TextStyle(
                             color: statusColor,
                             fontSize: 10,

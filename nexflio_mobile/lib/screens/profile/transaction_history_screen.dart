@@ -145,7 +145,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
             ),
           ),
           Text(
-            appointment.status.toUpperCase(),
+            appointment.statusLabel.toUpperCase(),
             style: const TextStyle(
               color: kPrimaryColor,
               fontSize: 12,

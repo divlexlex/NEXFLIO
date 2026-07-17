@@ -2,19 +2,20 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Enums\AppointmentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Inventory;
-use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-
         $upcoming = Appointment::where('appointment_date', '>=', now()->toDateString())
-            ->where('status', 'pending')
+            ->where('status', AppointmentStatus::Booked)
             ->count();
+
+        $awaitingVerification = Appointment::where('status', AppointmentStatus::Unverified)->count();
 
         $lowStocks = Inventory::whereColumn('quantity', '<=', 'reorder_point')->get();
 
@@ -22,9 +23,10 @@ class DashboardController extends Controller
 
         return response()->json([
             'upcoming_appointments_count' => $upcoming,
+            'awaiting_verification_count' => $awaitingVerification,
             'today_bookings_count' => $todayBookings,
             'low_stock_alerts' => $lowStocks,
-            'message' => 'Dashboard data retrieved successfully'
+            'message' => 'Dashboard data retrieved successfully',
         ]);
     }
 }

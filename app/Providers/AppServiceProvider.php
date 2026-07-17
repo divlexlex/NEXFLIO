@@ -2,9 +2,8 @@
 
 namespace App\Providers;
 
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
-use App\Models\Appointment;
-use App\Observers\AuditObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,6 +20,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Appointment::observe(AuditObserver::class);
+        // Audit logging is handled by the App\Traits\Auditable trait on each
+        // business model, not by observers.
+
+        // The admin portal is built on Bootstrap 5.
+        Paginator::useBootstrapFive();
     }
 }

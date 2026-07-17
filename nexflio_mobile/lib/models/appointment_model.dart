@@ -2,7 +2,7 @@ import '../utils/constants.dart';
 
 class AppointmentModel {
   final int id;
-  final int userId;
+  final int? userId; // null for walk-ins entered by a manager
   final int serviceId;
   final int personnelId;
   final DateTime appointmentDate;
@@ -11,6 +11,7 @@ class AppointmentModel {
   final String? notes;
   final String? paymentProofPath;
   final String? userName;
+  final String? walkInName;
   final String? serviceName;
   final String? personnelName;
 
@@ -25,6 +26,7 @@ class AppointmentModel {
     this.notes,
     this.paymentProofPath,
     this.userName,
+    this.walkInName,
     this.serviceName,
     this.personnelName,
   });
@@ -32,7 +34,7 @@ class AppointmentModel {
   factory AppointmentModel.fromJson(Map<String, dynamic> json) {
     return AppointmentModel(
       id: json['id'] as int,
-      userId: json['user_id'] as int,
+      userId: json['user_id'] as int?,
       serviceId: json['service_id'] as int,
       personnelId: json['personnel_id'] as int,
       appointmentDate: DateTime.parse(json['appointment_date'] as String),
@@ -41,6 +43,7 @@ class AppointmentModel {
       notes: json['notes'] as String?,
       paymentProofPath: json['payment_proof_path'] as String?,
       userName: (json['user'] as Map<String, dynamic>?)?['name'] as String?,
+      walkInName: json['walk_in_name'] as String?,
       serviceName:
           (json['service'] as Map<String, dynamic>?)?['name'] as String?,
       personnelName:
@@ -51,9 +54,13 @@ class AppointmentModel {
   String? get paymentProofUrl =>
       paymentProofPath == null ? null : '$kStorageBaseUrl/$paymentProofPath';
 
+  String get clientName => userName ?? walkInName ?? 'Client';
+
+  String get statusLabel => appointmentStatusLabel(status);
+
   bool get isUpcoming =>
       !appointmentDate.isBefore(DateTime.now().subtract(const Duration(days: 1))) &&
-      status != 'cancelled' &&
-      status != 'served' &&
-      status != 'no-show';
+      status != kStatusCancelled &&
+      status != kStatusCompleted &&
+      status != kStatusNoShow;
 }

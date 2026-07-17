@@ -50,14 +50,19 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen> {
     }
   }
 
-  Future<void> _updateStatus(AppointmentModel appointment, String status) async {
+  Future<void> _updateStatus(
+    AppointmentModel appointment,
+    String status, {
+    String? rejectionReason,
+  }) async {
     try {
       await ApiService.patch('/appointments/${appointment.id}/status', {
         'status': status,
+        'rejection_reason': ?rejectionReason,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Marked as $status.')),
+        SnackBar(content: Text('Marked as ${appointmentStatusLabel(status)}.')),
       );
       _fetchAppointments();
     } catch (e) {
@@ -65,6 +70,48 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen> {
       final message = e is ApiException ? e.message : 'Failed to update status.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
+  }
+
+  Future<void> _rejectWithReason(AppointmentModel appointment) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: kCardColor,
+        title: const Text(
+          "Reject booking",
+          style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: "Reason (shown to the client)",
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: kTextColor)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text("Reject", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (reason == null) return;
+    if (reason.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A rejection reason is required.')),
+      );
+      return;
+    }
+    await _updateStatus(appointment, kStatusCancelled, rejectionReason: reason);
   }
 
   @override
@@ -145,7 +192,7 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen> {
     }
 
     final list = _pendingOnly
-        ? _appointments.where((a) => a.status == 'pending').toList()
+        ? _appointments.where((a) => a.status == kStatusUnverified).toList()
         : _appointments;
 
     if (list.isEmpty) {
@@ -186,7 +233,7 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen> {
             children: [
               Expanded(
                 child: Text(
-                  appointment.userName ?? 'Client #${appointment.userId}',
+                  appointment.clientName,
                   style: const TextStyle(
                     color: kTextColor,
                     fontWeight: FontWeight.bold,
@@ -197,13 +244,14 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _statusColor(appointment.status).withOpacity(0.1),
+                  color: appointmentStatusColor(appointment.status)
+                      .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  appointment.status.toUpperCase(),
+                  appointment.statusLabel.toUpperCase(),
                   style: TextStyle(
-                    color: _statusColor(appointment.status),
+                    color: appointmentStatusColor(appointment.status),
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                   ),
@@ -253,13 +301,13 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen> {
               ),
             ),
           ],
-          if (appointment.status == 'pending') ...[
+          if (appointment.status == kStatusUnverified) ...[
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => _updateStatus(appointment, 'cancelled'),
+                    onPressed: () => _rejectWithReason(appointment),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.redAccent),
                     ),
@@ -272,7 +320,7 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => _updateStatus(appointment, 'confirmed'),
+                    onPressed: () => _updateStatus(appointment, kStatusBooked),
                     style: ElevatedButton.styleFrom(backgroundColor: kAccentColor),
                     child: const Text(
                       "Approve",
@@ -286,21 +334,6 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen> {
         ],
       ),
     );
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'confirmed':
-      case 'in-service':
-        return Colors.green;
-      case 'served':
-        return kPrimaryColor;
-      case 'cancelled':
-      case 'no-show':
-        return Colors.redAccent;
-      default:
-        return Colors.orange;
-    }
   }
 
   void _showPaymentProof(String url) {

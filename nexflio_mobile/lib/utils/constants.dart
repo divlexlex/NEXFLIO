@@ -34,3 +34,42 @@ const kBlushAccent = Color(
 ); // soft cherry-blossom pink (optional decorative accent)
 
 const double kDefaultPadding = 20.0;
+
+// ===== APPOINTMENT STATUSES =====
+// Must match the backend's App\Enums\AppointmentStatus values.
+// Flow: unverified -> booked -> in-service -> completed
+//       (cancelled / no-show are terminal side exits)
+const String kStatusUnverified = 'unverified';
+const String kStatusBooked = 'booked';
+const String kStatusInService = 'in-service';
+const String kStatusCompleted = 'completed';
+const String kStatusCancelled = 'cancelled';
+const String kStatusNoShow = 'no-show';
+
+const Map<String, String> kAppointmentStatusLabels = {
+  kStatusUnverified: 'Pending verification',
+  kStatusBooked: 'Booked',
+  kStatusInService: 'In service',
+  kStatusCompleted: 'Completed',
+  kStatusCancelled: 'Cancelled',
+  kStatusNoShow: 'No-show',
+};
+
+String appointmentStatusLabel(String status) =>
+    kAppointmentStatusLabels[status] ?? status;
+
+Color appointmentStatusColor(String status) {
+  switch (status) {
+    case kStatusBooked:
+    case kStatusInService:
+      return Colors.green;
+    case kStatusCompleted:
+      return kPrimaryColor;
+    case kStatusCancelled:
+    case kStatusNoShow:
+      return Colors.redAccent;
+    case kStatusUnverified:
+    default:
+      return Colors.orange;
+  }
+}

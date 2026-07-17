@@ -13,16 +13,17 @@ class AuthController extends Controller
     {
         $fields = $request->validate([
             'name' => 'required|string',
-            'email' => 'required|string|unique:users,email',
-            'password' => 'required|string|confirmed',
-            'role_id' => 'required' // Default to 4 (Client)
+            'email' => 'required|string|email|unique:users,email',
+            'password' => 'required|string|min:8|confirmed',
         ]);
 
+        // Public registration always creates a Client. Staff/Manager accounts
+        // are provisioned by admins, never self-assigned.
         $user = User::create([
             'name' => $fields['name'],
             'email' => $fields['email'],
             'password' => Hash::make($fields['password']),
-            'role_id' => $fields['role_id'],
+            'role_id' => User::ROLE_CLIENT,
         ]);
 
         $token = $user->createToken('myapptoken')->plainTextToken;

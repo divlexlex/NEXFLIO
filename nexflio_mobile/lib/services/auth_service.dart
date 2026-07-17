@@ -6,6 +6,9 @@ import 'api_service.dart';
 
 const _kTokenKey = 'auth_token';
 const _kUserKey = 'auth_user';
+const kSuperAdminRoleId = 1;
+const kManagerRoleId = 2;
+const kStaffRoleId = 3;
 const kClientRoleId = 4;
 
 /// Holds the current session and notifies listeners whenever the signed-in

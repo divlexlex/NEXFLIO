@@ -35,4 +35,25 @@ return [
         ],
     ],
 
+    // Google Gemini — summarizes aggregated operational metrics for the
+    // dashboard insight card. Only totals are sent, never client PII.
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
+    ],
+
+    // Dialogflow ES — customer inquiry bot on the public landing page.
+    // The webhook token authenticates fulfillment calls from Dialogflow.
+    'dialogflow' => [
+        'agent_id' => env('DIALOGFLOW_AGENT_ID'),
+        'webhook_token' => env('DIALOGFLOW_WEBHOOK_TOKEN'),
+    ],
+
+    // Firebase Cloud Messaging — push notifications for the Flutter app.
+    // Path to a Firebase service-account JSON file.
+    'fcm' => [
+        'credentials' => env('FIREBASE_CREDENTIALS'),
+        'project_id' => env('FIREBASE_PROJECT_ID'),
+    ],
+
 ];
