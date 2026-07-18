@@ -6,6 +6,7 @@ import '../../utils/page_transitions.dart';
 import '../../widgets/auth_transition_screen.dart';
 import '../../widgets/app_logo.dart';
 import '../home/home_screen.dart';
+import '../staff/staff_dashboard_screen.dart';
 import 'forgot_password_screen.dart';
 import 'signup_screen.dart';
 
@@ -30,12 +31,17 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
       if (!mounted) return;
+      // Staff go to their dashboard; everyone else to the client Home.
+      final Widget nextScreen =
+          AuthService.instance.currentUser?.roleId == kStaffRoleId
+              ? const StaffDashboardScreen()
+              : const HomeScreen();
       Navigator.of(context).pushAndRemoveUntil(
         fadeSlideRoute(
           AuthTransitionScreen(
             message: 'Welcome back!',
             icon: Icons.check_circle,
-            nextScreen: const HomeScreen(),
+            nextScreen: nextScreen,
           ),
         ),
         (route) => false,
@@ -57,7 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: kTextColor),
+          icon: Icon(Icons.arrow_back, color: kTextColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -74,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 40),
 
               // SIGN IN HEADER
-              const Text(
+              Text(
                 "Sign In",
                 style: TextStyle(
                   fontSize: 28,
@@ -85,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 25),
 
               // EMAIL FIELD
-              const Text(
+              Text(
                 "Email Address",
                 style: TextStyle(
                   color: kTextColor,
@@ -107,11 +113,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: kSecondaryColor),
+                    borderSide: BorderSide(color: kSecondaryColor),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: kSecondaryColor),
+                    borderSide: BorderSide(color: kSecondaryColor),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -125,7 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
 
               // PASSWORD FIELD
-              const Text(
+              Text(
                 "Password",
                 style: TextStyle(
                   color: kTextColor,
@@ -147,11 +153,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: kSecondaryColor),
+                    borderSide: BorderSide(color: kSecondaryColor),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: kSecondaryColor),
+                    borderSide: BorderSide(color: kSecondaryColor),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -249,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     );
                   },
                   child: RichText(
-                    text: const TextSpan(
+                    text: TextSpan(
                       text: "Don't have an account? ",
                       style: TextStyle(color: kTextColor),
                       children: [

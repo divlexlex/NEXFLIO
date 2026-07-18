@@ -11,8 +11,8 @@ class PrivacyPolicyScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kTextColor),
-        title: const Text(
+        iconTheme: IconThemeData(color: kTextColor),
+        title: Text(
           "Privacy Policy",
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
@@ -30,7 +30,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: Colors.orange),
                 ),
-                child: const Text(
+                child: Text(
                   "⚠ Placeholder text — this has not been reviewed by "
                   "$kAppName's management or a lawyer. Replace this with your "
                   "actual privacy policy before releasing the app publicly.",
@@ -76,7 +76,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               color: kTextColor,
               fontWeight: FontWeight.bold,
               fontSize: 16,

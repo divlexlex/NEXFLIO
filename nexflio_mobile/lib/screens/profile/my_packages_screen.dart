@@ -50,8 +50,8 @@ class _MyPackagesScreenState extends State<MyPackagesScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kTextColor),
-        title: const Text(
+        iconTheme: IconThemeData(color: kTextColor),
+        title: Text(
           "My Packages",
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
@@ -72,7 +72,7 @@ class _MyPackagesScreenState extends State<MyPackagesScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: const TextStyle(color: kTextColor)),
+            Text(_error!, style: TextStyle(color: kTextColor)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _fetchPlans,
@@ -85,7 +85,7 @@ class _MyPackagesScreenState extends State<MyPackagesScreen> {
     }
 
     if (_plans.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           "No packages available right now.",
           style: TextStyle(color: kTextColor, fontSize: 16),
@@ -107,7 +107,7 @@ class _MyPackagesScreenState extends State<MyPackagesScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.card_membership, color: kAccentColor),
+                  const Icon(Icons.card_membership, color: kPrimaryColor),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -115,7 +115,7 @@ class _MyPackagesScreenState extends State<MyPackagesScreen> {
                       children: [
                         Text(
                           "${plan.name} — ${plan.badgeText}",
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: kTextColor,
                             fontWeight: FontWeight.bold,
                           ),

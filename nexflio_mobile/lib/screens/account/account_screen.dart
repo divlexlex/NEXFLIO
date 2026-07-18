@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
+import '../../utils/theme.dart';
+import '../../utils/theme_controller.dart';
 import '../../services/auth_service.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/auth_transition_screen.dart';
@@ -29,7 +31,7 @@ class AccountTab extends StatelessWidget {
     final user = AuthService.instance.currentUser;
 
     return Scaffold(
-      backgroundColor: kBackgroundColor,
+      backgroundColor: context.appBg,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(kDefaultPadding),
@@ -37,19 +39,19 @@ class AccountTab extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // HEADER
-              const Text(
+              Text(
                 "My",
                 style: TextStyle(
                   fontSize: 24,
-                  color: kTextColor,
+                  color: context.appText,
                   fontWeight: FontWeight.w400,
                 ),
               ),
-              const Text(
+              Text(
                 "Account",
                 style: TextStyle(
                   fontSize: 28,
-                  color: kAccentColor,
+                  color: context.appText,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -72,10 +74,10 @@ class AccountTab extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 35,
                       backgroundColor: kSecondaryColor,
-                      child: Icon(Icons.person, size: 40, color: kAccentColor),
+                      child: Icon(Icons.person, size: 40, color: kPrimaryColor),
                     ),
                     const SizedBox(width: 20),
                     Expanded(
@@ -84,7 +86,7 @@ class AccountTab extends StatelessWidget {
                         children: [
                           Text(
                             user?.name ?? "Guest User",
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: kTextColor,
@@ -267,6 +269,7 @@ class AccountTab extends StatelessWidget {
                   );
                 },
               ),
+              _buildDarkModeToggle(context),
 
               const SizedBox(height: 40),
 
@@ -339,7 +342,41 @@ class AccountTab extends StatelessWidget {
     );
   }
 
-  // ===== HELPER WIDGET =====
+  // ===== HELPER WIDGETS =====
+
+  Widget _buildDarkModeToggle(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: kCardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kSecondaryColor.withOpacity(0.5)),
+      ),
+      child: SwitchListTile(
+        value: isDark,
+        onChanged: (v) => ThemeController.instance.setDark(v),
+        activeThumbColor: kPrimaryColor,
+        secondary: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: kSecondaryColor.withOpacity(0.3),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(isDark ? Icons.dark_mode : Icons.light_mode,
+              color: kPrimaryColor, size: 20),
+        ),
+        title: Text(
+          "Dark Mode",
+          style: TextStyle(
+            color: kTextColor,
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildMenuItem({
     required IconData icon,
@@ -360,11 +397,11 @@ class AccountTab extends StatelessWidget {
             color: kSecondaryColor.withOpacity(0.3),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: kAccentColor, size: 20),
+          child: Icon(icon, color: kPrimaryColor, size: 20),
         ),
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             color: kTextColor,
             fontWeight: FontWeight.w600,
             fontSize: 15,

@@ -67,8 +67,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kTextColor),
-        title: const Text(
+        iconTheme: IconThemeData(color: kTextColor),
+        title: Text(
           "Notifications",
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
@@ -99,7 +99,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: const TextStyle(color: kTextColor)),
+            Text(_error!, style: TextStyle(color: kTextColor)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _fetchNotifications,
@@ -112,7 +112,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     if (_notifications.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           "No notifications yet.",
           style: TextStyle(color: kTextColor, fontSize: 16),
@@ -149,7 +149,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               notification.isRead
                   ? Icons.notifications_none
                   : Icons.notifications_active,
-              color: kAccentColor,
+              color: kPrimaryColor,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -158,7 +158,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 children: [
                   Text(
                     notification.title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: kTextColor,
                       fontWeight: FontWeight.bold,
                     ),

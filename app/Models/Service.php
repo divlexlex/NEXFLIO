@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use App\Traits\Auditable;
+use App\Traits\HasImage;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Service extends Model
 {
-    use Auditable, HasFactory, SoftDeletes;
+    use Auditable, HasFactory, HasImage, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -17,8 +18,11 @@ class Service extends Model
         'description',
         'price',
         'duration_minutes',
+        'image_path',
         'status',
     ];
+
+    protected $appends = ['image_url'];
 
     protected function casts(): array
     {

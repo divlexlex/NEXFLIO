@@ -74,8 +74,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kTextColor),
-        title: const Text(
+        iconTheme: IconThemeData(color: kTextColor),
+        title: Text(
           "Edit Profile",
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
@@ -144,7 +144,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         text,
-        style: const TextStyle(color: kTextColor, fontWeight: FontWeight.w500),
+        style: TextStyle(color: kTextColor, fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -167,11 +167,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: kSecondaryColor),
+          borderSide: BorderSide(color: kSecondaryColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: kSecondaryColor),
+          borderSide: BorderSide(color: kSecondaryColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

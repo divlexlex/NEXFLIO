@@ -19,7 +19,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: kTextColor),
+          icon: Icon(Icons.arrow_back, color: kTextColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -35,12 +35,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               const Icon(
                 Icons.lock_reset, // Closest material icon to your reference
                 size: 80,
-                color: kAccentColor,
+                color: kPrimaryColor,
               ),
               const SizedBox(height: 20),
 
               // TITLE
-              const Text(
+              Text(
                 "Forgot Password",
                 style: TextStyle(
                   fontSize: 28,
@@ -51,7 +51,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               const SizedBox(height: 15),
 
               // SUBTITLE INSTRUCTIONS
-              const Text(
+              Text(
                 "To reset your password, enter the email address\nthat you use to login.",
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: kTextColor, height: 1.4),
@@ -61,7 +61,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               // EMAIL FIELD (Left-aligned text above it)
               Align(
                 alignment: Alignment.centerLeft,
-                child: const Text(
+                child: Text(
                   "Email Address",
                   style: TextStyle(
                     color: kTextColor,
@@ -84,11 +84,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: kSecondaryColor),
+                    borderSide: BorderSide(color: kSecondaryColor),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: kSecondaryColor),
+                    borderSide: BorderSide(color: kSecondaryColor),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),

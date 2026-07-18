@@ -70,8 +70,8 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kTextColor),
-        title: const Text(
+        iconTheme: IconThemeData(color: kTextColor),
+        title: Text(
           "Leave Requests",
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
@@ -100,7 +100,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: const TextStyle(color: kTextColor)),
+            Text(_error!, style: TextStyle(color: kTextColor)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _fetch,
@@ -113,7 +113,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
     }
 
     if (_leaves.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           "No leave requests yet.",
           style: TextStyle(color: kTextColor, fontSize: 16),
@@ -154,7 +154,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
             children: [
               Text(
                 leave.type.toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                   color: kTextColor,
                   fontWeight: FontWeight.bold,
                 ),
@@ -181,7 +181,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
           Text(
             start == end ? start : "$start → $end",
             style:
-                const TextStyle(color: kTextColor, fontWeight: FontWeight.w600),
+                TextStyle(color: kTextColor, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           Text(
@@ -294,7 +294,7 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
         top: kDefaultPadding,
         bottom: MediaQuery.of(context).viewInsets.bottom + kDefaultPadding,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: kBackgroundColor,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -317,7 +317,7 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
                 child: OutlinedButton.icon(
                   onPressed: () => _pickDate(isStart: true),
                   icon: const Icon(Icons.calendar_today,
-                      size: 16, color: kAccentColor),
+                      size: 16, color: kPrimaryColor),
                   label: Text(
                     _startDate == null
                         ? "Start date"
@@ -331,7 +331,7 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
                 child: OutlinedButton.icon(
                   onPressed: () => _pickDate(isStart: false),
                   icon: const Icon(Icons.calendar_today,
-                      size: 16, color: kAccentColor),
+                      size: 16, color: kPrimaryColor),
                   label: Text(
                     _endDate == null
                         ? "End date"

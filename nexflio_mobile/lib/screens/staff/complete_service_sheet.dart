@@ -88,7 +88,7 @@ class _CompleteServiceSheetState extends State<CompleteServiceSheet> {
         top: kDefaultPadding,
         bottom: MediaQuery.of(context).viewInsets.bottom + kDefaultPadding,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: kBackgroundColor,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -152,7 +152,7 @@ class _CompleteServiceSheetState extends State<CompleteServiceSheet> {
     if (_error != null) {
       return Padding(
         padding: const EdgeInsets.all(20),
-        child: Text(_error!, style: const TextStyle(color: kTextColor)),
+        child: Text(_error!, style: TextStyle(color: kTextColor)),
       );
     }
 
@@ -191,7 +191,7 @@ class _CompleteServiceSheetState extends State<CompleteServiceSheet> {
                   children: [
                     Text(
                       option.itemName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: kTextColor,
                         fontWeight: FontWeight.w600,
                       ),
@@ -214,7 +214,7 @@ class _CompleteServiceSheetState extends State<CompleteServiceSheet> {
               ),
               Text(
                 '$quantity',
-                style: const TextStyle(
+                style: TextStyle(
                   color: kTextColor,
                   fontWeight: FontWeight.bold,
                   fontSize: 16,

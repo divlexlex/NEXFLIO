@@ -15,7 +15,9 @@ use App\Http\Controllers\API\InventoryController;
 use App\Http\Controllers\API\LeaveController;
 use App\Http\Controllers\API\MembershipPlanController;
 use App\Http\Controllers\API\NotificationController;
+use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\PromoController;
+use App\Http\Controllers\API\RecommendationController;
 use App\Http\Controllers\API\ServiceController;
 use App\Http\Controllers\API\StaffController;
 use App\Http\Controllers\API\WishlistController;
@@ -33,10 +35,15 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/dialogflow/webhook', [App\Http\Controllers\API\DialogflowController::class, 'webhook']);
 
 Route::get('/services', [ServiceController::class, 'index']);
+Route::get('/services/{id}', [ServiceController::class, 'show']);
+Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products/{id}', [ProductController::class, 'show']);
 Route::get('/membership-plans', [MembershipPlanController::class, 'index']);
 Route::get('/gift-cards', [GiftCardController::class, 'index']);
 Route::get('/promos', [PromoController::class, 'index']);
+Route::get('/promos/{id}', [PromoController::class, 'show']);
 Route::get('/articles', [ArticleController::class, 'index']);
+Route::get('/recommendations', [RecommendationController::class, 'index']);
 
 // ===== Any authenticated user =====
 Route::middleware('auth:sanctum')->group(function () {

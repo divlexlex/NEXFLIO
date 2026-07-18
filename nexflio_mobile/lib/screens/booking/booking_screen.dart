@@ -93,7 +93,7 @@ class _BookingTabState extends State<BookingTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     "My",
                     style: TextStyle(
                       fontSize: 24,
@@ -179,7 +179,7 @@ class _BookingTabState extends State<BookingTab> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
+            Text(
               "Sign in to view your appointments.",
               style: TextStyle(color: kTextColor, fontSize: 16),
             ),
@@ -207,7 +207,7 @@ class _BookingTabState extends State<BookingTab> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: const TextStyle(color: kTextColor)),
+            Text(_error!, style: TextStyle(color: kTextColor)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _fetchAppointments,
@@ -229,7 +229,7 @@ class _BookingTabState extends State<BookingTab> {
           _selectedTabIndex == 0
               ? "No upcoming appointments."
               : "No past appointments.",
-          style: const TextStyle(color: kTextColor, fontSize: 16),
+          style: TextStyle(color: kTextColor, fontSize: 16),
         ),
       );
     }
@@ -376,7 +376,7 @@ class _BookingTabState extends State<BookingTab> {
                   const SizedBox(height: 8),
                   Text(
                     appointment.serviceName ?? 'Service #${appointment.serviceId}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: kTextColor,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,

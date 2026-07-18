@@ -57,7 +57,7 @@ class _CardsTabState extends State<CardsTab> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBackgroundColor,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,19 +68,19 @@ class _CardsTabState extends State<CardsTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     "Purchase a",
                     style: TextStyle(
                       fontSize: 24,
-                      color: kTextColor,
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
-                  const Text(
+                  Text(
                     "NEXFLIO Cards",
                     style: TextStyle(
                       fontSize: 28,
-                      color: kAccentColor,
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -111,7 +111,13 @@ class _CardsTabState extends State<CardsTab> {
             ),
 
             // CARD LIST CONTENT
-            Expanded(child: _buildBody()),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _fetchData,
+                color: kPrimaryColor,
+                child: _buildBody(),
+              ),
+            ),
           ],
         ),
       ),
@@ -130,7 +136,7 @@ class _CardsTabState extends State<CardsTab> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: const TextStyle(color: kTextColor)),
+            Text(_error!, style: TextStyle(color: kTextColor)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _fetchData,
@@ -177,7 +183,7 @@ class _CardsTabState extends State<CardsTab> {
 
   Widget _buildMembershipList() {
     if (_plans.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           "No membership plans available right now.",
           style: TextStyle(color: kTextColor, fontSize: 16),
@@ -186,6 +192,7 @@ class _CardsTabState extends State<CardsTab> {
     }
 
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
       children: [
         ...List.generate(_plans.length, (index) {
@@ -195,7 +202,7 @@ class _CardsTabState extends State<CardsTab> {
             subtitle: "${plan.description ?? plan.name} — ${plan.formattedPrice}",
             badgeText: plan.badgeText,
             gradientColors: index.isEven
-                ? [kAccentColor, kTextColor]
+                ? [kAccentColor, const Color(0xFF6F4A2F)]
                 : [kPrimaryColor, kAccentColor],
           );
         }),
@@ -206,7 +213,7 @@ class _CardsTabState extends State<CardsTab> {
 
   Widget _buildGiftCardsList() {
     if (_giftCards.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           "Gift Cards coming soon...",
           style: TextStyle(
@@ -219,6 +226,7 @@ class _CardsTabState extends State<CardsTab> {
     }
 
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
       children: [
         ..._giftCards.map(
@@ -238,7 +246,7 @@ class _CardsTabState extends State<CardsTab> {
                     color: kSecondaryColor.withOpacity(0.3),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.card_giftcard, color: kAccentColor),
+                  child: const Icon(Icons.card_giftcard, color: kPrimaryColor),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -247,7 +255,7 @@ class _CardsTabState extends State<CardsTab> {
                     children: [
                       Text(
                         card.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: kTextColor,
                           fontWeight: FontWeight.bold,
                           fontSize: 16,

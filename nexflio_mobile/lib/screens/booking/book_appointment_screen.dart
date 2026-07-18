@@ -119,7 +119,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_library, color: kPrimaryColor),
-              title: const Text(
+              title: Text(
                 "Choose from Gallery",
                 style: TextStyle(color: kTextColor),
               ),
@@ -127,7 +127,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.camera_alt, color: kPrimaryColor),
-              title: const Text(
+              title: Text(
                 "Take a Photo",
                 style: TextStyle(color: kTextColor),
               ),
@@ -210,8 +210,8 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kTextColor),
-        title: const Text(
+        iconTheme: IconThemeData(color: kTextColor),
+        title: Text(
           "Book Appointment",
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
@@ -232,7 +232,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_loadError!, style: const TextStyle(color: kTextColor)),
+            Text(_loadError!, style: TextStyle(color: kTextColor)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _loadOptions,
@@ -256,7 +256,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                 ? "No services are available to book right now."
                 : "No staff are available to book right now.",
             textAlign: TextAlign.center,
-            style: const TextStyle(color: kTextColor, fontSize: 16),
+            style: TextStyle(color: kTextColor, fontSize: 16),
           ),
         ),
       );
@@ -320,11 +320,11 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
               hintStyle: TextStyle(color: kTextColor.withOpacity(0.5)),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: kSecondaryColor),
+                borderSide: BorderSide(color: kSecondaryColor),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: kSecondaryColor),
+                borderSide: BorderSide(color: kSecondaryColor),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -424,7 +424,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         text,
-        style: const TextStyle(color: kTextColor, fontWeight: FontWeight.w500),
+        style: TextStyle(color: kTextColor, fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -454,7 +454,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                   value: item,
                   child: Text(
                     itemLabel(item),
-                    style: const TextStyle(color: kTextColor),
+                    style: TextStyle(color: kTextColor),
                   ),
                 ),
               )
@@ -483,7 +483,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           children: [
             Icon(icon, color: kPrimaryColor, size: 20),
             const SizedBox(width: 12),
-            Text(text, style: const TextStyle(color: kTextColor)),
+            Text(text, style: TextStyle(color: kTextColor)),
           ],
         ),
       ),

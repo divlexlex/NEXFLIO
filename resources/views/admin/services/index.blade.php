@@ -15,11 +15,12 @@
     <div class="table-responsive">
         <table class="table align-middle">
             <thead>
-                <tr><th>Name</th><th>Category</th><th>Price</th><th>Duration</th><th>Status</th><th class="text-end"></th></tr>
+                <tr><th style="width:60px;"></th><th>Name</th><th>Category</th><th>Price</th><th>Duration</th><th>Status</th><th class="text-end"></th></tr>
             </thead>
             <tbody>
                 @forelse($services as $service)
                     <tr>
+                        <td>@include('admin.partials.thumb', ['url' => $service->image_url])</td>
                         <td>
                             <strong>{{ $service->name }}</strong>
                             <div class="small text-muted" style="max-width: 320px;">{{ $service->description }}</div>
@@ -44,13 +45,14 @@
                                     data-description="{{ $service->description }}"
                                     data-price="{{ $service->price }}"
                                     data-duration="{{ $service->duration_minutes }}"
-                                    data-status="{{ $service->status }}">
+                                    data-status="{{ $service->status }}"
+                                    data-image="{{ $service->image_url }}">
                                 Edit
                             </button>
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="text-center text-muted py-4">No services yet.</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted py-4">No services yet.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -60,7 +62,7 @@
 {{-- CREATE/EDIT MODAL --}}
 <div class="modal fade" id="serviceModal" tabindex="-1">
     <div class="modal-dialog">
-        <form method="POST" id="serviceForm" class="modal-content">
+        <form method="POST" id="serviceForm" class="modal-content" enctype="multipart/form-data">
             @csrf
             <span id="service-method-holder"></span>
             <div class="modal-header">
@@ -103,6 +105,7 @@
                     <label class="form-label">Description</label>
                     <textarea name="description" id="svc-description" class="form-control" rows="2"></textarea>
                 </div>
+                @include('admin.partials.image-field', ['prefix' => 'svc'])
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -120,6 +123,10 @@
         const form = document.getElementById('serviceForm');
         const methodHolder = document.getElementById('service-method-holder');
 
+        const preview = document.getElementById('svc-image-preview');
+        const removeWrap = document.getElementById('svc-remove-wrap');
+        const removeBox = document.getElementById('svc-remove-image');
+
         if (btn.dataset.mode === 'edit') {
             form.action = "{{ url('admin/services') }}/" + btn.dataset.id;
             methodHolder.innerHTML = '<input type="hidden" name="_method" value="PATCH">';
@@ -130,11 +137,23 @@
             document.getElementById('svc-price').value = btn.dataset.price;
             document.getElementById('svc-duration').value = btn.dataset.duration;
             document.getElementById('svc-status').value = btn.dataset.status;
+            document.getElementById('svc-image').value = '';
+            removeBox.checked = false;
+            if (btn.dataset.image) {
+                preview.src = btn.dataset.image;
+                preview.style.display = 'block';
+                removeWrap.style.display = 'block';
+            } else {
+                preview.style.display = 'none';
+                removeWrap.style.display = 'none';
+            }
         } else {
             form.action = "{{ route('admin.services.store') }}";
             methodHolder.innerHTML = '';
             document.getElementById('service-modal-title').textContent = 'New Service';
             form.reset();
+            preview.style.display = 'none';
+            removeWrap.style.display = 'none';
         }
     });
 </script>

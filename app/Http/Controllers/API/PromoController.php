@@ -11,4 +11,9 @@ class PromoController extends Controller
     {
         return Promo::where('is_active', true)->with('service')->get();
     }
+
+    public function show($id)
+    {
+        return Promo::with('service')->findOrFail($id);
+    }
 }

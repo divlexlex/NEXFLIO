@@ -57,8 +57,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kTextColor),
-        title: const Text(
+        iconTheme: IconThemeData(color: kTextColor),
+        title: Text(
           "Transaction History",
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
@@ -79,7 +79,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: const TextStyle(color: kTextColor)),
+            Text(_error!, style: TextStyle(color: kTextColor)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _fetchHistory,
@@ -92,7 +92,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     }
 
     if (_appointments.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           "No transactions yet.",
           style: TextStyle(color: kTextColor, fontSize: 16),
@@ -123,7 +123,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
               color: kSecondaryColor.withOpacity(0.3),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.receipt_long, color: kAccentColor),
+            child: const Icon(Icons.receipt_long, color: kPrimaryColor),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -132,7 +132,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
               children: [
                 Text(
                   appointment.serviceName ?? 'Service #${appointment.serviceId}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: kTextColor,
                     fontWeight: FontWeight.bold,
                   ),

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Http\Controllers\Concerns\HandlesImageUpload;
 use App\Http\Controllers\Controller;
 use App\Models\Service;
 use Illuminate\Http\Request;
@@ -9,6 +10,8 @@ use Illuminate\Validation\Rule;
 
 class ServiceController extends Controller
 {
+    use HandlesImageUpload;
+
     public function index()
     {
         return view('admin.services.index', [
@@ -18,7 +21,7 @@ class ServiceController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $this->validated($request);
+        $validated = $this->applyImage($request, null, $this->validated($request), 'services');
 
         Service::create($validated);
 
@@ -30,7 +33,7 @@ class ServiceController extends Controller
         $service = Service::findOrFail($id);
 
         // Never deleted — retiring a service is a status change.
-        $service->update($this->validated($request));
+        $service->update($this->applyImage($request, $service, $this->validated($request), 'services'));
 
         return back()->with('success', 'Service updated.');
     }
@@ -44,6 +47,7 @@ class ServiceController extends Controller
             'price' => 'required|numeric|min:0',
             'duration_minutes' => 'required|integer|min:5',
             'status' => ['required', Rule::in(['active', 'inactive', 'suspended'])],
+            'image' => 'nullable|image|max:4096',
         ]);
     }
 }

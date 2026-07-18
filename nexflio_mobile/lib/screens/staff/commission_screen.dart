@@ -70,8 +70,8 @@ class _CommissionScreenState extends State<CommissionScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kTextColor),
-        title: const Text(
+        iconTheme: IconThemeData(color: kTextColor),
+        title: Text(
           "My Commission",
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
@@ -88,11 +88,11 @@ class _CommissionScreenState extends State<CommissionScreen> {
               children: [
                 IconButton(
                   onPressed: () => _changeMonth(-1),
-                  icon: const Icon(Icons.chevron_left, color: kAccentColor),
+                  icon: const Icon(Icons.chevron_left, color: kPrimaryColor),
                 ),
                 Text(
                   "${_monthNames[_month.month - 1]} ${_month.year}",
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: kTextColor,
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -104,7 +104,7 @@ class _CommissionScreenState extends State<CommissionScreen> {
                     Icons.chevron_right,
                     color: isCurrentMonth
                         ? kSecondaryColor
-                        : kAccentColor,
+                        : kPrimaryColor,
                   ),
                 ),
               ],
@@ -127,7 +127,7 @@ class _CommissionScreenState extends State<CommissionScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: const TextStyle(color: kTextColor)),
+            Text(_error!, style: TextStyle(color: kTextColor)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _fetch,
@@ -259,7 +259,7 @@ class _CommissionScreenState extends State<CommissionScreen> {
               children: [
                 Text(
                   entry.serviceName ?? "Service",
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: kTextColor,
                     fontWeight: FontWeight.w600,
                   ),

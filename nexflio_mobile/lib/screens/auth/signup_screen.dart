@@ -68,7 +68,7 @@ class _SignupScreenState extends State<SignupScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: kTextColor),
+          icon: Icon(Icons.arrow_back, color: kTextColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -79,7 +79,7 @@ class _SignupScreenState extends State<SignupScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // HEADER
-              const Text(
+              Text(
                 "Create Account",
                 style: TextStyle(
                   fontSize: 28,
@@ -88,7 +88,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 "Sign up to start booking your\npremium skin care treatments.",
                 style: TextStyle(fontSize: 14, color: kTextColor, height: 1.4),
               ),
@@ -181,7 +181,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   onTap: () =>
                       Navigator.pop(context), // Pops back to Login Screen
                   child: RichText(
-                    text: const TextSpan(
+                    text: TextSpan(
                       text: "Already have an account? ",
                       style: TextStyle(color: kTextColor),
                       children: [
@@ -212,7 +212,7 @@ class _SignupScreenState extends State<SignupScreen> {
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Text(
         label,
-        style: const TextStyle(color: kTextColor, fontWeight: FontWeight.w500),
+        style: TextStyle(color: kTextColor, fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -238,11 +238,11 @@ class _SignupScreenState extends State<SignupScreen> {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: kSecondaryColor),
+          borderSide: BorderSide(color: kSecondaryColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: kSecondaryColor),
+          borderSide: BorderSide(color: kSecondaryColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -280,11 +280,11 @@ class _SignupScreenState extends State<SignupScreen> {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: kSecondaryColor),
+          borderSide: BorderSide(color: kSecondaryColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: kSecondaryColor),
+          borderSide: BorderSide(color: kSecondaryColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

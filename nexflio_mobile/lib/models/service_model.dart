@@ -6,6 +6,7 @@ class ServiceModel {
   final double price;
   final int durationMinutes;
   final String status;
+  final String? imageUrl;
 
   const ServiceModel({
     required this.id,
@@ -15,6 +16,7 @@ class ServiceModel {
     required this.price,
     required this.durationMinutes,
     required this.status,
+    this.imageUrl,
   });
 
   factory ServiceModel.fromJson(Map<String, dynamic> json) {
@@ -22,10 +24,11 @@ class ServiceModel {
       id: json['id'] as int,
       name: json['name'] as String,
       category: json['category'] as String,
-      description: json['description'] as String,
+      description: (json['description'] ?? '') as String,
       price: double.parse(json['price'].toString()),
       durationMinutes: json['duration_minutes'] as int,
       status: json['status'] as String,
+      imageUrl: json['image_url'] as String?,
     );
   }
 

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
-import '../../models/service_model.dart';
+import '../../utils/theme.dart';
 import '../../models/promo_model.dart';
+import '../../models/product_model.dart';
+import '../../models/recommendation_model.dart';
 import '../../models/article_model.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
@@ -12,6 +14,10 @@ import '../cards/cards_screen.dart';
 import '../booking/booking_screen.dart';
 import '../account/account_screen.dart';
 import '../account/wishlist_screen.dart';
+import '../products/products_screen.dart';
+import '../services/service_menu_screen.dart';
+import '../catalog/catalog_detail_screen.dart';
+import '../../widgets/app_network_image.dart';
 import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -23,7 +29,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-  List<ServiceModel> _recommendedServices = [];
+  List<RecommendationModel> _recommendations = [];
+  List<ProductModel> _products = [];
   List<PromoModel> _promos = [];
   List<ArticleModel> _articles = [];
   bool _isLoadingHomeContent = true;
@@ -71,22 +78,27 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isLoadingHomeContent = true);
     try {
       final results = await Future.wait([
-        ApiService.get('/services'),
+        ApiService.get('/recommendations'),
+        ApiService.get('/products'),
         ApiService.get('/promos'),
         ApiService.get('/articles'),
       ]);
-      final services = (results[0] as List)
-          .map((e) => ServiceModel.fromJson(e as Map<String, dynamic>))
+      final recommendations = (results[0] as List)
+          .map((e) => RecommendationModel.fromJson(e as Map<String, dynamic>))
           .toList();
-      final promos = (results[1] as List)
+      final products = (results[1] as List)
+          .map((e) => ProductModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      final promos = (results[2] as List)
           .map((e) => PromoModel.fromJson(e as Map<String, dynamic>))
           .toList();
-      final articles = (results[2] as List)
+      final articles = (results[3] as List)
           .map((e) => ArticleModel.fromJson(e as Map<String, dynamic>))
           .toList();
       if (mounted) {
         setState(() {
-          _recommendedServices = services.take(3).toList();
+          _recommendations = recommendations;
+          _products = products;
           _promos = promos;
           _articles = articles;
           _isLoadingHomeContent = false;
@@ -111,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBackgroundColor,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         // IndexedStack keeps all pages in memory so they don't reload when switching tabs
         child: IndexedStack(
@@ -127,9 +139,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: kAccentColor,
-        unselectedItemColor: kTextColor.withOpacity(0.4),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        selectedItemColor: Theme.of(context).colorScheme.onSurface,
+        unselectedItemColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
         currentIndex: _selectedIndex,
         onTap: (index) {
           // "Book" (2) and "Account" (4) require a signed-in user; send
@@ -164,8 +176,17 @@ class _HomeScreenState extends State<HomeScreen> {
   // ==========================================
   // ===== TAB 1: MAIN HOME UI CONTENT ========
   // ==========================================
+  Future<void> _refreshHome() async {
+    await _fetchHomeContent();
+    await _fetchBadgeCounts();
+  }
+
   Widget _buildHomeTab(BuildContext context) {
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: _refreshHome,
+      color: kPrimaryColor,
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,8 +203,8 @@ class _HomeScreenState extends State<HomeScreen> {
               kDefaultPadding,
               30,
             ),
-            decoration: const BoxDecoration(
-              color: kBackgroundColor,
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
               border: Border(
                 bottom: BorderSide(color: kSecondaryColor, width: 1.5),
               ),
@@ -210,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         backgroundColor: kSecondaryColor,
                         child: const Icon(
                           Icons.person,
-                          color: kAccentColor,
+                          color: kPrimaryColor,
                           size: 30,
                         ),
                       ),
@@ -223,8 +244,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text(
                             AuthService.instance.currentUser?.name ??
                                 "Guest Account",
-                            style: const TextStyle(
-                              color: kTextColor,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
@@ -297,20 +318,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 25),
 
                 // TAGLINE
-                const Text(
-                  "Your best skin",
+                Text(
+                  "Luxury nails,",
                   style: TextStyle(
-                    color: kAccentColor,
+                    color: context.isDark ? kDarkPrimary : kAccentColor,
                     fontSize: 32,
-                    fontFamily: 'cursive',
+                    fontFamily: kHeadingFont,
                     fontStyle: FontStyle.italic,
                     height: 1.1,
                   ),
                 ),
-                const Text(
-                  "CREATED BY SCIENCE",
+                Text(
+                  "CRAFTED WITH CARE",
                   style: TextStyle(
-                    color: kTextColor,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 2,
@@ -335,7 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // SEARCH BAR
+                // SEARCH BAR — taps through to the searchable service menu.
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 15),
                   decoration: BoxDecoration(
@@ -343,7 +364,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: kSecondaryColor),
                   ),
-                  child: const TextField(
+                  child: TextField(
+                    readOnly: true,
+                    onTap: () => Navigator.push(
+                      context,
+                      fadeSlideRoute(const ServiceMenuScreen()),
+                    ),
                     decoration: InputDecoration(
                       icon: Icon(Icons.search, color: kPrimaryColor),
                       hintText: "I'm Looking for...",
@@ -361,17 +387,17 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ===== RECOMMENDED =====
-                _sectionHeader("Recommended"),
+                // ===== RECOMMENDED (dynamic random mix) =====
+                _sectionHeader("Recommended for You"),
                 const SizedBox(height: 15),
                 SizedBox(
-                  height: 200,
+                  height: 210,
                   child: _isLoadingHomeContent
                       ? const Center(
                           child: CircularProgressIndicator(color: kPrimaryColor),
                         )
-                      : _recommendedServices.isEmpty
-                          ? const Center(
+                      : _recommendations.isEmpty
+                          ? Center(
                               child: Text(
                                 "No recommendations yet.",
                                 style: TextStyle(color: kTextColor),
@@ -379,58 +405,90 @@ class _HomeScreenState extends State<HomeScreen> {
                             )
                           : ListView(
                               scrollDirection: Axis.horizontal,
-                              children: _recommendedServices
-                                  .map(
-                                    (service) => _buildRecommendedCard(
-                                      Icons.spa,
-                                      service.name,
-                                      service.formattedPrice,
-                                    ),
-                                  )
+                              children: _recommendations
+                                  .map((rec) => _buildRecommendedCard(rec))
                                   .toList(),
                             ),
                 ),
                 const SizedBox(height: 30),
 
+                // ===== SHOP PRODUCTS =====
+                if (!_isLoadingHomeContent && _products.isNotEmpty) ...[
+                  _sectionHeader(
+                    "Shop Products",
+                    onSeeAll: () => Navigator.push(
+                      context,
+                      fadeSlideRoute(const ProductsScreen()),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  SizedBox(
+                    height: 200,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: _products
+                          .map((product) => _buildProductCard(product))
+                          .toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                ],
+
                 // ===== PROMOS =====
-                // Dark espresso banner block, gaya ng "PERFECT PACKAGE" strip
-                // sa reference — white text sa dark brown background.
                 if (!_isLoadingHomeContent && _promos.isNotEmpty) ...[
                   _sectionHeader("Promos"),
                   const SizedBox(height: 15),
                   ..._promos.map(
-                    (promo) => Container(
-                      width: double.infinity,
-                      height: 130,
-                      margin: const EdgeInsets.only(bottom: 15),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: kAccentColor,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            right: -10,
-                            top: -10,
-                            child: Icon(
-                              Icons.spa,
-                              size: 90,
-                              color: Colors.white.withOpacity(0.12),
+                    (promo) => GestureDetector(
+                      onTap: () => _openDetail('promo', promo.id, promo.title,
+                          promo.imageUrl, promo.price, promo.serviceName),
+                      child: Container(
+                        width: double.infinity,
+                        height: 130,
+                        margin: const EdgeInsets.only(bottom: 15),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: kOmbreGradient,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: kAccentColor.withOpacity(0.25),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
                             ),
-                          ),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              "${promo.title}\n${promo.formattedPrice}",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                          ],
+                        ),
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              right: -10,
+                              top: -10,
+                              child: Icon(
+                                Icons.spa,
+                                size: 90,
+                                color: Colors.white.withOpacity(0.12),
                               ),
                             ),
-                          ),
-                        ],
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "${promo.title}\n${promo.formattedPrice}",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const Align(
+                              alignment: Alignment.bottomRight,
+                              child: Text(
+                                "View details →",
+                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -445,7 +503,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: CircularProgressIndicator(color: kPrimaryColor),
                   )
                 else if (_articles.isEmpty)
-                  const Text(
+                  Text(
                     "No articles yet.",
                     style: TextStyle(color: kTextColor),
                   )
@@ -460,6 +518,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -467,23 +526,56 @@ class _HomeScreenState extends State<HomeScreen> {
   // ===== HELPER WIDGETS =====================
   // ==========================================
 
-  Widget _sectionHeader(String title) {
+  Widget _sectionHeader(String title, {VoidCallback? onSeeAll}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: kTextColor,
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 20,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                color: kMetallicGold,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Text(
+              title,
+              style: TextStyle(
+                fontFamily: kHeadingFont,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: context.appText,
+              ),
+            ),
+          ],
+        ),
+        if (onSeeAll != null)
+          GestureDetector(
+            onTap: onSeeAll,
+            child: const Text(
+              "See all",
+              style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.w600),
+            ),
           ),
-        ),
-        const Text(
-          "See all",
-          style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.w600),
-        ),
       ],
+    );
+  }
+
+  void _openDetail(String type, int id, String title, String? imageUrl,
+      double price, String? subtitle) {
+    Navigator.push(
+      context,
+      fadeSlideRoute(CatalogDetailScreen(
+        type: type,
+        id: id,
+        initialTitle: title,
+        initialImageUrl: imageUrl,
+        initialPrice: price,
+        initialSubtitle: subtitle,
+      )),
     );
   }
 
@@ -498,7 +590,7 @@ class _HomeScreenState extends State<HomeScreen> {
         CircleAvatar(
           radius: 20,
           backgroundColor: kSecondaryColor,
-          child: Icon(icon, color: kAccentColor, size: 20),
+          child: Icon(icon, color: kPrimaryColor, size: 20),
         ),
         if (badgeCount > 0)
           Positioned(
@@ -524,57 +616,114 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildRecommendedCard(IconData icon, String title, String price) {
-    return Container(
-      width: 160,
-      margin: const EdgeInsets.only(right: 15),
-      decoration: BoxDecoration(
-        color: kCardColor,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: kSecondaryColor),
-        boxShadow: [
-          BoxShadow(
-            color: kTextColor.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+  Widget _buildRecommendedCard(RecommendationModel rec) {
+    return GestureDetector(
+      onTap: () => _openDetail(
+          rec.type, rec.id, rec.title, rec.imageUrl, rec.price, rec.subtitle),
+      child: Container(
+        width: 160,
+        margin: const EdgeInsets.only(right: 15),
+        decoration: BoxDecoration(
+          color: kCardColor,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: kSecondaryColor),
+          boxShadow: [
+            BoxShadow(
+              color: kTextColor.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 120,
+              width: double.infinity,
+              child: AppNetworkImage(url: rec.imageUrl),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    rec.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: kTextColor,
+                    ),
+                  ),
+                  Text(
+                    rec.formattedPrice,
+                    style: const TextStyle(
+                      color: kPrimaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 120,
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              color: kSecondaryColor,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+    );
+  }
+
+  Widget _buildProductCard(ProductModel product) {
+    return GestureDetector(
+      onTap: () => _openDetail('product', product.id, product.name,
+          product.imageUrl, product.price, product.category),
+      child: Container(
+        width: 150,
+        margin: const EdgeInsets.only(right: 15),
+        decoration: BoxDecoration(
+          color: kCardColor,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: kSecondaryColor),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 120,
+              width: double.infinity,
+              child: AppNetworkImage(
+                url: product.imageUrl,
+                placeholderIcon: Icons.shopping_bag_outlined,
+              ),
             ),
-            child: Center(child: Icon(icon, color: kAccentColor, size: 40)),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: kTextColor,
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: kTextColor,
+                    ),
                   ),
-                ),
-                Text(
-                  price,
-                  style: const TextStyle(
-                    color: kPrimaryColor,
-                    fontWeight: FontWeight.bold,
+                  Text(
+                    product.formattedPrice,
+                    style: const TextStyle(
+                      color: kPrimaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -622,7 +771,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.menu_book, size: 12, color: kAccentColor),
+                          const Icon(Icons.menu_book, size: 12, color: kPrimaryColor),
                           const SizedBox(width: 4),
                           Text(
                             article.category,
@@ -638,7 +787,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   Text(
                     article.title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: kTextColor,
                       fontWeight: FontWeight.w600,
                     ),

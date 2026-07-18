@@ -14,24 +14,59 @@ const String kApiBaseUrl = 'http://localhost:8000/api';
 // `storage` symlink), e.g. uploaded proof-of-payment photos.
 const String kStorageBaseUrl = 'http://localhost:8000/storage';
 
-// ===== ELEGANT SPA PALETTE (cream / blush / dark espresso) =====
-// Base sa "Perfect Spa" reference — light at airy, hindi coffee-shop dark.
+// ===== LUXURY NAIL-SPA PALETTE (latte / caramel / espresso + gold) =====
+// Keeps the warm brown identity but elevated. The four surface/text tokens
+// below are **theme-driven**: `applyThemePalette()` swaps them to the dark set
+// whenever the active theme changes, so every screen that references them
+// (kBackgroundColor / kCardColor / kSecondaryColor / kTextColor) reads as a
+// polished light OR dark surface without per-screen changes.
 
-const kBackgroundColor = Color(0xFFF7ECE1); // soft cream/blush background
-const kCardColor = Color(0xFFFFFFFF); // white cards
-const kSecondaryColor = Color(
-  0xFFE8D5C4,
-); // light tan/beige (borders, tints, image placeholders)
-const kPrimaryColor = Color(
-  0xFF9C7A54,
-); // muted gold-brown (prices, links, "See all")
-const kAccentColor = Color(
-  0xFF3D2817,
-); // deep espresso brown (banners, dark buttons, icons)
-const kTextColor = Color(0xFF3D2817); // dark espresso brown text
-const kBlushAccent = Color(
-  0xFFE8B4B8,
-); // soft cherry-blossom pink (optional decorative accent)
+// -- Light values --
+const kLightBackground = Color(0xFFFBF7F2); // warm ivory / latte
+const kLightCard = Color(0xFFFFFFFF); // glossy white
+const kLightSecondary = Color(0xFFEAD9C7); // latte tint (borders/placeholders)
+const kLightText = Color(0xFF2C1E14); // deep espresso text
+
+// -- Dark values (professional warm-charcoal, not pure black) --
+const kDarkBackground = Color(0xFF14100D);
+const kDarkSurface = Color(0xFF201812);
+const kDarkBorder = Color(0xFF3A2E24);
+const kDarkText = Color(0xFFF0E7DD);
+const kDarkPrimary = Color(0xFFD9B070); // lighter caramel for dark contrast
+
+// -- Theme-aware (mutable) tokens. Default to light; flipped at runtime. --
+Color kBackgroundColor = kLightBackground;
+Color kCardColor = kLightCard;
+Color kSecondaryColor = kLightSecondary;
+Color kTextColor = kLightText;
+
+/// Swaps the mutable surface/text tokens to match the active brightness.
+/// Called from the app root before each frame so all screens stay in sync.
+void applyThemePalette(bool isDark) {
+  kBackgroundColor = isDark ? kDarkBackground : kLightBackground;
+  kCardColor = isDark ? kDarkSurface : kLightCard;
+  kSecondaryColor = isDark ? kDarkBorder : kLightSecondary;
+  kTextColor = isDark ? kDarkText : kLightText;
+}
+
+// -- Accents (constant; read well on both light and dark) --
+const kPrimaryColor = Color(0xFFA97C50); // caramel-bronze (prices, links)
+const kAccentColor = Color(0xFF3A2317); // deep espresso (banners, dark buttons)
+const kBlushAccent = Color(0xFFD9A7A0); // dusty rose — sparing CTA pop
+const kSageAccent = Color(0xFF8FA68A); // muted sage — sparing accent
+const kMetallicGold = Color(0xFFC9A24B); // metallic gold accent / dividers
+const kLatte = Color(0xFFB5895A); // caramel (ombré gradient start)
+
+/// Caramel → espresso ombré, used for hero blocks and premium promo banners.
+const LinearGradient kOmbreGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [kLatte, kAccentColor],
+);
+
+/// Elegant serif family for headings (platform serif — no bundled asset
+/// needed). Replaces the old ad-hoc 'cursive' styling.
+const String kHeadingFont = 'serif';
 
 const double kDefaultPadding = 20.0;
 

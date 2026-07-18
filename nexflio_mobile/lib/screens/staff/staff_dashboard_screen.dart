@@ -3,9 +3,13 @@ import '../../utils/constants.dart';
 import '../../utils/page_transitions.dart';
 import '../../models/attendance_model.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
+import '../home/home_screen.dart';
 import 'staff_schedule_screen.dart';
 import 'leave_requests_screen.dart';
 import 'commission_screen.dart';
+import 'manage_appointments_screen.dart';
+import 'my_clients_screen.dart';
 
 /// Hub for staff: attendance (time-in/out), break toggle, and links to
 /// schedule, leaves, and commission.
@@ -94,6 +98,15 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
     }
   }
 
+  Future<void> _logout() async {
+    await AuthService.instance.logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      fadeSlideRoute(const HomeScreen()),
+      (route) => false,
+    );
+  }
+
   Future<void> _toggleBreak(bool value) async {
     setState(() => _isWorking = true);
     try {
@@ -130,11 +143,18 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kTextColor),
-        title: const Text(
+        iconTheme: IconThemeData(color: kTextColor),
+        title: Text(
           "Staff Dashboard",
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.logout, color: kTextColor),
+            tooltip: 'Log out',
+            onPressed: _logout,
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: kPrimaryColor))
@@ -149,6 +169,18 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
                       const SizedBox(height: 15),
                       _buildBreakCard(),
                       const SizedBox(height: 25),
+                      _buildNavTile(
+                        icon: Icons.people_alt_outlined,
+                        title: "My Clients",
+                        subtitle: "Clients assigned to you and their visits",
+                        screen: const MyClientsScreen(),
+                      ),
+                      _buildNavTile(
+                        icon: Icons.event_available,
+                        title: "Manage Appointments",
+                        subtitle: "Update booking status and complete services",
+                        screen: const ManageAppointmentsScreen(),
+                      ),
                       _buildNavTile(
                         icon: Icons.calendar_month,
                         title: "My Schedule",
@@ -178,7 +210,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(_error!, style: const TextStyle(color: kTextColor)),
+          Text(_error!, style: TextStyle(color: kTextColor)),
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: _load,
@@ -224,7 +256,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
           const SizedBox(height: 8),
           Text(
             statusText,
-            style: const TextStyle(
+            style: TextStyle(
               color: kTextColor,
               fontWeight: FontWeight.w600,
               fontSize: 16,
@@ -245,11 +277,11 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
                 : attendance.isOpen
                     ? OutlinedButton.icon(
                         onPressed: _isWorking ? null : _timeOut,
-                        icon: const Icon(Icons.logout, color: kAccentColor),
+                        icon: const Icon(Icons.logout, color: kPrimaryColor),
                         label: const Text("Time Out",
-                            style: TextStyle(color: kAccentColor)),
+                            style: TextStyle(color: kPrimaryColor)),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: kAccentColor),
+                          side: const BorderSide(color: kPrimaryColor),
                         ),
                       )
                     : const Center(
@@ -277,7 +309,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
         value: _isOnBreak,
         onChanged: _isWorking ? null : _toggleBreak,
         activeThumbColor: kAccentColor,
-        title: const Text(
+        title: Text(
           "On Break",
           style: TextStyle(
             color: kTextColor,
@@ -314,11 +346,11 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
             color: kSecondaryColor.withOpacity(0.3),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: kAccentColor, size: 20),
+          child: Icon(icon, color: kPrimaryColor, size: 20),
         ),
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             color: kTextColor,
             fontWeight: FontWeight.w600,
             fontSize: 15,

@@ -4,8 +4,10 @@ import '../../models/service_model.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../utils/page_transitions.dart';
+import '../../widgets/app_network_image.dart';
 import '../auth/login_screen.dart';
 import '../booking/book_appointment_screen.dart';
+import '../catalog/catalog_detail_screen.dart';
 
 class ServiceMenuScreen extends StatefulWidget {
   const ServiceMenuScreen({super.key});
@@ -135,7 +137,7 @@ class _ServiceMenuScreen extends State<ServiceMenuScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBackgroundColor,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
           const SizedBox(height: 10), // Padding from the top
@@ -151,7 +153,7 @@ class _ServiceMenuScreen extends State<ServiceMenuScreen> {
               ),
               child: TextField(
                 controller: _searchController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   icon: Icon(Icons.search, color: kPrimaryColor),
                   hintText: "I'm Looking for...",
                   hintStyle: TextStyle(color: kTextColor),
@@ -238,7 +240,7 @@ class _ServiceMenuScreen extends State<ServiceMenuScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: const TextStyle(color: kTextColor)),
+            Text(_error!, style: TextStyle(color: kTextColor)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _fetchServices,
@@ -255,7 +257,7 @@ class _ServiceMenuScreen extends State<ServiceMenuScreen> {
 
     final visible = _visibleServices;
     if (visible.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           "No items found.",
           style: TextStyle(color: kTextColor, fontSize: 16),
@@ -263,24 +265,44 @@ class _ServiceMenuScreen extends State<ServiceMenuScreen> {
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
-      children: [
-        ...visible.map(
-          (service) => _buildShopCard(
-            title: service.name,
-            subtitle: service.description,
-            price: service.formattedPrice,
-            icon: Icons.spa,
-            isWishlisted: _wishlistedIds.contains(service.id),
-            onBook: () => _handleBook(service),
-            onToggleWishlist: () => _toggleWishlist(service),
+    return RefreshIndicator(
+      onRefresh: _fetchServices,
+      color: kPrimaryColor,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: kDefaultPadding),
+        children: [
+          ...visible.map(
+            (service) => _buildShopCard(
+              title: service.name,
+              subtitle: service.description,
+              price: service.formattedPrice,
+              imageUrl: service.imageUrl,
+              isWishlisted: _wishlistedIds.contains(service.id),
+              onTap: () => _openDetail(service),
+              onBook: () => _handleBook(service),
+              onToggleWishlist: () => _toggleWishlist(service),
+            ),
           ),
-        ),
-        const SizedBox(
-          height: 90,
-        ), // Extra padding at the bottom so the floating basket doesn't block the last item
-      ],
+          const SizedBox(
+            height: 90,
+          ), // Extra padding at the bottom so the floating basket doesn't block the last item
+        ],
+      ),
+    );
+  }
+
+  void _openDetail(ServiceModel service) {
+    Navigator.push(
+      context,
+      fadeSlideRoute(CatalogDetailScreen(
+        type: 'service',
+        id: service.id,
+        initialTitle: service.name,
+        initialImageUrl: service.imageUrl,
+        initialPrice: service.price,
+        initialSubtitle: service.category,
+      )),
     );
   }
 
@@ -289,14 +311,18 @@ class _ServiceMenuScreen extends State<ServiceMenuScreen> {
     required String title,
     required String subtitle,
     required String price,
-    required IconData icon,
+    required String? imageUrl,
     required bool isWishlisted,
+    required VoidCallback onTap,
     required VoidCallback onBook,
     required VoidCallback onToggleWishlist,
   }) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 15),
       height: 140,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: kAccentColor, // Espresso background for the card
         borderRadius: BorderRadius.circular(15),
@@ -378,46 +404,37 @@ class _ServiceMenuScreen extends State<ServiceMenuScreen> {
               ),
             ),
           ),
-          // RIGHT SIDE IMAGE PLACEHOLDER (Curved edge)
+          // RIGHT SIDE IMAGE (falls back to a placeholder)
           Expanded(
             flex: 2,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: kSecondaryColor,
-                borderRadius: BorderRadius.only(
-                  topRight: Radius.circular(15),
-                  bottomRight: Radius.circular(15),
-                  bottomLeft: Radius.circular(
-                    70,
-                  ), // This creates that distinct sweeping curve from your reference
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Icon(
-                      icon,
-                      size: 60,
-                      color: kAccentColor.withOpacity(0.3),
-                    ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: GestureDetector(
-                      onTap: onToggleWishlist,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                AppNetworkImage(url: imageUrl),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: onToggleWishlist,
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: const BoxDecoration(
+                        color: Colors.white70,
+                        shape: BoxShape.circle,
+                      ),
                       child: Icon(
                         isWishlisted ? Icons.favorite : Icons.favorite_border,
-                        color: isWishlisted ? Colors.redAccent : kAccentColor,
-                        size: 22,
+                        color: isWishlisted ? Colors.redAccent : kPrimaryColor,
+                        size: 20,
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
       ),
     );
   }

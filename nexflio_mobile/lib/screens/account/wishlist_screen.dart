@@ -65,8 +65,8 @@ class _WishlistScreenState extends State<WishlistScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kTextColor),
-        title: const Text(
+        iconTheme: IconThemeData(color: kTextColor),
+        title: Text(
           "Wishlist",
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
@@ -87,7 +87,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: const TextStyle(color: kTextColor)),
+            Text(_error!, style: TextStyle(color: kTextColor)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _fetchWishlist,
@@ -100,7 +100,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
     }
 
     if (_services.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           "No services saved yet.",
           style: TextStyle(color: kTextColor, fontSize: 16),
@@ -122,7 +122,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.spa, color: kAccentColor),
+                  const Icon(Icons.spa, color: kPrimaryColor),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -130,7 +130,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                       children: [
                         Text(
                           service.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: kTextColor,
                             fontWeight: FontWeight.bold,
                           ),

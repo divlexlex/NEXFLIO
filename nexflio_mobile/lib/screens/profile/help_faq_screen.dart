@@ -39,8 +39,8 @@ class HelpFaqScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kTextColor),
-        title: const Text(
+        iconTheme: IconThemeData(color: kTextColor),
+        title: Text(
           "Help & FAQ",
           style: TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
         ),
@@ -63,7 +63,7 @@ class HelpFaqScreen extends StatelessWidget {
                 collapsedIconColor: kAccentColor,
                 title: Text(
                   faq['q']!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: kTextColor,
                     fontWeight: FontWeight.bold,
                   ),

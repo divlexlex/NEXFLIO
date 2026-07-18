@@ -14,6 +14,12 @@ class ServiceController extends Controller
         return Service::where('status', 'active')->get();
     }
 
+    // Single service for the detail page.
+    public function show($id)
+    {
+        return Service::findOrFail($id);
+    }
+
     // Para mag-add ng new service (para sa Admin dashboard)
     public function store(Request $request)
     {
