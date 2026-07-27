@@ -12,7 +12,6 @@ use App\Http\Controllers\Web\InventoryController;
 use App\Http\Controllers\Web\LandingController;
 use App\Http\Controllers\Web\LeaveController;
 use App\Http\Controllers\Web\PaymentController;
-use App\Http\Controllers\Web\ProductController;
 use App\Http\Controllers\Web\PromoController;
 use App\Http\Controllers\Web\ReportController;
 use App\Http\Controllers\Web\ServiceController;
@@ -22,7 +21,6 @@ Route::get('/', [LandingController::class, 'index'])->name('landing');
 
 // Public catalog detail pages (booking still happens in the app).
 Route::get('/services/{id}', [CatalogController::class, 'service'])->name('catalog.service');
-Route::get('/products/{id}', [CatalogController::class, 'product'])->name('catalog.product');
 Route::get('/promos/{id}', [CatalogController::class, 'promo'])->name('catalog.promo');
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
@@ -61,14 +59,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
     Route::get('/services', [ServiceController::class, 'index'])->name('services');
     Route::post('/services', [ServiceController::class, 'store'])->name('services.store');
     Route::patch('/services/{id}', [ServiceController::class, 'update'])->name('services.update');
+    Route::delete('/services/{id}', [ServiceController::class, 'destroy'])->name('services.destroy');
 
     Route::get('/promos', [PromoController::class, 'index'])->name('promos');
     Route::post('/promos', [PromoController::class, 'store'])->name('promos.store');
     Route::patch('/promos/{id}', [PromoController::class, 'update'])->name('promos.update');
-
-    Route::get('/products', [ProductController::class, 'index'])->name('products');
-    Route::post('/products', [ProductController::class, 'store'])->name('products.store');
-    Route::patch('/products/{id}', [ProductController::class, 'update'])->name('products.update');
 
     // ===== Owner only =====
     Route::middleware('role:1')->group(function () {

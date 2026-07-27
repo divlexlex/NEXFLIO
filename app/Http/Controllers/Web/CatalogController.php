@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
 use App\Models\Promo;
 use App\Models\Service;
 
 /**
- * Public detail pages for services, products, and promos. Booking/buying still
+ * Public detail pages for services and promos. Booking/buying still
  * happens in the mobile app, so each detail page's primary CTA opens the
  * "Get the app" modal.
  */
@@ -27,22 +26,6 @@ class CatalogController extends Controller
             'description' => $service->description,
             'meta' => $service->duration_minutes . ' mins',
             'cta' => 'Book in the App',
-        ]);
-    }
-
-    public function product($id)
-    {
-        $product = Product::where('status', 'active')->findOrFail($id);
-
-        return view('catalog.detail', [
-            'type' => 'product',
-            'title' => $product->name,
-            'category' => $product->category,
-            'price' => $product->price,
-            'imageUrl' => $product->image_url,
-            'description' => $product->description,
-            'meta' => $product->stock > 0 ? 'In stock' : 'Out of stock',
-            'cta' => 'Get it in the App',
         ]);
     }
 

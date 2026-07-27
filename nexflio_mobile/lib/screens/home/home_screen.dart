@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
 import '../../utils/theme.dart';
 import '../../models/promo_model.dart';
-import '../../models/product_model.dart';
 import '../../models/recommendation_model.dart';
 import '../../models/article_model.dart';
 import '../../services/api_service.dart';
@@ -14,7 +13,6 @@ import '../cards/cards_screen.dart';
 import '../booking/booking_screen.dart';
 import '../account/account_screen.dart';
 import '../account/wishlist_screen.dart';
-import '../products/products_screen.dart';
 import '../services/service_menu_screen.dart';
 import '../catalog/catalog_detail_screen.dart';
 import '../../widgets/app_network_image.dart';
@@ -30,7 +28,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   List<RecommendationModel> _recommendations = [];
-  List<ProductModel> _products = [];
   List<PromoModel> _promos = [];
   List<ArticleModel> _articles = [];
   bool _isLoadingHomeContent = true;
@@ -79,26 +76,21 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final results = await Future.wait([
         ApiService.get('/recommendations'),
-        ApiService.get('/products'),
         ApiService.get('/promos'),
         ApiService.get('/articles'),
       ]);
       final recommendations = (results[0] as List)
           .map((e) => RecommendationModel.fromJson(e as Map<String, dynamic>))
           .toList();
-      final products = (results[1] as List)
-          .map((e) => ProductModel.fromJson(e as Map<String, dynamic>))
-          .toList();
-      final promos = (results[2] as List)
+      final promos = (results[1] as List)
           .map((e) => PromoModel.fromJson(e as Map<String, dynamic>))
           .toList();
-      final articles = (results[3] as List)
+      final articles = (results[2] as List)
           .map((e) => ArticleModel.fromJson(e as Map<String, dynamic>))
           .toList();
       if (mounted) {
         setState(() {
           _recommendations = recommendations;
-          _products = products;
           _promos = promos;
           _articles = articles;
           _isLoadingHomeContent = false;
@@ -412,28 +404,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 30),
 
-                // ===== SHOP PRODUCTS =====
-                if (!_isLoadingHomeContent && _products.isNotEmpty) ...[
-                  _sectionHeader(
-                    "Shop Products",
-                    onSeeAll: () => Navigator.push(
-                      context,
-                      fadeSlideRoute(const ProductsScreen()),
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                  SizedBox(
-                    height: 200,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: _products
-                          .map((product) => _buildProductCard(product))
-                          .toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                ],
-
                 // ===== PROMOS =====
                 if (!_isLoadingHomeContent && _promos.isNotEmpty) ...[
                   _sectionHeader("Promos"),
@@ -660,60 +630,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   Text(
                     rec.formattedPrice,
-                    style: const TextStyle(
-                      color: kPrimaryColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProductCard(ProductModel product) {
-    return GestureDetector(
-      onTap: () => _openDetail('product', product.id, product.name,
-          product.imageUrl, product.price, product.category),
-      child: Container(
-        width: 150,
-        margin: const EdgeInsets.only(right: 15),
-        decoration: BoxDecoration(
-          color: kCardColor,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: kSecondaryColor),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              height: 120,
-              width: double.infinity,
-              child: AppNetworkImage(
-                url: product.imageUrl,
-                placeholderIcon: Icons.shopping_bag_outlined,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: kTextColor,
-                    ),
-                  ),
-                  Text(
-                    product.formattedPrice,
                     style: const TextStyle(
                       color: kPrimaryColor,
                       fontWeight: FontWeight.bold,

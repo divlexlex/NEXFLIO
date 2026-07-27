@@ -49,6 +49,12 @@
                                     data-image="{{ $service->image_url }}">
                                 Edit
                             </button>
+                            <form method="POST" action="{{ url('admin/services') }}/{{ $service->id }}"
+                                  class="d-inline" onsubmit="return confirm('Remove {{ $service->name }}? This will hide it from bookings but keep past appointment history.');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                            </form>
                         </td>
                     </tr>
                 @empty

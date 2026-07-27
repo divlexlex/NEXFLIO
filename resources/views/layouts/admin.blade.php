@@ -100,11 +100,6 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {{ request()->routeIs('admin.products') ? 'active' : '' }}" href="{{ route('admin.products') }}">
-                    <i class="bi bi-bag me-2"></i>Products
-                </a>
-            </li>
-            <li class="nav-item">
                 <a class="nav-link {{ request()->routeIs('admin.promos') ? 'active' : '' }}" href="{{ route('admin.promos') }}">
                     <i class="bi bi-tags me-2"></i>Promos
                 </a>

@@ -32,10 +32,17 @@ class ServiceController extends Controller
     {
         $service = Service::findOrFail($id);
 
-        // Never deleted — retiring a service is a status change.
+        // Retiring a service via the Status field keeps it out of new bookings while preserving history.
         $service->update($this->applyImage($request, $service, $this->validated($request), 'services'));
 
         return back()->with('success', 'Service updated.');
+    }
+
+    public function destroy($id)
+    {
+        Service::findOrFail($id)->delete();
+
+        return back()->with('success', 'Service removed.');
     }
 
     private function validated(Request $request): array

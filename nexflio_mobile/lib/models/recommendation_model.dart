@@ -1,7 +1,7 @@
 /// A single item from the dynamic `/recommendations` feed — a normalized
-/// service, product, or promo. `type` decides which detail page to open.
+/// service or promo. `type` decides which detail page to open.
 class RecommendationModel {
-  final String type; // 'service' | 'product' | 'promo'
+  final String type; // 'service' | 'promo'
   final int id;
   final String title;
   final String? subtitle;

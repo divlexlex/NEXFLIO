@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/constants.dart';
 
 /// Network image with a graceful placeholder when the URL is null, still
-/// loading, or fails to load. Used for services, products, and promos so a
+/// loading, or fails to load. Used for services and promos so a
 /// missing image never breaks the layout.
 class AppNetworkImage extends StatelessWidget {
   final String? url;

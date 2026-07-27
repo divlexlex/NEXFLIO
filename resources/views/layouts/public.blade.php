@@ -81,7 +81,6 @@
         <div class="collapse navbar-collapse" id="publicNav">
             <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
                 <li class="nav-item"><a class="nav-link" href="{{ route('landing') }}#services">Services</a></li>
-                <li class="nav-item"><a class="nav-link" href="{{ route('landing') }}#products">Products</a></li>
                 <li class="nav-item"><a class="nav-link" href="{{ route('landing') }}#about">About Us</a></li>
                 <li class="nav-item"><a class="nav-link" href="{{ route('landing') }}#contact">Contact</a></li>
                 <li class="nav-item"><a class="nav-link" href="{{ route('landing') }}#app">Get the App</a></li>

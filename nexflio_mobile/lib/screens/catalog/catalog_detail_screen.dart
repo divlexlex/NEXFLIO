@@ -9,10 +9,10 @@ import '../../widgets/app_network_image.dart';
 import '../auth/login_screen.dart';
 import '../booking/book_appointment_screen.dart';
 
-/// Detail page for a service, product, or promo. Fetches the full record by
+/// Detail page for a service or promo. Fetches the full record by
 /// type + id; a preloaded title/price/image paints instantly while loading.
 class CatalogDetailScreen extends StatefulWidget {
-  final String type; // 'service' | 'product' | 'promo'
+  final String type; // 'service' | 'promo'
   final int id;
   final String? initialTitle;
   final String? initialImageUrl;
@@ -89,9 +89,6 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
         return _data!['duration_minutes'] != null
             ? '${_data!['duration_minutes']} mins'
             : null;
-      case 'product':
-        final stock = (_data!['stock'] ?? 0) as int;
-        return stock > 0 ? 'In stock' : 'Out of stock';
       case 'promo':
         final svc = _data!['service'] as Map<String, dynamic>?;
         return svc != null ? 'Includes: ${svc['name']}' : null;

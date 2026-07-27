@@ -69,33 +69,6 @@
     </div>
 </section>
 
-{{-- PRODUCTS --}}
-@if($products->isNotEmpty())
-<section id="products" class="py-5">
-    <div class="container">
-        <div class="text-center mb-4">
-            <h2 class="mb-2">Shop Products</h2>
-            <hr class="gold-divider mx-auto">
-            <p class="text-muted mt-2 mb-0">Take the spa home with our curated retail picks.</p>
-        </div>
-        <div class="row g-3">
-            @foreach($products as $product)
-                <div class="col-6 col-md-4 col-lg-3">
-                    @include('partials.item-card', [
-                        'url' => route('catalog.product', $product->id),
-                        'imageUrl' => $product->image_url,
-                        'title' => $product->name,
-                        'price' => $product->price,
-                        'subtitle' => $product->category,
-                        'ctaText' => 'View',
-                    ])
-                </div>
-            @endforeach
-        </div>
-    </div>
-</section>
-@endif
-
 {{-- PROMOS --}}
 @if($promos->isNotEmpty())
 <section class="py-5 bg-white border-top" style="border-color: var(--spa-tan) !important;">

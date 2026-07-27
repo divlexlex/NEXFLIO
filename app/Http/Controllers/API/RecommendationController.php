@@ -3,15 +3,14 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
 use App\Models\Promo;
 use App\Models\Service;
 use Illuminate\Http\Request;
 
 /**
- * Dynamic recommendations: a randomized mix of active services, products, and
- * promos. Public (works for guests and signed-in users) and re-shuffled on
- * every request, so the client just re-fetches to refresh.
+ * Dynamic recommendations: a randomized mix of active services and promos.
+ * Public (works for guests and signed-in users) and re-shuffled on every
+ * request, so the client just re-fetches to refresh.
  */
 class RecommendationController extends Controller
 {
@@ -29,15 +28,6 @@ class RecommendationController extends Controller
             'image_url' => $s->image_url,
         ]);
 
-        $products = Product::where('status', 'active')->get()->map(fn ($p) => [
-            'type' => 'product',
-            'id' => $p->id,
-            'title' => $p->name,
-            'subtitle' => $p->category,
-            'price' => $p->price,
-            'image_url' => $p->image_url,
-        ]);
-
         $promos = Promo::where('is_active', true)->with('service')->get()->map(fn ($p) => [
             'type' => 'promo',
             'id' => $p->id,
@@ -48,7 +38,6 @@ class RecommendationController extends Controller
         ]);
 
         return $services
-            ->concat($products)
             ->concat($promos)
             ->shuffle()
             ->take($limit)

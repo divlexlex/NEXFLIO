@@ -3,16 +3,20 @@ import 'package:flutter/material.dart';
 const String kAppName = 'Perfect Nails';
 
 // ===== API CONFIGURATION =====
-// The Laravel backend is expected to be running locally via `php artisan serve`
-// (default port 8000). Every platform reaches it via localhost — for Android
-// (emulator or a real USB-connected device), that requires
-// `adb reverse tcp:8000 tcp:8000` so the device's "localhost" tunnels back to
-// this machine over ADB.
-const String kApiBaseUrl = 'http://localhost:8000/api';
+// The Laravel backend runs on the dev machine via `php artisan serve
+// --host=0.0.0.0` (default port 8000) and is reached over the LAN by its IP
+// address — this works for any device (Android or iOS) connected to the same
+// WiFi network as the dev machine. Update this if the dev machine's IP
+// changes (check with `ipconfig` / `Get-NetIPAddress`).
+const String kApiOrigin = String.fromEnvironment(
+  'API_ORIGIN',
+  defaultValue: 'http://127.0.0.1:8000',
+);
+const String kApiBaseUrl = '$kApiOrigin/api';
 
 // Base URL for files stored via `Storage::disk('public')` (served through the
 // `storage` symlink), e.g. uploaded proof-of-payment photos.
-const String kStorageBaseUrl = 'http://localhost:8000/storage';
+const String kStorageBaseUrl = '$kApiOrigin/storage';
 
 // ===== LUXURY NAIL-SPA PALETTE (latte / caramel / espresso + gold) =====
 // Keeps the warm brown identity but elevated. The four surface/text tokens
