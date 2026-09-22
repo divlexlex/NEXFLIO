@@ -3,49 +3,162 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Web\Concerns\RedirectsAfterAuth;
 use App\Models\User;
+use App\Services\EmailVerificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
+/**
+ * Single, shared Website login gateway. There is one `users` table and one
+ * `web` session guard for every role (Super Admin/Manager/Staff/Client) —
+ * this controller never chooses a role, it only reads the authenticated
+ * user's existing `role_id` and decides where they land (see
+ * RedirectsAfterAuth::destinationFor()). Real authorization still lives in
+ * the `role:` middleware on the admin/staff/account routes (routes/web.php),
+ * not here — this only controls a post-login redirect.
+ */
 class AuthController extends Controller
 {
-    public function showLogin()
+    use RedirectsAfterAuth;
+
+    public function showLogin(Request $request)
     {
         if (Auth::check()) {
-            return redirect()->route('admin.dashboard');
+            return redirect()->to($this->destinationFor(Auth::user()));
+        }
+
+        // Guest "Book an Appointment" → "Continue on Website" links here with
+        // ?redirect=, so a Client lands back where they started once logged
+        // in — the same intended-URL session key Laravel's own auth
+        // middleware uses. Management always goes to the dashboard regardless
+        // (see destinationFor()), so this never affects that redirect.
+        $redirect = $request->query('redirect');
+        if ($this->isSafeRedirectPath($redirect)) {
+            $request->session()->put('url.intended', $redirect);
         }
 
         return view('auth.login');
     }
 
-    public function login(Request $request)
+    public function login(Request $request, EmailVerificationService $verification)
     {
-        $credentials = $request->validate([
-            'email' => 'required|string|email',
+        $validated = $request->validate([
+            'email'    => 'required|string',
             'password' => 'required|string',
         ]);
 
-        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
+        // Accept email or username — look up the user manually so we can
+        // match against either column, then verify the password ourselves.
+        $user = User::where('email', $validated['email'])
+            ->orWhere('username', $validated['email'])
+            ->first();
+
+        if (! $user || ! Hash::check($validated['password'], $user->password)) {
             return back()
                 ->withInput($request->only('email'))
                 ->withErrors(['email' => 'Invalid credentials.']);
         }
 
-        // The web portal is for the Owner and Manager only; staff and
-        // clients use the mobile app.
-        if (! in_array((int) Auth::user()->role_id, [User::ROLE_SUPER_ADMIN, User::ROLE_MANAGER], true)) {
-            Auth::logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
+        Auth::login($user, $request->boolean('remember'));
 
-            return back()
-                ->withInput($request->only('email'))
-                ->withErrors(['email' => 'This portal is for management only — please use the mobile app.']);
+        $user = Auth::user();
+
+        // Accounts created before email verification existed were
+        // grandfathered in as verified (see the backfill migration), so this
+        // only ever stops a genuinely new, unverified account.
+        if (! $user->hasVerifiedEmail()) {
+            Auth::logout();
+            $request->session()->regenerateToken();
+            $request->session()->put('verify_user_id', $user->id);
+            $verification->issue($user);
+
+            return redirect()->route('verification.show')
+                ->with('status', 'Please verify your account first — we sent a new code to your email.');
         }
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('admin.dashboard'));
+        return redirect()->to($this->destinationFor($user));
+    }
+
+    public function showRegister(Request $request)
+    {
+        if (Auth::check()) {
+            return redirect()->to($this->destinationFor(Auth::user()));
+        }
+
+        // Same intended-URL passthrough as showLogin(), so a Guest who lands
+        // here from the Book Appointment modal's redirect param (via the
+        // "Create an account" link on the login page) still returns to
+        // where they started after registering.
+        $redirect = $request->query('redirect');
+        if ($this->isSafeRedirectPath($redirect)) {
+            $request->session()->put('url.intended', $redirect);
+        }
+
+        return view('auth.register');
+    }
+
+    public function register(Request $request, EmailVerificationService $verification)
+    {
+        // Website registration collects only the essentials (name, email,
+        // mobile, password) plus a Terms acceptance — gender/birthdate/
+        // address are no longer asked here and are instead filled in later
+        // from the Account > Profile page (ClientAccountController@updateProfile
+        // already treats all of those as optional). This deliberately
+        // diverges from App\Http\Controllers\API\AuthController@register
+        // (mobile), which is left untouched — out of scope for this
+        // Website-only task. Both create an identical `users` row (role_id
+        // forced to Client server-side, never from the request) either way.
+        $fields = $request->validate([
+            'last_name' => 'required|string|max:100',
+            'first_name' => 'required|string|max:100',
+            'middle_name' => 'nullable|string|max:100',
+            'email' => 'required|string|email|unique:users,email',
+            // 09XXXXXXXXX or +639XXXXXXXXX — accepts both common PH mobile
+            // formats without being stricter than that (no carrier-prefix
+            // allowlist, no re-formatting of what the Client typed).
+            'mobile_number' => ['required', 'string', 'regex:/^(09\d{9}|\+639\d{9})$/'],
+            'password' => 'required|string|min:8|confirmed',
+            'terms' => 'accepted',
+        ], [
+            'terms.accepted' => 'You must agree to the Terms & Conditions to create an account.',
+        ]);
+
+        $user = DB::transaction(function () use ($fields) {
+            $fullName = trim(preg_replace(
+                '/\s+/',
+                ' ',
+                "{$fields['first_name']} ".($fields['middle_name'] ?? '')." {$fields['last_name']}"
+            ));
+
+            $user = User::create([
+                'name' => $fullName,
+                'email' => $fields['email'],
+                'password' => Hash::make($fields['password']),
+                'role_id' => User::ROLE_CLIENT,
+            ]);
+
+            $user->clientProfile()->create([
+                'first_name' => $fields['first_name'],
+                'middle_name' => $fields['middle_name'] ?? null,
+                'last_name' => $fields['last_name'],
+                'mobile_number' => $fields['mobile_number'],
+            ]);
+
+            return $user;
+        });
+
+        // Not logged in yet — the account only gets full access once the
+        // Client proves they control this email (see EmailVerificationController).
+        $request->session()->put('verify_user_id', $user->id);
+        $verification->issue($user);
+
+        return redirect()->route('verification.show')
+            ->with('status', 'We sent a 6-digit verification code to your email.');
     }
 
     public function logout(Request $request)
@@ -55,5 +168,14 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('landing');
+    }
+
+    private function isSafeRedirectPath(?string $path): bool
+    {
+        if (! $path || ! str_starts_with($path, '/') || str_starts_with($path, '//')) {
+            return false;
+        }
+
+        return parse_url($path, PHP_URL_HOST) === null;
     }
 }

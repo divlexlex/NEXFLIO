@@ -28,14 +28,16 @@ class RecommendationController extends Controller
             'image_url' => $s->image_url,
         ]);
 
-        $promos = Promo::where('is_active', true)->with('service')->get()->map(fn ($p) => [
-            'type' => 'promo',
-            'id' => $p->id,
-            'title' => $p->title,
-            'subtitle' => $p->service?->name,
-            'price' => $p->price,
-            'image_url' => $p->image_url,
-        ]);
+        $promos = Promo::live()->with('services')->get()
+            ->filter(fn ($p) => $p->displayPrice() !== null)
+            ->map(fn ($p) => [
+                'type' => 'promo',
+                'id' => $p->id,
+                'title' => $p->title,
+                'subtitle' => $p->services->first()?->name,
+                'price' => $p->displayPrice(),
+                'image_url' => $p->image_url,
+            ]);
 
         return $services
             ->concat($promos)

@@ -26,10 +26,15 @@
         }
         body { background: var(--spa-cream); color: var(--spa-text); }
         .sidebar {
-            width: 240px; min-height: 100vh;
+            width: 240px; height: 100vh;
             background: linear-gradient(180deg, #3A2317 0%, #2A190F 100%);
-            position: fixed; top: 0; left: 0; overflow-y: auto;
+            position: fixed; top: 0; left: 0;
+            display: flex; flex-direction: column;
         }
+        /* Nav list scrolls on its own; the brand (top) and the account/theme/
+           logout block (bottom) stay pinned and always visible, no matter how
+           many nav items there are. */
+        .sidebar > .nav { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
         .sidebar .nav-link { color: rgba(255,255,255,.75); border-radius: .5rem; transition: background .15s, color .15s; }
         .sidebar .nav-link:hover { color: #fff; background: rgba(255,255,255,.08); }
         .sidebar .nav-link.active { color: #fff; background: var(--spa-gold); }
@@ -38,8 +43,11 @@
         .text-gold { color: var(--spa-gold); }
         .btn-spa { background: var(--spa-espresso); color: #fff; transition: background .2s; }
         .btn-spa:hover { background: var(--spa-gold); color: #fff; }
+        html[data-bs-theme="dark"] .btn-spa { background: var(--spa-gold); }
+        html[data-bs-theme="dark"] .btn-spa:hover { background: var(--spa-metallic); }
         @media (max-width: 991px) {
-            .sidebar { position: static; width: 100%; min-height: auto; }
+            .sidebar { position: static; width: 100%; height: auto; }
+            .sidebar > .nav { flex: 0 0 auto; overflow-y: visible; }
             .main-content { margin-left: 0; }
         }
     </style>
@@ -56,22 +64,44 @@
 <div class="d-lg-flex">
     <aside class="sidebar p-3">
         <a href="{{ route('admin.dashboard') }}" class="d-block text-white text-decoration-none fs-5 fw-bold mb-4 px-2">
-            NEXFLIO <small class="d-block fs-6 fw-normal opacity-50">Perfect Nails Admin</small>
+            {{-- Shared by Owner (role 1) and Manager (role 2) — label reflects
+                 whoever's actually signed in instead of always saying "Admin". --}}
+            NEXFLIO <small class="d-block fs-6 fw-normal opacity-50">Perfect Nails {{ auth()->user()->role_id === \App\Models\User::ROLE_SUPER_ADMIN ? 'Admin' : 'Manager' }}</small>
         </a>
         <ul class="nav flex-column gap-1">
+            @php
+                $pendingAppointments = \App\Models\Appointment::where('status', 'unverified')->count();
+                $pendingPayments = \App\Models\Payment::where('status', 'pending')->count();
+                $pendingChangeRequests = \App\Models\AppointmentChangeRequest::where('status', 'pending')->count();
+                $pendingLeaves = \App\Models\LeaveRequest::where('status', 'pending')->count();
+            @endphp
             <li class="nav-item">
                 <a class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}">
                     <i class="bi bi-speedometer2 me-2"></i>Dashboard
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {{ request()->routeIs('admin.appointments') ? 'active' : '' }}" href="{{ route('admin.appointments') }}">
+                <a class="nav-link d-flex align-items-center {{ request()->routeIs('admin.appointments') ? 'active' : '' }}" href="{{ route('admin.appointments') }}">
                     <i class="bi bi-calendar-event me-2"></i>Appointments
+                    @if($pendingAppointments)
+                        <span class="badge text-bg-warning ms-auto">{{ $pendingAppointments }}</span>
+                    @endif
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {{ request()->routeIs('admin.payments') ? 'active' : '' }}" href="{{ route('admin.payments') }}">
+                <a class="nav-link d-flex align-items-center {{ request()->routeIs('admin.appointment-requests') ? 'active' : '' }}" href="{{ route('admin.appointment-requests') }}">
+                    <i class="bi bi-arrow-left-right me-2"></i>Change Requests
+                    @if($pendingChangeRequests)
+                        <span class="badge text-bg-warning ms-auto">{{ $pendingChangeRequests }}</span>
+                    @endif
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link d-flex align-items-center {{ request()->routeIs('admin.payments') ? 'active' : '' }}" href="{{ route('admin.payments') }}">
                     <i class="bi bi-cash-coin me-2"></i>Payments
+                    @if($pendingPayments)
+                        <span class="badge text-bg-warning ms-auto">{{ $pendingPayments }}</span>
+                    @endif
                 </a>
             </li>
             <li class="nav-item">
@@ -85,8 +115,11 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {{ request()->routeIs('admin.leaves') ? 'active' : '' }}" href="{{ route('admin.leaves') }}">
+                <a class="nav-link d-flex align-items-center {{ request()->routeIs('admin.leaves') ? 'active' : '' }}" href="{{ route('admin.leaves') }}">
                     <i class="bi bi-calendar-x me-2"></i>Leave Requests
+                    @if($pendingLeaves)
+                        <span class="badge text-bg-warning ms-auto">{{ $pendingLeaves }}</span>
+                    @endif
                 </a>
             </li>
             <li class="nav-item">
@@ -100,15 +133,20 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {{ request()->routeIs('admin.promos') ? 'active' : '' }}" href="{{ route('admin.promos') }}">
-                    <i class="bi bi-tags me-2"></i>Promos
+                <a class="nav-link {{ request()->routeIs('admin.promos*') ? 'active' : '' }}" href="{{ route('admin.promos') }}">
+                    <i class="bi bi-tags me-2"></i>Promotions
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('admin.availability*') ? 'active' : '' }}" href="{{ route('admin.availability') }}">
+                    <i class="bi bi-clock-history me-2"></i>Availability
                 </a>
             </li>
             @if((int) auth()->user()->role_id === \App\Models\User::ROLE_SUPER_ADMIN)
                 <li class="mt-3 px-2 text-uppercase small text-white-50">Owner</li>
                 <li class="nav-item">
                     <a class="nav-link {{ request()->routeIs('admin.audit-logs') ? 'active' : '' }}" href="{{ route('admin.audit-logs') }}">
-                        <i class="bi bi-shield-lock me-2"></i>Audit Trail
+                        <i class="bi bi-shield-lock me-2"></i>Activity Log
                     </a>
                 </li>
                 <li class="nav-item">

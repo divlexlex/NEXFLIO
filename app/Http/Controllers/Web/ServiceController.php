@@ -54,6 +54,7 @@ class ServiceController extends Controller
             'price' => 'required|numeric|min:0',
             'duration_minutes' => 'required|integer|min:5',
             'status' => ['required', Rule::in(['active', 'inactive', 'suspended'])],
+            'badge' => 'nullable|string|max:50',
             'image' => 'nullable|image|max:4096',
         ]);
     }

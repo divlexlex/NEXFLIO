@@ -46,6 +46,7 @@
                                     data-price="{{ $service->price }}"
                                     data-duration="{{ $service->duration_minutes }}"
                                     data-status="{{ $service->status }}"
+                                    data-badge="{{ $service->badge }}"
                                     data-image="{{ $service->image_url }}">
                                 Edit
                             </button>
@@ -85,8 +86,9 @@
                         <label class="form-label">Category</label>
                         <input name="category" id="svc-category" class="form-control" list="categories" required>
                         <datalist id="categories">
-                            <option value="Nails"><option value="Massage"><option value="Aesthetics"><option value="Packages">
+                            <option value="Facial"><option value="Massage"><option value="Nails"><option value="Lashes & Brows"><option value="Aesthetics"><option value="Head Spa"><option value="Home Service">
                         </datalist>
+                        <div class="form-text">Must match an existing tab exactly to group with it on the public Services page — any other spelling creates a new tab.</div>
                     </div>
                     <div class="col mb-2">
                         <label class="form-label">Status</label>
@@ -110,6 +112,13 @@
                 <div class="mb-2">
                     <label class="form-label">Description</label>
                     <textarea name="description" id="svc-description" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Badge <span class="text-muted">(optional)</span></label>
+                    <input name="badge" id="svc-badge" class="form-control" list="badges" maxlength="50" placeholder="e.g. New, Best, Most Booked">
+                    <datalist id="badges">
+                        <option value="New"><option value="Best"><option value="Most Booked"><option value="Premium">
+                    </datalist>
                 </div>
                 @include('admin.partials.image-field', ['prefix' => 'svc'])
             </div>
@@ -143,6 +152,7 @@
             document.getElementById('svc-price').value = btn.dataset.price;
             document.getElementById('svc-duration').value = btn.dataset.duration;
             document.getElementById('svc-status').value = btn.dataset.status;
+            document.getElementById('svc-badge').value = btn.dataset.badge || '';
             document.getElementById('svc-image').value = '';
             removeBox.checked = false;
             if (btn.dataset.image) {

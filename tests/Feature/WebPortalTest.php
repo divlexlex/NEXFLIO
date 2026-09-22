@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Enums\AppointmentStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Appointment;
-use App\Models\Payment;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,16 +17,20 @@ class WebPortalTest extends TestCase
     protected $seed = true;
 
     private User $owner;
+
     private User $manager;
+
     private User $staff;
+
     private User $client;
+
     private Service $service;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->owner = User::where('email', 'owner@nexflio.test')->firstOrFail();
+        $this->owner = User::where('email', 'admin@nexflio.test')->firstOrFail();
         $this->manager = User::where('email', 'manager@nexflio.test')->firstOrFail();
         $this->staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
         $this->client = User::where('email', 'client@nexflio.test')->firstOrFail();
@@ -44,28 +47,45 @@ class WebPortalTest extends TestCase
 
     public function test_landing_page_renders_with_services(): void
     {
+        // Landing only ever shows a random shuffled sample of the catalog
+        // (LandingController's "Suggested for you") — the full, deterministic
+        // list lives on the dedicated /services page (App\Support\ServiceCatalog),
+        // so that's what a specific service's visibility is checked against.
         $this->get('/')
             ->assertOk()
-            ->assertSee('Perfect')
+            ->assertSee('Perfect');
+
+        $this->get('/services')
+            ->assertOk()
             ->assertSee('Foot Spa');
     }
 
     public function test_login_page_renders(): void
     {
-        $this->get('/login')->assertOk()->assertSee('Management Portal');
+        $this->get('/login')->assertOk()->assertSee('Sign In');
     }
 
-    public function test_staff_and_clients_cannot_log_into_the_portal(): void
+    // Staff now have their own self-service portal (App\Http\Controllers\Web\StaffController)
+    // — the mobile-app-only restriction was dropped once the mobile app was
+    // no longer being built.
+    public function test_staff_can_log_in_and_reach_their_dashboard(): void
     {
-        foreach ([$this->staff, $this->client] as $user) {
-            $response = $this->post('/login', [
-                'email' => $user->email,
-                'password' => 'password',
-            ]);
+        $this->post('/login', [
+            'email' => $this->staff->email,
+            'password' => 'delacruz00000',
+        ])->assertRedirect(route('staff.dashboard'));
 
-            $response->assertSessionHasErrors('email');
-            $this->assertGuest();
-        }
+        $this->assertAuthenticatedAs($this->staff);
+    }
+
+    public function test_client_can_log_in_and_reach_the_dashboard(): void
+    {
+        $this->post('/login', [
+            'email' => $this->client->email,
+            'password' => 'password',
+        ])->assertRedirect(route('account.dashboard'));
+
+        $this->assertAuthenticatedAs($this->client);
     }
 
     public function test_manager_can_log_in_and_reach_the_dashboard(): void

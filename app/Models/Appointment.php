@@ -54,6 +54,33 @@ class Appointment extends Model
     }
 
     /**
+     * Home Service address snapshot (Phase 3B) — absent for Branch Booking
+     * appointments. See App\Models\AppointmentAddress for why this is a
+     * copy, not a live reference to client_addresses.
+     */
+    public function address()
+    {
+        return $this->hasOne(AppointmentAddress::class);
+    }
+
+    public function changeRequests()
+    {
+        return $this->hasMany(AppointmentChangeRequest::class);
+    }
+
+    /**
+     * At most one open (pending) client change request at a time — enforced
+     * in StoreAppointmentChangeRequest, surfaced on the client's bookings
+     * page and the Manager review queue.
+     */
+    public function pendingChangeRequest()
+    {
+        return $this->hasOne(AppointmentChangeRequest::class)
+            ->where('status', AppointmentChangeRequest::STATUS_PENDING)
+            ->latestOfMany();
+    }
+
+    /**
      * Registered clients book under their account; walk-ins only have a name
      * the manager typed in.
      */

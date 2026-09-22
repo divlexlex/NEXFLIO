@@ -9,11 +9,11 @@ class PromoController extends Controller
 {
     public function index()
     {
-        return Promo::where('is_active', true)->with('service')->get();
+        return Promo::live()->with('services')->get();
     }
 
     public function show($id)
     {
-        return Promo::with('service')->findOrFail($id);
+        return Promo::with('services')->findOrFail($id);
     }
 }

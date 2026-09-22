@@ -1,28 +1,48 @@
-{{-- Image catalog card linking to a detail page.
-     Expects: $url, $title, $price; optional: $imageUrl, $subtitle, $badge, $ctaText --}}
-<a href="{{ $url }}" class="text-decoration-none d-block h-100">
-    <div class="card-spa h-100 overflow-hidden">
-        <div class="ratio ratio-4x3">
-            @if(!empty($imageUrl))
-                <img src="{{ $imageUrl }}" alt="{{ $title }}" style="object-fit: cover;">
-            @else
-                <div class="bg-ombre d-flex align-items-center justify-content-center text-white">
-                    <i class="bi bi-image fs-1 opacity-50"></i>
-                </div>
-            @endif
+{{-- Image catalog card. Pass $url for real DB-backed items (links to their detail
+     page) — omit it for temporary/no-record items (demo services) with no real
+     Service id.
+
+     For a no-$url item, the card must still never fabricate a booking: a Guest
+     gets the existing "Get the App" modal, but an authenticated Client must NOT
+     see that Guest modal (see the Phase 3B modal-regression fix) — instead the
+     card sends them to the real booking start chooser (account.booking.start),
+     which only ever lists real, DB-backed, active services. This is the one
+     spot in the whole Website where auth state has to be checked *inline*
+     rather than relying on a destination page's own @auth block, because a
+     demo item has no detail page to route to at all.
+     Expects: $title, $price; optional: $url, $imageUrl, $subtitle, $badge, $ctaText --}}
+@php
+    $isLink = !empty($url);
+    $isAuthedClient = auth()->check() && auth()->user()->isClient();
+    $fallbackHref = $isAuthedClient ? route('account.booking.start') : null;
+@endphp
+<{{ $isLink || $fallbackHref ? 'a' : 'button' }}
+    @if($isLink) href="{{ $url }}"
+    @elseif($fallbackHref) href="{{ $fallbackHref }}" data-bs-toggle="modal" data-bs-target="#bookServiceModal"
+    @else type="button" data-bs-toggle="modal" data-bs-target="#getAppModal" @endif
+    class="nx-card d-block h-100 w-100 text-start border-0 bg-transparent p-0"
+    style="text-decoration:none; color:inherit; cursor:pointer;"
+>
+    <div class="nx-card-media" style="height: 180px;">
+        @if(!empty($imageUrl))
+            <img src="{{ $imageUrl }}" alt="{{ $title }}">
+        @else
+            <i class="bi bi-image fs-1 opacity-50"></i>
+        @endif
+    </div>
+    <div class="nx-card-body">
+        @if(!empty($badge))
+            <span class="nx-badge mb-2">{{ $badge }}</span>
+        @endif
+        <div class="d-flex justify-content-between align-items-start gap-2">
+            <h3 class="nx-card-title h6 mb-1">{{ $title }}</h3>
         </div>
-        <div class="p-3">
-            @if(!empty($badge))
-                <span class="badge mb-1" style="background: var(--spa-blush); color: var(--spa-espresso);">{{ $badge }}</span>
-            @endif
-            <div class="d-flex justify-content-between align-items-start gap-2">
-                <h3 class="h6 mb-1">{{ $title }}</h3>
-                <span class="text-gold fw-bold text-nowrap">₱{{ number_format($price, 2) }}</span>
-            </div>
-            @if(!empty($subtitle))
-                <p class="small text-muted mb-2">{{ $subtitle }}</p>
-            @endif
-            <small class="text-gold fw-semibold">{{ $ctaText ?? 'View details' }} <i class="bi bi-arrow-right"></i></small>
+        @if(!empty($subtitle))
+            <p class="small nx-text-secondary mb-2">{{ $subtitle }}</p>
+        @endif
+        <div class="d-flex justify-content-between align-items-center">
+            <span class="nx-card-price">₱{{ number_format($price, 2) }}</span>
+            <small class="nx-text-accent fw-semibold">{{ $ctaText ?? 'View details' }} <i class="bi bi-arrow-right"></i></small>
         </div>
     </div>
-</a>
+</{{ $isLink || $fallbackHref ? 'a' : 'button' }}>

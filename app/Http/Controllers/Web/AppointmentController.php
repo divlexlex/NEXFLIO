@@ -9,9 +9,14 @@ use App\Models\Appointment;
 use App\Models\Notification;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\AppointmentService;
+use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AppointmentController extends Controller
 {
@@ -34,34 +39,112 @@ class AppointmentController extends Controller
         ]);
     }
 
-    /** FullCalendar event feed. */
+    /**
+     * FullCalendar event feed — carries everything the details drawer on the
+     * Appointments page needs in extendedProps, so clicking an event never
+     * needs a second request. Cancelled / no-show are included (greyed) so
+     * the calendar legend is meaningful and past cancellations stay visible.
+     */
     public function feed(Request $request)
     {
-        $appointments = Appointment::with(['service:id,name,duration_minutes', 'personnel:id,name'])
-            ->whereNotIn('status', [AppointmentStatus::Cancelled, AppointmentStatus::NoShow])
+        $appointments = Appointment::with([
+            'user:id,name',
+            'user.clientProfile:id,user_id,mobile_number',
+            'service:id,name,duration_minutes,price',
+            'personnel:id,name',
+            'payment',
+            'address',
+        ])
             ->when($request->query('start'), fn ($query, $start) => $query->where('appointment_date', '>=', $start))
             ->when($request->query('end'), fn ($query, $end) => $query->where('appointment_date', '<=', $end))
             ->get();
 
-        return response()->json($appointments->map(function (Appointment $appointment) {
+        // One grouped query for the "Returning customer" flag instead of N.
+        $returningUserIds = Appointment::query()
+            ->whereIn('user_id', $appointments->pluck('user_id')->filter()->unique())
+            ->selectRaw('user_id, COUNT(*) as c')
+            ->groupBy('user_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->pluck('user_id')
+            ->all();
+
+        return response()->json($appointments->map(function (Appointment $appointment) use ($returningUserIds) {
             $date = $appointment->appointment_date->toDateString();
             $start = "{$date}T{$appointment->start_time}";
             $duration = $appointment->service->duration_minutes ?? 60;
 
+            $isWalkIn = $appointment->user_id === null;
+            $bookingType = $isWalkIn ? 'Walk-in' : ($appointment->address ? 'Home Service' : 'Online Booking');
+
+            // Light-mode chip colours (FullCalendar renders these inline); the
+            // dark-mode equivalents are CSS overrides keyed off the classNames
+            // below — see admin/appointments/index.blade.php.
+            $statusKey = $isWalkIn && ! $appointment->status->isTerminal() ? 'walkin' : $appointment->status->value;
+            [$bg, $border, $fg] = match ($statusKey) {
+                'walkin' => ['#deeafe', '#aec8f7', '#0d5bd6'],
+                'unverified' => ['#fcebd2', '#ecc78f', '#8a5a16'],
+                'booked' => ['#dcf0e2', '#a9d9bc', '#1f6b41'],
+                'in-service' => ['#deeafe', '#aec8f7', '#1b4fc0'],
+                'completed' => ['#eae1f6', '#cdb8ec', '#5e3a97'],
+                'cancelled' => ['#ececec', '#d9d9d9', '#7a7a7a'],
+                'no-show' => ['#f6e5e3', '#e4c0ba', '#93534a'],
+                default => ['#e9e2d8', '#d8ccbc', '#5b5148'],
+            };
+
+            $payment = $appointment->payment;
+            $methodLabel = $payment ? match ($payment->method) {
+                'cash' => 'Cash', 'gcash' => 'GCash', 'bank_transfer' => 'Bank transfer', 'card' => 'Card',
+                default => ucfirst((string) $payment->method),
+            } : null;
+
             return [
                 'id' => $appointment->id,
-                'title' => trim(($appointment->clientName() ?? 'Client') . ' · ' . ($appointment->service->name ?? '')),
+                'title' => trim(($appointment->clientName() ?? 'Client').' · '.($appointment->service->name ?? '')),
                 'start' => $start,
-                'end' => \Carbon\Carbon::parse($start)->addMinutes($duration)->toIso8601String(),
-                'color' => match ($appointment->status) {
-                    AppointmentStatus::Unverified => '#fd7e14',
-                    AppointmentStatus::Booked => '#198754',
-                    AppointmentStatus::InService => '#0d6efd',
-                    default => '#9C7A54',
-                },
+                'end' => Carbon::parse($start)->addMinutes($duration)->toIso8601String(),
+                'backgroundColor' => $bg,
+                'borderColor' => $border,
+                'textColor' => $fg,
+                'classNames' => ['nx-evt', 'nx-evt-'.$statusKey],
                 'extendedProps' => [
-                    'status' => $appointment->status->value,
+                    'client' => $appointment->clientName() ?? 'Client',
+                    'phone' => $appointment->user?->clientProfile?->mobile_number ?? $appointment->walk_in_phone,
+                    'returning' => in_array($appointment->user_id, $returningUserIds, true),
+                    'service' => $appointment->service->name ?? '—',
+                    'durationMins' => $duration,
+                    'price' => $appointment->service->price ? (float) $appointment->service->price : null,
+                    'bookingType' => $bookingType,
+                    'dateLabel' => $appointment->appointment_date->format('M j, Y (D)'),
+                    'timeLabel' => Carbon::parse($start)->format('g:i A')
+                        .' – '.Carbon::parse($start)->addMinutes($duration)->format('g:i A'),
                     'personnel' => $appointment->personnel->name ?? null,
+                    'status' => $appointment->status->value,
+                    'statusLabel' => $appointment->status->label(),
+                    'isTerminal' => $appointment->status->isTerminal(),
+                    'payment' => $payment ? [
+                        'label' => $methodLabel.' · '.ucfirst($payment->status->value),
+                        'amount' => (float) $payment->amount,
+                        'proofUrl' => $payment->proof_path ? Storage::url($payment->proof_path) : null,
+                    ] : null,
+                    'notes' => $appointment->notes,
+                    // Which status actions the drawer should offer (server still
+                    // re-validates each via AppointmentService::transition).
+                    'actions' => match ($appointment->status) {
+                        AppointmentStatus::Unverified => [
+                            ['to' => 'booked', 'label' => 'Confirm booking', 'style' => 'success'],
+                            ['to' => 'cancelled', 'label' => 'Reject / Cancel', 'style' => 'outline-danger', 'reason' => true],
+                        ],
+                        AppointmentStatus::Booked => [
+                            ['to' => 'in-service', 'label' => 'Start service', 'style' => 'primary'],
+                            ['to' => 'no-show', 'label' => 'Mark no-show', 'style' => 'outline-secondary'],
+                            ['to' => 'cancelled', 'label' => 'Cancel', 'style' => 'outline-danger'],
+                        ],
+                        AppointmentStatus::InService => [
+                            ['to' => 'completed', 'label' => 'Mark completed', 'style' => 'success'],
+                            ['to' => 'cancelled', 'label' => 'Cancel', 'style' => 'outline-danger'],
+                        ],
+                        default => [],
+                    },
                 ],
             ];
         }));
@@ -116,6 +199,44 @@ class AppointmentController extends Controller
     }
 
     /**
+     * Status action from the Appointments calendar details drawer — Confirm
+     * (verify payment → Booked), Mark Completed, or Cancel. Everything runs
+     * through AppointmentService::transition so payment verification,
+     * commission accrual, and client notifications stay consistent with the
+     * mobile app and the Payments screen.
+     */
+    public function updateStatus(Request $request, AppointmentService $appointmentService, $id)
+    {
+        $appointment = Appointment::with(['service', 'personnel', 'payment', 'user'])->findOrFail($id);
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::in([
+                AppointmentStatus::Booked->value,
+                AppointmentStatus::InService->value,
+                AppointmentStatus::Completed->value,
+                AppointmentStatus::Cancelled->value,
+                AppointmentStatus::NoShow->value,
+            ])],
+            'rejection_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $appointmentService->transition(
+                $appointment,
+                AppointmentStatus::from($validated['status']),
+                $request->user(),
+                ['rejection_reason' => $validated['rejection_reason'] ?? null],
+            );
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (AuthorizationException $e) {
+            return back()->withErrors(['status' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Appointment updated to "'.AppointmentStatus::from($validated['status'])->label().'".');
+    }
+
+    /**
      * Manager override: reschedule and/or reassign an active appointment.
      * The Auditable trait records the before/after values automatically.
      */
@@ -143,7 +264,7 @@ class AppointmentController extends Controller
                 'user_id' => $appointment->user_id,
                 'title' => 'Appointment updated',
                 'body' => "Your booking for {$appointment->service->name} was moved to "
-                    . "{$appointment->appointment_date->toDateString()} at {$appointment->start_time}.",
+                    ."{$appointment->appointment_date->toDateString()} at {$appointment->start_time}.",
             ]);
         }
 

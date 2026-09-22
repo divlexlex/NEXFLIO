@@ -7,9 +7,16 @@ use App\Models\Promo;
 use App\Models\Service;
 
 /**
- * Public detail pages for services and promos. Booking/buying still
- * happens in the mobile app, so each detail page's primary CTA opens the
- * "Get the app" modal.
+ * Public detail pages for services and promos.
+ *
+ * For a Guest, the primary CTA still opens the "Get the app" / "Continue
+ * on Website" choice modal (booking requires an account). For an
+ * authenticated Client, catalog/detail.blade.php routes the CTA straight
+ * into the real Website Booking Flow (App\Http\Controllers\Web\BookingController)
+ * instead — see that view for the auth-aware logic. `id` and `locationType`
+ * are exposed here so the view can build that destination (Branch, Home
+ * Service, or the Branch/Home choice for a `both` service — see
+ * App\Enums\ServiceLocationType) without querying the Service model again.
  */
 class CatalogController extends Controller
 {
@@ -19,29 +26,32 @@ class CatalogController extends Controller
 
         return view('catalog.detail', [
             'type' => 'service',
+            'id' => $service->id,
             'title' => $service->name,
             'category' => $service->category,
+            'locationType' => $service->service_location_type->value,
             'price' => $service->price,
             'imageUrl' => $service->image_url,
             'description' => $service->description,
-            'meta' => $service->duration_minutes . ' mins',
-            'cta' => 'Book in the App',
+            'meta' => $service->duration_minutes.' mins',
+            'cta' => 'Book Now',
         ]);
     }
 
     public function promo($id)
     {
-        $promo = Promo::with('service')->where('is_active', true)->findOrFail($id);
+        $promo = Promo::live()->with('services')->findOrFail($id);
+        $serviceNames = $promo->services->pluck('name')->implode(', ');
 
         return view('catalog.detail', [
             'type' => 'promo',
-            'title' => $promo->title,
             'category' => 'Limited offer',
-            'price' => $promo->price,
+            'title' => $promo->title,
+            'price' => $promo->displayPrice(),
             'imageUrl' => $promo->image_url,
-            'description' => $promo->service ? 'Includes: ' . $promo->service->name : null,
-            'meta' => null,
-            'cta' => 'Claim in the App',
+            'description' => $promo->description ?? ($serviceNames ? 'Includes: '.$serviceNames : null),
+            'meta' => $promo->discountLabel(),
+            'cta' => 'Claim Offer',
         ]);
     }
 }

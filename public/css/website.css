@@ -1,0 +1,1199 @@
+/* =========================================================================
+   NEXFLIO Website Design System
+   Perfect Nails Wellness & Aesthetics — public website only.
+   Source of truth: Figma "web-and-admin" file, "01 - Design System" page.
+   Do not use these tokens/classes in the Admin layout.
+   ========================================================================= */
+
+:root {
+    /* Color tokens */
+    --nx-bg-page: #f8f4ef;
+    --nx-bg-surface: #ffffff;
+    --nx-bg-surface-muted: #e8ddd0;
+    --nx-border: #e7ddd1;
+    --nx-text-primary: #2f2925;
+    --nx-text-secondary: #81776e;
+    --nx-text-on-primary: #ffffff;
+    --nx-text-on-dark: #ffffff;
+    --nx-text-on-dark-muted: #c7b8a9;
+    --nx-brand-dark: #35241b;
+    --nx-brand-dark-alt: #4b3425;
+    --nx-primary: #a98963;
+    --nx-accent: #c59d5f;
+    --nx-error: #b85c55;
+
+    /* Radius */
+    --nx-radius-sm: 8px;
+    --nx-radius-md: 12px;
+    --nx-radius-lg: 18px;
+    --nx-radius-pill: 999px;
+
+    /* Spacing */
+    --nx-space-3: 12px;
+    --nx-space-6: 24px;
+
+    /* Elevation */
+    --nx-shadow-card: 0 2px 8px rgba(46, 33, 23, 0.08);
+    --nx-shadow-card-hover: 0 12px 28px rgba(46, 33, 23, 0.14);
+}
+
+html[data-bs-theme="dark"] {
+    --nx-bg-page: #16120e;
+    --nx-bg-surface: #211a14;
+    --nx-bg-surface-muted: #2b2119;
+    --nx-border: #3d2f23;
+    --nx-text-primary: #f2e9df;
+    --nx-text-secondary: #bfad9a;
+    --nx-brand-dark: #0f0b08;
+    --nx-brand-dark-alt: #1c140e;
+    --nx-primary: #cda06a;
+    --nx-accent: #e0b774;
+    --nx-error: #d97f77;
+    /* Warm-brown shadows vanish on a near-black page — use plain dark ones so
+       cards still read as lifted in dark mode. */
+    --nx-shadow-card: 0 2px 10px rgba(0, 0, 0, 0.35);
+    --nx-shadow-card-hover: 0 14px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* ---- Base / typography ------------------------------------------------ */
+
+body.nx-body {
+    background: var(--nx-bg-page);
+    color: var(--nx-text-primary);
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+.nx-body h1, .nx-body h2, .nx-body h3, .nx-body .nx-font-display {
+    font-family: 'Playfair Display', serif;
+    font-weight: 600;
+    color: var(--nx-text-primary);
+}
+
+.nx-eyebrow {
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--nx-accent);
+}
+
+.nx-text-secondary { color: var(--nx-text-secondary) !important; }
+.nx-text-accent { color: var(--nx-accent) !important; }
+.nx-text-primary-token { color: var(--nx-primary) !important; }
+
+/* ---- Buttons ------------------------------------------------------------ */
+
+.nx-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    padding: var(--nx-space-3) var(--nx-space-6);
+    border-radius: var(--nx-radius-md);
+    font-weight: 600;
+    font-size: 15px;
+    text-decoration: none;
+    border: 1.5px solid transparent;
+    transition: transform .15s ease, background-color .15s ease, color .15s ease, filter .15s ease;
+    line-height: 1.2;
+}
+.nx-btn:hover { transform: translateY(-1px); }
+
+.nx-btn-primary {
+    background: var(--nx-primary);
+    color: var(--nx-text-on-primary);
+}
+.nx-btn-primary:hover { filter: brightness(1.05); color: var(--nx-text-on-primary); }
+
+.nx-btn-outline {
+    background: transparent;
+    border-color: var(--nx-primary);
+    color: var(--nx-primary);
+}
+.nx-btn-outline:hover { background: var(--nx-primary); color: var(--nx-text-on-primary); }
+
+.nx-btn-dark {
+    background: var(--nx-brand-dark);
+    color: var(--nx-text-on-dark);
+    border-radius: var(--nx-radius-pill);
+    padding: var(--nx-space-3) var(--nx-space-6);
+}
+.nx-btn-dark:hover { background: var(--nx-brand-dark-alt); color: var(--nx-text-on-dark); }
+
+/* ---- Badge / pill -------------------------------------------------------- */
+
+.nx-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 12px;
+    border-radius: var(--nx-radius-pill);
+    background: var(--nx-bg-page);
+    border: 1px solid var(--nx-border);
+    color: var(--nx-text-primary);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+}
+
+.nx-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 14px 20px;
+    border-radius: var(--nx-radius-pill);
+    background: var(--nx-bg-surface);
+    border: 1px solid var(--nx-border);
+    color: var(--nx-text-primary);
+    font-size: 13.5px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: border-color .15s ease, transform .15s ease;
+}
+.nx-pill:hover { border-color: var(--nx-primary); color: var(--nx-text-primary); transform: translateY(-1px); }
+.nav-pills .nx-pill.active,
+button.nx-pill.active {
+    background: var(--nx-brand-dark) !important;
+    color: #fff !important;
+    border-color: var(--nx-brand-dark) !important;
+}
+
+/* ---- Form fields (Figma Design System: "Input Field" / "Textarea" / "File
+   Upload" component sets) — themes Bootstrap's native .form-control/
+   .form-select/.form-check so every form site-wide (Login, Register,
+   Profile, Branch/Home Service Booking) gets the same field treatment,
+   without any per-page CSS. .nx-search overrides these more specifically
+   further down for the services search box only. ---------------------- */
+
+.nx-body .form-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--nx-text-secondary);
+    margin-bottom: 6px;
+}
+
+.nx-body .form-control,
+.nx-body .form-select {
+    min-height: 46px;
+    padding: 12px 16px;
+    background: var(--nx-bg-surface);
+    border: 1.5px solid var(--nx-border);
+    border-radius: var(--nx-radius-sm);
+    color: var(--nx-text-primary);
+    font-size: 15px;
+}
+.nx-body textarea.form-control { min-height: 100px; padding-top: 12px; }
+.nx-body .form-control::placeholder { color: var(--nx-text-secondary); opacity: 1; }
+.nx-body .form-control:focus,
+.nx-body .form-select:focus {
+    background: var(--nx-bg-surface);
+    border-color: var(--nx-primary);
+    color: var(--nx-text-primary);
+    box-shadow: none;
+}
+.nx-body .form-control.is-invalid,
+.nx-body .form-select.is-invalid {
+    border-color: var(--nx-error);
+    background-image: none;
+}
+.nx-body .invalid-feedback,
+.nx-body .form-text {
+    font-size: 12.5px;
+}
+.nx-body .invalid-feedback,
+.nx-body .text-danger { color: var(--nx-error) !important; }
+.nx-body .form-text { color: var(--nx-text-secondary); }
+
+.nx-body .form-check-input {
+    border-color: var(--nx-border);
+}
+.nx-body .form-check-input:checked {
+    background-color: var(--nx-primary);
+    border-color: var(--nx-primary);
+}
+.nx-body .form-check-input:focus {
+    border-color: var(--nx-primary);
+    box-shadow: 0 0 0 .2rem rgba(169, 137, 99, .25);
+}
+
+/* ---- Cards --------------------------------------------------------------- */
+
+.nx-card {
+    background: var(--nx-bg-surface);
+    border-radius: var(--nx-radius-lg);
+    box-shadow: var(--nx-shadow-card);
+    /* No overflow:hidden here on purpose — combined with border-radius and
+       box-shadow on the same element, Chromium can render a faint seam
+       around whichever card paints first in a row (compositing-layer-order
+       dependent, not tied to any specific card). Clipping now happens on
+       .nx-card-media below instead, which is the only child with content
+       (the image) that actually needs to be clipped to the rounded corners. */
+}
+a.nx-card, a.nx-card:hover { text-decoration: none; color: inherit; }
+
+.nx-card-media {
+    background: var(--nx-bg-surface-muted);
+    height: 180px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--nx-text-secondary);
+    overflow: hidden;
+    border-radius: var(--nx-radius-lg) var(--nx-radius-lg) 0 0;
+}
+.nx-card-media img { width: 100%; height: 100%; object-fit: cover; }
+
+.nx-card-body { padding: 20px 24px 24px; }
+.nx-card-title { font-size: 20px; color: var(--nx-accent); margin-bottom: 4px; }
+.nx-card-desc { font-size: 14px; color: var(--nx-text-secondary); }
+.nx-card-price { font-size: 14px; font-weight: 600; color: var(--nx-text-primary); }
+
+/* ---- Header -------------------------------------------------------------- */
+
+.nx-header {
+    background: var(--nx-bg-surface);
+    border-bottom: 1px solid var(--nx-border);
+}
+.nx-header .navbar-brand {
+    font-family: 'Playfair Display', serif;
+    font-weight: 600;
+    font-size: 26px;
+    color: var(--nx-text-primary);
+}
+.nx-header .nav-link {
+    position: relative;
+    font-weight: 500;
+    font-size: 14.5px;
+    color: var(--nx-text-primary);
+    padding-bottom: 4px;
+    transition: color .15s ease;
+}
+.nx-header .nav-link::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: 2px;
+    background: var(--nx-accent);
+    border-radius: 2px;
+    transform: scaleX(0);
+    transition: transform .2s ease;
+}
+.nx-header .nav-link:hover { color: var(--nx-primary); }
+.nx-header .nav-link:hover::after,
+.nx-header .nav-link.active::after { transform: scaleX(1); }
+.nx-header .nav-link.active { color: var(--nx-accent); font-weight: 600; }
+
+/* Keyboard focus stays visible everywhere in the header, not just on hover. */
+.nx-header .nav-link:focus-visible,
+.nx-header .navbar-brand:focus-visible,
+.nx-btn:focus-visible,
+.nx-pill:focus-visible,
+.nx-header #themeToggle:focus-visible {
+    outline: 2px solid var(--nx-accent);
+    outline-offset: 3px;
+    border-radius: var(--nx-radius-sm);
+}
+
+/* ---- Account menu (authenticated Client, see partials/nav) ------------------ */
+
+.nx-account-menu {
+    background: var(--nx-bg-surface);
+    border: 1px solid var(--nx-border);
+    border-radius: var(--nx-radius-md);
+    box-shadow: var(--nx-shadow-card-hover);
+    padding: 6px;
+}
+.nx-account-menu .dropdown-item {
+    border-radius: var(--nx-radius-sm);
+    color: var(--nx-text-primary);
+    font-size: 14px;
+    padding: 8px 12px;
+}
+.nx-account-menu .dropdown-item.active {
+    background: var(--nx-bg-surface-muted);
+    color: var(--nx-accent);
+    font-weight: 600;
+}
+.nx-account-menu .dropdown-item:hover,
+.nx-account-menu .dropdown-item:focus {
+    background: var(--nx-bg-surface-muted);
+    color: var(--nx-text-primary);
+}
+
+/* ---- Hero ------------------------------------------------------------------ */
+
+.nx-hero {
+    background: var(--nx-bg-surface-muted);
+}
+.nx-hero h1 { font-size: clamp(2.1rem, 4vw, 3.25rem); line-height: 1.18; color: var(--nx-text-primary); }
+
+/* Dark mode: the flat muted slab reads as muddy — give the hero real depth
+   with a soft vertical gradient and a warm accent hairline under the header. */
+html[data-bs-theme="dark"] .nx-hero {
+    background:
+        radial-gradient(120% 120% at 15% 0%, rgba(224, 183, 116, .07) 0%, transparent 55%),
+        linear-gradient(180deg, var(--nx-bg-surface) 0%, var(--nx-bg-page) 100%);
+    border-bottom: 1px solid var(--nx-border);
+}
+html[data-bs-theme="dark"] .nx-header {
+    background: linear-gradient(180deg, #241c15 0%, var(--nx-bg-surface) 100%);
+    border-bottom-color: rgba(224, 183, 116, .18);
+}
+.nx-hero-media {
+    border-radius: var(--nx-radius-lg);
+    background: linear-gradient(135deg, var(--nx-primary) 0%, var(--nx-brand-dark) 100%);
+    min-height: 320px;
+}
+
+/* Hero slider — TEMPORARY Home content, see config/hero_slider.php. */
+.nx-hero-slider {
+    border-radius: var(--nx-radius-lg);
+    overflow: hidden;
+    box-shadow: var(--nx-shadow-card-hover);
+}
+.nx-hero-slider .carousel-item {
+    aspect-ratio: 4 / 5;
+    background: var(--nx-bg-surface-muted);
+}
+.nx-hero-slider .carousel-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 30%; /* keeps hands/faces in frame instead of cropping them out */
+}
+.nx-hero-slider-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(169, 137, 99, .14) 0%, rgba(53, 36, 27, 0) 38%, rgba(53, 36, 27, .58) 100%);
+}
+.nx-hero-slider .carousel-indicators {
+    margin-bottom: 16px;
+}
+.nx-hero-slider .carousel-indicators [data-bs-target] {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, .55);
+    border: none;
+    opacity: 1;
+    transition: width .2s ease, background-color .2s ease;
+}
+.nx-hero-slider .carousel-indicators .active {
+    background-color: #fff;
+    width: 22px;
+    border-radius: 4px;
+}
+.nx-hero-slider .carousel-control-prev,
+.nx-hero-slider .carousel-control-next {
+    width: 40px;
+    height: 40px;
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+    border-radius: 50%;
+    background: rgba(53, 36, 27, .55);
+    opacity: 0;
+    transition: opacity .2s ease, background-color .2s ease;
+}
+.nx-hero-slider:hover .carousel-control-prev,
+.nx-hero-slider:hover .carousel-control-next,
+.nx-hero-slider .carousel-control-prev:focus-visible,
+.nx-hero-slider .carousel-control-next:focus-visible {
+    opacity: 1;
+}
+.nx-hero-slider .carousel-control-prev:hover,
+.nx-hero-slider .carousel-control-next:hover {
+    background: rgba(53, 36, 27, .8);
+}
+.nx-hero-slider .carousel-control-prev { left: 16px; }
+.nx-hero-slider .carousel-control-next { right: 16px; }
+.nx-hero-slider .carousel-control-prev-icon,
+.nx-hero-slider .carousel-control-next-icon {
+    width: 14px;
+    height: 14px;
+}
+@media (max-width: 991.98px) {
+    .nx-hero-slider .carousel-item { aspect-ratio: 16 / 10; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .nx-hero-slider .carousel-item { transition: none !important; }
+}
+
+/* ---- Visit & Booking Highlights (Home, replaces the old plain stats bar) ------ */
+
+.nx-visit-highlights {
+    background: var(--nx-brand-dark);
+    border-radius: var(--nx-radius-lg);
+    display: flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+}
+.nx-visit-block {
+    flex: 1 1 220px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 26px 32px;
+}
+.nx-visit-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid rgba(224, 183, 116, .35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--nx-accent);
+    font-size: 17px;
+}
+.nx-visit-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--nx-accent);
+    margin: 0 0 4px;
+}
+.nx-visit-main { font-size: 17px; font-weight: 600; color: #fff; margin: 0 0 2px; }
+.nx-visit-sub { font-size: 13px; color: rgba(255, 255, 255, .6); margin: 0; }
+.nx-visit-divider {
+    width: 1px;
+    align-self: stretch;
+    margin: 18px 0;
+    background: rgba(255, 255, 255, .12);
+}
+@media (max-width: 767.98px) {
+    .nx-visit-highlights { flex-direction: column; }
+    .nx-visit-divider { width: auto; height: 1px; margin: 0 26px; }
+    .nx-visit-block { padding: 20px 24px; }
+}
+
+/* ---- Services search (filters the active category tab, see services-section) --- */
+
+.nx-search .input-group-text,
+.nx-search .form-control {
+    background: var(--nx-bg-surface);
+    border-color: var(--nx-border);
+    color: var(--nx-text-secondary);
+}
+.nx-search .form-control {
+    color: var(--nx-text-primary);
+}
+.nx-search .form-control:focus {
+    box-shadow: none;
+    border-color: var(--nx-primary);
+}
+.nx-search .input-group:focus-within .input-group-text {
+    border-color: var(--nx-primary);
+}
+
+/* ---- Section shells ------------------------------------------------------------ */
+
+.nx-section { padding: 88px 0; }
+.nx-section-tight { padding: 56px 0; }
+.nx-section-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.nx-section-title { font-size: 36px; }
+.nx-section-link { color: var(--nx-accent); font-weight: 500; font-size: 14.5px; text-decoration: none; }
+.nx-section-link:hover { color: var(--nx-primary); }
+
+/* ---- Packages --------------------------------------------------------------------- */
+
+.nx-package-featured {
+    background: var(--nx-brand-dark);
+    color: var(--nx-text-on-dark);
+    border-radius: var(--nx-radius-lg);
+    padding: 32px;
+}
+.nx-package-card {
+    background: var(--nx-bg-surface);
+    border-radius: var(--nx-radius-lg);
+    box-shadow: var(--nx-shadow-card);
+    padding: 28px 24px;
+}
+.nx-package-checklist { list-style: none; padding: 0; margin: 0; font-size: 13.5px; color: var(--nx-text-secondary); }
+.nx-package-checklist li { margin-bottom: 6px; }
+.nx-price-strike { text-decoration: line-through; color: var(--nx-text-secondary); font-size: 13px; }
+
+/* Package pricing tiers (Solo/Couple/Barkada) — see resources/views/pages/packages.blade.php */
+.nx-tier-list { margin: 16px 0; }
+.nx-tier-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--nx-border);
+    font-size: 14.5px;
+}
+.nx-tier-row:last-child { border-bottom: none; }
+.nx-tier-row .nx-tier-label { color: var(--nx-text-secondary); }
+.nx-tier-row .nx-tier-price { font-weight: 600; color: var(--nx-text-primary); }
+.nx-package-featured .nx-tier-row { border-bottom-color: rgba(255, 255, 255, .18); }
+.nx-package-featured .nx-tier-row .nx-tier-label { color: rgba(255, 255, 255, .7); }
+.nx-package-featured .nx-tier-row .nx-tier-price { color: #fff; }
+
+/* ---- Promotions (Special Offers section + /offers page) --------------------------- */
+/* Distinct from a plain Service item-card — a discount deserves more visual
+   weight, so these get a photo-forward treatment with a discount ribbon
+   instead of a plain price line. See partials/promo-card.blade.php. */
+
+.nx-promo-ribbon {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: var(--nx-accent);
+    color: var(--nx-brand-dark);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: .02em;
+    padding: 6px 14px;
+    border-radius: var(--nx-radius-pill);
+    box-shadow: 0 4px 10px rgba(46, 33, 23, .18);
+}
+
+/* Every Special Offer (Home teaser and the full /offers page) renders as an
+   equal-weight card in a row — see partials/promo-card.blade.php. */
+.nx-promo-card {
+    display: block;
+    height: 100%;
+    background: var(--nx-bg-surface);
+    border-radius: var(--nx-radius-lg);
+    box-shadow: var(--nx-shadow-card);
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    transition: box-shadow .2s ease, transform .2s ease;
+}
+.nx-promo-card:hover { box-shadow: var(--nx-shadow-card-hover); transform: translateY(-2px); color: inherit; }
+.nx-promo-card-media { position: relative; aspect-ratio: 16 / 10; background: var(--nx-bg-surface-muted); }
+.nx-promo-card-media img { width: 100%; height: 100%; object-fit: cover; }
+.nx-promo-card-media .nx-promo-ribbon { top: 10px; left: 10px; font-size: 11.5px; padding: 4px 10px; }
+.nx-promo-card-body { padding: 18px; }
+
+/* ---- Services sidebar layout (/services) -------------------------------------------- */
+.nx-services-layout { display: grid; grid-template-columns: 220px 1fr; gap: 32px; align-items: start; }
+.nx-services-sidebar {
+    position: sticky;
+    top: 88px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.nx-services-sidebar .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--nx-radius-sm);
+    color: var(--nx-text-secondary);
+    font-size: 14.5px;
+    font-weight: 500;
+    text-align: left;
+}
+.nx-services-sidebar .nav-link:hover { background: var(--nx-bg-surface-muted); color: var(--nx-text-primary); }
+.nx-services-sidebar .nav-link.active { background: var(--nx-brand-dark); color: #fff; }
+@media (max-width: 991.98px) {
+    .nx-services-layout { grid-template-columns: 1fr; }
+    .nx-services-sidebar {
+        position: static;
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 8px;
+        padding-bottom: 4px;
+    }
+    .nx-services-sidebar .nav-link { white-space: nowrap; }
+}
+
+/* ---- Client Home quick actions (account/dashboard.blade.php) -----------------------
+   .nx-quick-action's base box (background/radius/shadow/padding) is defined
+   once further below, alongside the rest of the Client Dashboard rules —
+   this just adds the icon-chip/title/subtitle treatment and a hover lift. */
+.nx-quick-action-icon {
+    flex: 0 0 auto;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--nx-radius-md);
+    background: var(--nx-bg-surface-muted);
+    color: var(--nx-brand-dark);
+    font-size: 19px;
+}
+html[data-bs-theme="dark"] .nx-quick-action-icon { color: var(--nx-accent); }
+.nx-quick-action-title { font-weight: 600; font-size: 14.5px; margin-bottom: 2px; }
+.nx-quick-action-sub { font-size: 12.5px; color: var(--nx-text-secondary); }
+
+.nx-upcoming-card {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 20px;
+    border-radius: var(--nx-radius-lg);
+    border: 1px solid var(--nx-accent);
+    background: var(--nx-bg-surface);
+}
+.nx-upcoming-card-media {
+    width: 64px; height: 64px; flex: 0 0 auto;
+    border-radius: var(--nx-radius-md);
+    overflow: hidden;
+    background: var(--nx-bg-surface-muted);
+}
+.nx-upcoming-card-media img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Add-ons list — packages page */
+.nx-addon-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--nx-border);
+    font-size: 14px;
+}
+.nx-addon-row:last-child { border-bottom: none; }
+.nx-addon-row .nx-addon-price { font-weight: 600; color: var(--nx-primary); }
+
+/* ---- Value props / why choose us --------------------------------------------------- */
+
+.nx-value-icon {
+    width: 48px; height: 48px;
+    border-radius: var(--nx-radius-md);
+    background: var(--nx-bg-surface-muted);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--nx-primary);
+    font-size: 20px;
+    margin-bottom: 4px;
+}
+
+/* ---- Testimonials -------------------------------------------------------------------- */
+
+.nx-testimonial {
+    background: var(--nx-bg-surface);
+    border-radius: var(--nx-radius-lg);
+    box-shadow: var(--nx-shadow-card);
+    padding: 26px;
+}
+.nx-testimonial .nx-stars { color: var(--nx-accent); letter-spacing: 2px; }
+
+/* ---- FAQ -------------------------------------------------------------------------------- */
+
+.nx-faq-item {
+    background: var(--nx-bg-surface);
+    border: 1px solid var(--nx-border);
+    border-radius: var(--nx-radius-md);
+}
+.nx-faq-question {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 15px;
+    color: var(--nx-text-primary);
+    text-decoration: none;
+}
+.nx-faq-question .nx-faq-icon { color: var(--nx-accent); font-weight: 600; font-size: 16px; }
+.nx-faq-answer { padding: 0 20px 18px; font-size: 13.5px; color: var(--nx-text-secondary); }
+
+/* ---- CTA banner ------------------------------------------------------------------------- */
+
+.nx-cta-banner {
+    background: var(--nx-brand-dark);
+    border-radius: var(--nx-radius-lg);
+    padding: 48px 56px;
+    color: var(--nx-text-on-dark);
+}
+
+/* ---- Footer -------------------------------------------------------------------------------- */
+
+.nx-footer { background: var(--nx-brand-dark); color: var(--nx-text-on-dark); }
+.nx-footer h6 { color: var(--nx-accent); font-size: 12px; letter-spacing: .4px; font-weight: 600; text-transform: uppercase; }
+.nx-footer a { color: var(--nx-text-on-dark); text-decoration: none; opacity: .92; }
+.nx-footer a:hover { opacity: 1; color: var(--nx-accent); }
+.nx-footer .nx-footer-tagline { color: var(--nx-text-on-dark-muted); font-size: 13.5px; }
+.nx-footer .nx-footer-divider { border-color: var(--nx-brand-dark-alt); opacity: 1; }
+.nx-footer .nx-footer-bottom { color: var(--nx-text-on-dark-muted); font-size: 12.5px; }
+.nx-footer .nx-social {
+    width: 32px; height: 32px; border-radius: 16px;
+    background: var(--nx-brand-dark-alt);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+    color: var(--nx-text-on-dark);
+}
+
+/* ---- Gallery grid + lightbox — see resources/views/pages/gallery.blade.php ------------------- */
+
+.nx-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 18px;
+}
+.nx-gallery-item {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--nx-radius-lg);
+    overflow: hidden;
+    cursor: pointer;
+    border: 0;
+    padding: 0;
+    display: block;
+    width: 100%;
+}
+.nx-gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .35s ease;
+}
+.nx-gallery-item:hover img { transform: scale(1.06); }
+.nx-gallery-item::after {
+    content: '\F52A'; /* bootstrap-icons zoom-in glyph */
+    font-family: 'bootstrap-icons';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: #fff;
+    background: rgba(53, 36, 27, 0);
+    transition: background .2s ease, opacity .2s ease;
+    opacity: 0;
+}
+.nx-gallery-item:hover::after { background: rgba(53, 36, 27, .35); opacity: 1; }
+.nx-gallery-item:focus-visible {
+    outline: 2px solid var(--nx-accent);
+    outline-offset: 3px;
+}
+
+/* ---- Map / branch placeholder ---------------------------------------------------------------- */
+
+.nx-map-placeholder {
+    background: var(--nx-bg-surface);
+    border: 1px solid var(--nx-border);
+    border-radius: var(--nx-radius-lg);
+    min-height: 340px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--nx-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+}
+.nx-map-placeholder .nx-map-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--nx-primary); }
+
+/* ---- Client account (Phase 2) — status badges + quick-action tiles --------------------------- */
+
+.nx-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: var(--nx-radius-pill);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+}
+.nx-status-pending { background: rgba(201, 157, 95, .16); color: var(--nx-accent); }
+.nx-status-upcoming { background: rgba(76, 130, 96, .14); color: #3f7d55; }
+.nx-status-done { background: var(--nx-bg-surface-muted); color: var(--nx-text-secondary); }
+.nx-status-cancelled { background: rgba(176, 74, 62, .12); color: #b04a3e; }
+
+.nx-quick-action {
+    background: var(--nx-bg-surface);
+    border: 1px solid var(--nx-border);
+    border-radius: var(--nx-radius-lg);
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 100%;
+    transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+a.nx-quick-action, a.nx-quick-action:hover { text-decoration: none; color: inherit; }
+.nx-quick-action:hover { border-color: var(--nx-accent); transform: translateY(-2px); box-shadow: var(--nx-shadow-card); }
+
+.nx-booking-row {
+    background: var(--nx-bg-surface);
+    border-radius: var(--nx-radius-md);
+    box-shadow: var(--nx-shadow-card);
+    padding: 18px 22px;
+}
+/* Briefly highlighted when jumped to from the dashboard calendar
+   (`#day-2026-09-04`-style anchors) — plain CSS, no JS needed. */
+.nx-booking-row:target { outline: 2px solid var(--nx-accent); outline-offset: 2px; }
+
+/* ---- Client Dashboard: mini calendar ------------------------------------------------------------ */
+
+.nx-calendar {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+}
+.nx-calendar-weekday {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--nx-text-secondary);
+    padding-bottom: 6px;
+}
+.nx-calendar-cell {
+    position: relative;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--nx-radius-sm);
+    color: var(--nx-text-primary);
+    text-decoration: none;
+    font-size: 13px;
+    transition: background .15s ease;
+}
+.nx-calendar-cell-empty { visibility: hidden; }
+a.nx-calendar-cell:hover { background: var(--nx-bg-surface-muted); color: inherit; }
+.nx-calendar-cell.is-today { background: var(--nx-primary); color: var(--nx-text-on-primary); font-weight: 600; }
+.nx-calendar-cell.has-appt:not(.is-today) { background: var(--nx-bg-surface-muted); font-weight: 600; }
+.nx-calendar-dot {
+    position: absolute;
+    bottom: 5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--nx-accent);
+}
+.nx-calendar-cell.is-today .nx-calendar-dot { background: var(--nx-text-on-primary); }
+@media (max-width: 400px) {
+    .nx-calendar-cell { font-size: 11px; }
+    .nx-calendar-weekday { font-size: 10px; }
+}
+
+/* ---- Client Dashboard: notifications panel ------------------------------------------------------ */
+
+.nx-notification {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--nx-border);
+}
+.nx-notification:last-child { border-bottom: none; }
+.nx-notification-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin-top: 6px;
+    border-radius: 50%;
+    background: var(--nx-accent);
+}
+.nx-notification.is-read .nx-notification-dot { background: transparent; }
+.nx-notification.is-read .nx-notification-title { font-weight: 500; color: var(--nx-text-secondary); }
+
+/* ---- Client Dashboard: profile summary card ------------------------------------------------------ */
+
+.nx-avatar-circle {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--nx-bg-surface-muted);
+    color: var(--nx-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    font-weight: 600;
+    flex: none;
+}
+.nx-profile-nav a,
+.nx-profile-nav button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 13px 14px;
+    border: none;
+    border-radius: var(--nx-radius-md);
+    background: transparent;
+    color: var(--nx-text-primary);
+    text-decoration: none;
+    text-align: left;
+    font-size: 14.5px;
+    font-weight: 500;
+    transition: background .15s ease, color .15s ease;
+}
+.nx-profile-nav .bi { font-size: 17px; width: 20px; text-align: center; color: var(--nx-primary); flex: none; }
+.nx-profile-nav a:hover,
+.nx-profile-nav button:hover { background: var(--nx-bg-surface-muted); }
+.nx-profile-nav a.active,
+.nx-profile-nav button.active {
+    background: var(--nx-bg-surface-muted);
+    color: var(--nx-accent);
+    font-weight: 600;
+}
+.nx-profile-nav a.active .bi,
+.nx-profile-nav button.active .bi { color: var(--nx-accent); }
+
+/* ---- Profile tab content: subtle heading each pane opens with -------------------------------- */
+
+.nx-profile-pane-heading {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--nx-border);
+}
+.nx-profile-pane-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--nx-radius-md);
+    background: var(--nx-bg-surface-muted);
+    color: var(--nx-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 19px;
+    flex: none;
+}
+.nx-progress-track {
+    height: 6px;
+    border-radius: var(--nx-radius-pill);
+    background: var(--nx-bg-surface-muted);
+    overflow: hidden;
+}
+.nx-progress-fill {
+    height: 100%;
+    border-radius: var(--nx-radius-pill);
+    background: var(--nx-accent);
+    transition: width .3s ease;
+}
+
+/* ---- Booking flow (Phase 3A — Branch Booking) -------------------------------------------------- */
+
+.nx-booking-stepper {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-bottom: 40px;
+}
+.nx-booking-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-right: 18px;
+}
+.nx-booking-step-index {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    background: var(--nx-bg-surface-muted);
+    color: var(--nx-text-secondary);
+}
+.nx-booking-step-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--nx-text-secondary);
+    white-space: nowrap;
+}
+.nx-booking-step.is-done .nx-booking-step-index {
+    background: var(--nx-primary);
+    color: #fff;
+}
+.nx-booking-step.is-done .nx-booking-step-label { color: var(--nx-text-primary); }
+.nx-booking-step.is-active .nx-booking-step-index {
+    background: var(--nx-brand-dark);
+    color: #fff;
+}
+.nx-booking-step.is-active .nx-booking-step-label { color: var(--nx-text-primary); font-weight: 600; }
+.nx-booking-step-connector {
+    width: 28px;
+    height: 1px;
+    background: var(--nx-border);
+    margin-right: 18px;
+    flex-shrink: 0;
+}
+@media (max-width: 767.98px) {
+    .nx-booking-stepper { gap: 6px 0; }
+    .nx-booking-step-label { display: none; }
+    .nx-booking-step { padding-right: 8px; }
+    .nx-booking-step-connector { width: 16px; margin-right: 8px; }
+}
+
+/* ---- Booking flow: floating-card page treatment (steps 2-6) ------------------------------------
+   Every Branch Booking step after the "Book a Service" modal renders on its
+   own real page/URL (unchanged mechanism, tested), but is now presented as
+   a compact card floating over a muted backdrop instead of a full hero
+   banner + full-width stepper — a continuation of the modal's look rather
+   than a jarring style switch mid-flow. */
+.nx-booking-floating-section {
+    background: var(--nx-bg-surface-muted);
+    padding: 40px 0;
+    min-height: calc(100vh - 80px);
+    display: flex;
+    align-items: center;
+}
+.nx-booking-floating-section > .container { width: 100%; }
+.nx-booking-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--nx-border);
+}
+.nx-booking-dots { display: flex; align-items: center; gap: 6px; }
+.nx-booking-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--nx-border);
+    transition: background .2s ease, width .2s ease;
+}
+.nx-booking-dot.is-done { background: var(--nx-primary); }
+.nx-booking-dot.is-active { background: var(--nx-brand-dark); width: 20px; border-radius: 4px; }
+
+.nx-booking-panel {
+    background: var(--nx-bg-surface);
+    border-radius: var(--nx-radius-lg);
+    box-shadow: var(--nx-shadow-card);
+    padding: 32px;
+}
+@media (max-width: 575.98px) {
+    .nx-booking-panel { padding: 22px; }
+}
+
+.nx-select-card {
+    display: block;
+    background: var(--nx-bg-surface);
+    border: 1.5px solid var(--nx-border);
+    border-radius: var(--nx-radius-md);
+    padding: 16px 18px;
+    cursor: pointer;
+    transition: border-color .15s ease, background-color .15s ease;
+    text-decoration: none;
+    color: inherit;
+}
+.nx-select-card:hover { border-color: var(--nx-primary); color: inherit; }
+.nx-select-card input[type="radio"] { accent-color: var(--nx-primary); }
+.nx-select-card.is-selected,
+.nx-select-card:has(input:checked) {
+    border-color: var(--nx-primary);
+    background: var(--nx-bg-surface-muted);
+}
+.nx-select-card.is-disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.nx-slot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: 10px;
+}
+.nx-slot-btn {
+    display: block;
+    text-align: center;
+    padding: 10px 6px;
+    border-radius: var(--nx-radius-sm);
+    border: 1.5px solid var(--nx-border);
+    background: var(--nx-bg-surface);
+    color: var(--nx-text-primary);
+    font-size: 13.5px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+}
+.nx-slot-btn:hover { border-color: var(--nx-primary); color: var(--nx-text-primary); }
+.nx-slot-btn.is-selected {
+    background: var(--nx-brand-dark);
+    border-color: var(--nx-brand-dark);
+    color: #fff;
+}
+.nx-slot-btn.is-disabled {
+    background: var(--nx-bg-surface-muted);
+    color: var(--nx-text-secondary);
+    border-color: var(--nx-border);
+    text-decoration: line-through;
+    opacity: .55;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.nx-review-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--nx-border);
+    font-size: 14.5px;
+}
+.nx-review-row:last-child { border-bottom: none; }
+.nx-review-row .nx-review-label { color: var(--nx-text-secondary); }
+.nx-review-row .nx-review-value { color: var(--nx-text-primary); font-weight: 600; text-align: right; }
+
+.nx-upload-control {
+    border: 1.5px dashed var(--nx-border);
+    border-radius: var(--nx-radius-md);
+    padding: 28px 20px;
+    text-align: center;
+    background: var(--nx-bg-page);
+}
+.nx-upload-control input[type="file"] { max-width: 320px; margin: 0 auto; }
+
+.nx-booking-success-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: rgba(76, 130, 96, .14);
+    color: #3f7d55;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    margin: 0 auto 20px;
+}
+
+/* ---- Responsive ------------------------------------------------------------------------------- */
+
+@media (max-width: 991.98px) {
+    .nx-section { padding: 56px 0; }
+    .nx-cta-banner { flex-direction: column; align-items: flex-start !important; gap: 24px; }
+}
+
+/* --- Small phone (≤575px) — tighten hero, nav, CTA, and pills for narrow screens ------------- */
+@media (max-width: 575.98px) {
+    .nx-hero h1 { font-size: 1.65rem; line-height: 1.22; }
+    .nx-hero p { font-size: 15px !important; }
+
+    .nx-hero .container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
+
+    .nx-section { padding: 40px 0; }
+
+    .nx-section-title { font-size: 24px !important; }
+
+    .nx-cta-banner { padding: 32px 24px; }
+    .nx-cta-banner h2 { font-size: 24px !important; }
+
+    .nx-pill { padding: 10px 16px; font-size: 12.5px; }
+
+    .nx-nav-mobile-gap { margin-bottom: 6px; }
+
+    .nx-header .navbar-collapse { padding: 8px 0 12px; }
+    .nx-header .navbar-nav { gap: 2px; }
+    .nx-header .navbar-nav .nav-item { margin-bottom: 2px; }
+}

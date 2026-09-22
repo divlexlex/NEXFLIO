@@ -3,7 +3,22 @@
 @section('title', 'Financial Reports')
 
 @section('content')
-<h1 class="h3 mb-4">Financial Reports · {{ now()->year }}</h1>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+    <h1 class="h3 mb-0">Financial Reports · {{ now()->year }}</h1>
+    <div class="dropdown">
+        <button class="btn btn-spa dropdown-toggle" data-bs-toggle="dropdown">
+            <i class="bi bi-download me-1"></i>Export
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{{ route('admin.reports.financial.export', 'csv') }}">
+                <i class="bi bi-filetype-csv me-2"></i>CSV (spreadsheet)
+            </a></li>
+            <li><a class="dropdown-item" href="{{ route('admin.reports.financial.export', 'pdf') }}">
+                <i class="bi bi-filetype-pdf me-2"></i>PDF
+            </a></li>
+        </ul>
+    </div>
+</div>
 
 <div class="row g-3 mb-4">
     <div class="col-md-4">

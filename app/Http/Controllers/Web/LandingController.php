@@ -10,12 +10,10 @@ class LandingController extends Controller
 {
     public function index()
     {
-        $servicesByCategory = Service::where('status', 'active')
-            ->orderBy('name')
-            ->get()
-            ->groupBy('category');
-
-        $promos = Promo::where('is_active', true)->with('service')->get();
+        // The full Services catalog now lives only on the dedicated /services
+        // page (see ServicesController + App\Support\ServiceCatalog) — Home no
+        // longer needs it.
+        $promos = Promo::live()->with('services')->get();
 
         // Dynamic recommendations: a fresh random mix of services and promos
         // on every page load, each linking to its detail page.
@@ -24,18 +22,19 @@ class LandingController extends Controller
                 'type' => 'service', 'id' => $s->id, 'title' => $s->name,
                 'subtitle' => $s->category, 'price' => $s->price, 'image_url' => $s->image_url,
             ]))
-            ->concat($promos->map(fn ($p) => [
+            ->concat($promos->filter(fn ($p) => $p->displayPrice() !== null)->map(fn ($p) => [
                 'type' => 'promo', 'id' => $p->id, 'title' => $p->title,
-                'subtitle' => $p->service?->name, 'price' => $p->price, 'image_url' => $p->image_url,
+                'subtitle' => $p->services->first()?->name, 'price' => $p->displayPrice(), 'image_url' => $p->image_url,
             ]))
             ->shuffle()
             ->take(8)
             ->values();
 
         return view('landing.index', [
-            'servicesByCategory' => $servicesByCategory,
             'promos' => $promos,
             'recommendations' => $recommendations,
+            // Temporary frontend-only hero imagery — see config/hero_slider.php.
+            'heroSlides' => config('hero_slider.slides', []),
         ]);
     }
 }

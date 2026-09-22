@@ -7,58 +7,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --spa-cream: #FBF7F2;   /* warm ivory/latte page bg */
-            --spa-ivory: #FFFFFF;
-            --spa-tan: #EAD9C7;     /* latte tint / borders */
-            --spa-latte: #B5895A;   /* caramel (ombré start) */
-            --spa-gold: #A97C50;    /* caramel-bronze primary */
-            --spa-metallic: #C9A24B;/* metallic gold accent */
-            --spa-espresso: #3A2317;/* dark / premium */
-            --spa-text: #2C1E14;    /* deep espresso text */
-            --spa-heading: #3A2317; /* heading color (flips light in dark mode) */
-            --spa-blush: #D9A7A0;   /* sparing CTA pop */
-            --spa-sage: #8FA68A;    /* sparing CTA pop */
-        }
-        /* Dark mode: remap surfaces + text; keep espresso/gold for banners. */
-        html[data-bs-theme="dark"] {
-            --spa-cream: #14100D;
-            --spa-ivory: #201812;
-            --spa-tan: #3A2E24;
-            --spa-text: #F0E7DD;
-            --spa-heading: #F0E7DD;
-            --spa-gold: #D9B070;
-            --spa-metallic: #E0BD77;
-        }
-        html[data-bs-theme="dark"] .bg-white { background: var(--spa-ivory) !important; }
-        html[data-bs-theme="dark"] .text-muted { color: #b9a894 !important; }
-        html[data-bs-theme="dark"] .navbar-spa { background: rgba(20,16,13,.92); }
-        html[data-bs-theme="dark"] .card-spa { background: var(--spa-ivory); border-color: var(--spa-tan); }
-        html[data-bs-theme="dark"] .btn-outline-spa { border-color: var(--spa-text); color: var(--spa-text); }
-        html[data-bs-theme="dark"] .btn-outline-spa:hover { background: var(--spa-text); color: var(--spa-cream); }
-        html[data-bs-theme="dark"] .nav-pills .nav-link { color: var(--spa-text) !important; }
-        html[data-bs-theme="dark"] .navbar-brand, html[data-bs-theme="dark"] .navbar-nav .nav-link { color: var(--spa-text); }
-        body { font-family: 'Montserrat', sans-serif; background: var(--spa-cream); color: var(--spa-text); }
-        h1, h2, h3, .brand-font { font-family: 'Playfair Display', serif; color: var(--spa-heading); }
-        .bg-ombre { background: linear-gradient(135deg, var(--spa-latte) 0%, var(--spa-espresso) 100%); }
-        .btn-spa { background: var(--spa-espresso); color: #fff; border: none; transition: background .2s, transform .2s; }
-        .btn-spa:hover { background: var(--spa-gold); color: #fff; transform: translateY(-1px); }
-        .btn-outline-spa { border: 1px solid var(--spa-espresso); color: var(--spa-espresso); background: transparent; transition: all .2s; }
-        .btn-outline-spa:hover { background: var(--spa-espresso); color: #fff; }
-        .btn-gold { background: var(--spa-metallic); color: var(--spa-espresso); border: none; font-weight: 600; transition: transform .2s, filter .2s; }
-        .btn-gold:hover { filter: brightness(1.05); transform: translateY(-1px); color: var(--spa-espresso); }
-        .text-gold { color: var(--spa-gold) !important; }
-        .text-metallic { color: var(--spa-metallic) !important; }
-        .bg-espresso { background: var(--spa-espresso); }
-        .gold-divider { display:inline-block; width: 56px; height: 2px; background: var(--spa-metallic); border: 0; opacity: 1; border-radius: 2px; }
-        .card-spa { background: var(--spa-ivory); border: 1px solid var(--spa-tan); border-radius: 1rem; transition: transform .2s, box-shadow .2s; }
-        .card-spa:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(58,35,23,.12); }
-        .navbar-spa { background: rgba(251,247,242,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--spa-tan); }
-        .nav-pills .nav-link { color: var(--spa-espresso); }
-        .nav-pills .nav-link.active { background: var(--spa-espresso) !important; color: #fff; }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="{{ app()->environment('local') ? asset('css/website.css') : secure_asset('css/website.css') }}" rel="stylesheet">
     <script>
         // Apply saved/system theme before paint to avoid a flash.
         (function () {
@@ -69,68 +19,143 @@
     </script>
     @stack('head')
 </head>
-<body>
-<nav class="navbar navbar-expand-lg navbar-spa sticky-top">
-    <div class="container">
-        <a class="navbar-brand brand-font fw-bold" href="{{ route('landing') }}">
-            Perfect <span class="text-gold">Nails</span>
-        </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#publicNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="publicNav">
-            <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
-                <li class="nav-item"><a class="nav-link" href="{{ route('landing') }}#services">Services</a></li>
-                <li class="nav-item"><a class="nav-link" href="{{ route('landing') }}#about">About Us</a></li>
-                <li class="nav-item"><a class="nav-link" href="{{ route('landing') }}#contact">Contact</a></li>
-                <li class="nav-item"><a class="nav-link" href="{{ route('landing') }}#app">Get the App</a></li>
-                <li class="nav-item">
-                    <button type="button" id="themeToggle" class="btn btn-outline-spa btn-sm px-2" title="Toggle dark mode" aria-label="Toggle dark mode">
-                        <i class="bi bi-moon-stars"></i>
-                    </button>
-                </li>
-                <li class="nav-item">
-                    <a class="btn btn-outline-spa btn-sm px-3" href="{{ route('login') }}">Management Login</a>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
+<body class="nx-body">
+@include('partials.nav')
 
 @yield('content')
 
-{{-- GET-THE-APP MODAL (booking happens in the mobile app) --}}
-<div class="modal fade" id="getAppModal" tabindex="-1" aria-hidden="true">
+{{-- BOOK APPOINTMENT MODAL — Guest prompt to sign in and continue booking on
+     the Website. Shared by every "Book an Appointment" / "Book in the App"
+     trigger site-wide, so whichever page opens it, "Continue on Website"
+     returns here after login (see AuthController@destinationFor). Only shown
+     to guests — authenticated Clients skip straight past this everywhere it's
+     used (see landing/index.blade.php, partials/booking-cta.blade.php,
+     catalog/detail.blade.php). The mobile app is not being shipped; booking
+     lives entirely on the (mobile-responsive) Website.
+
+     A trigger can optionally set data-booking-redirect="{{ url }}" (see
+     catalog/detail.blade.php's service "Book" button) to send the Guest
+     straight into that specific booking flow after logging in, instead of
+     just back to whatever page the modal was opened from — so a Guest's
+     selected service survives the login redirect intact, per the
+     "preserve selected service through auth" requirement. --}}
+<div class="modal fade" id="getAppModal" tabindex="-1" aria-hidden="true" aria-labelledby="getAppModalLabel">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0" style="border-radius: 1.25rem; overflow: hidden;">
-            <div class="bg-ombre text-white text-center p-4">
-                <i class="bi bi-phone fs-1"></i>
-                <h4 class="brand-font mt-2 mb-1" style="color:#fff;">Book in the Perfect Nails app</h4>
-                <p class="small opacity-75 mb-0">Booking, payment &amp; tracking all happen in the app.</p>
+        <div class="modal-content border-0 nx-body" style="border-radius: var(--nx-radius-lg); overflow: hidden;">
+            <div class="text-center p-4" style="background: var(--nx-brand-dark); color: #fff;">
+                <i class="bi bi-calendar-heart fs-1"></i>
+                <h4 id="getAppModalLabel" class="nx-font-display mt-2 mb-1" style="color:#fff;">Book your appointment</h4>
+                <p class="small opacity-75 mb-0">Choose how you'd like to continue.</p>
             </div>
-            <div class="modal-body text-center p-4">
-                <p class="text-muted mb-4">Download the app to pick your specialist, choose a slot, and confirm your booking.</p>
-                <div class="d-grid gap-2">
-                    <a href="#" class="btn btn-spa btn-lg"><i class="bi bi-android2 me-2"></i>Download for Android</a>
-                    <a href="#" class="btn btn-outline-spa btn-lg"><i class="bi bi-apple me-2"></i>Coming to iOS</a>
-                </div>
+            <div class="modal-body p-4">
+                <p class="nx-eyebrow mb-2">Continue on Website</p>
+                <a id="getAppModalLoginLink"
+                   href="{{ route('login', ['redirect' => request()->getRequestUri()]) }}"
+                   class="nx-btn nx-btn-primary w-100 justify-content-center mb-0">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Login / Continue on Website
+                </a>
             </div>
             <div class="text-center pb-3">
-                <button class="btn btn-link text-muted small text-decoration-none" data-bs-dismiss="modal">Keep browsing</button>
+                <button class="btn btn-link nx-text-secondary small text-decoration-none" data-bs-dismiss="modal">Keep browsing</button>
             </div>
         </div>
     </div>
 </div>
 
-<footer class="bg-espresso text-white py-4 mt-5">
-    <div class="container d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
-        <span class="brand-font">Perfect Nails Wellness and Aesthetics</span>
-        <small class="opacity-75">&copy; {{ date('Y') }} NEXFLIO Business Management System</small>
+@auth
+    @if(auth()->user()->isClient())
+        @include('partials.booking.service-picker-modal')
+    @endif
+@endauth
+
+{{-- Footer shows only on the Guest Home/landing page — never on the Sign In
+     / Create Account / password-reset pages, never on Services/Packages/
+     Offers/About/Contact (their own content already ends with what a Guest
+     needs; the footer was just dead weight below the fold there), and never
+     for any signed-in user (Client Website or Management) — the account/
+     admin nav already covers those links. The Dialogflow AI widget further
+     down is unaffected by this condition. --}}
+@if(auth()->guest() && !request()->routeIs('login', 'login.attempt', 'register', 'register.attempt', 'password.request', 'password.email', 'password.reset', 'password.update', 'verification.show', 'verification.verify', 'verification.resend', 'services', 'packages', 'offers', 'about', 'contact'))
+<footer class="nx-footer">
+    <div class="container d-flex flex-wrap justify-content-between gap-4 py-5">
+        <div style="max-width: 320px;">
+            <p class="nx-font-display mb-2" style="font-size: 24px; color: #f8f4ef;">Perfect Nails</p>
+            <p class="nx-footer-tagline mb-0">Wellness &amp; Aesthetics — 237 A. Mabini St., Maypajo, Caloocan</p>
+        </div>
+        <div>
+            <h6>Services</h6>
+            <ul class="list-unstyled d-flex flex-column gap-2 mb-0 mt-2">
+                <li><a href="{{ route('services') }}">Nails &amp; Eyes</a></li>
+                <li><a href="{{ route('services') }}">Massage</a></li>
+                <li><a href="{{ route('services') }}">Aesthetics</a></li>
+                <li><a href="{{ route('services') }}">Home Service</a></li>
+            </ul>
+        </div>
+        <div>
+            <h6>Company</h6>
+            <ul class="list-unstyled d-flex flex-column gap-2 mb-0 mt-2">
+                <li><a href="{{ route('about') }}">About us</a></li>
+                <li><a href="{{ route('packages') }}">Packages</a></li>
+                <li><a href="{{ route('contact') }}">Contact us</a></li>
+            </ul>
+        </div>
+        <div>
+            <h6>Booking</h6>
+            <ul class="list-unstyled d-flex flex-column gap-2 mb-0 mt-2">
+                {{-- This footer only ever renders for Guests now (see the
+                     @if above) — the authenticated-Client branch that used
+                     to live here is unreachable since the footer stopped
+                     showing for any signed-in user, so it's removed rather
+                     than kept as dead code. --}}
+                <li><a href="#" data-bs-toggle="modal" data-bs-target="#getAppModal">Get the App</a></li>
+                <li><a href="{{ route('login') }}">Management Login</a></li>
+            </ul>
+        </div>
+        <div>
+            <h6>Policies</h6>
+            <ul class="list-unstyled d-flex flex-column gap-2 mb-0 mt-2">
+                {{-- Previously linked to the now-unlisted /faqs page; repointed to
+                     Contact (an existing named route) so these aren't dead ends. --}}
+                <li><a href="{{ route('contact') }}">Booking &amp; grace period</a></li>
+                <li><a href="{{ route('contact') }}">Cancellation</a></li>
+            </ul>
+        </div>
+    </div>
+    <hr class="nx-footer-divider m-0">
+    <div class="container d-flex flex-column flex-md-row justify-content-between align-items-center gap-2 py-3">
+        <small class="nx-footer-bottom">&copy; {{ date('Y') }} Perfect Nails Wellness &amp; Aesthetics. All rights reserved.</small>
+        <div class="d-flex gap-2">
+            <span class="nx-social">FB</span>
+            <span class="nx-social">IG</span>
+        </div>
     </div>
 </footer>
+@endif
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+    // Book Appointment modal: honor a trigger's data-booking-redirect (see
+    // catalog/detail.blade.php) by pointing the "Continue on Website" login
+    // link at that specific booking URL instead of the default (the page
+    // the modal was opened from). Falls back to the server-rendered default
+    // whenever a trigger doesn't set the attribute — every other trigger
+    // site-wide is unaffected.
+    (function () {
+        const modal = document.getElementById('getAppModal');
+        const loginLink = document.getElementById('getAppModalLoginLink');
+        if (!modal || !loginLink) return;
+
+        const defaultHref = loginLink.getAttribute('href');
+        const loginBase = defaultHref.split('?')[0];
+
+        modal.addEventListener('show.bs.modal', (event) => {
+            const redirect = event.relatedTarget?.dataset?.bookingRedirect;
+            loginLink.href = redirect
+                ? `${loginBase}?redirect=${encodeURIComponent(redirect)}`
+                : defaultHref;
+        });
+    })();
+
     // Dark-mode toggle (persisted in localStorage).
     (function () {
         const btn = document.getElementById('themeToggle');

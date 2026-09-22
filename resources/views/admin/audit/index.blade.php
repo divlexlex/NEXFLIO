@@ -1,13 +1,49 @@
 @extends('layouts.admin')
 
-@section('title', 'Audit Trail')
+@section('title', 'Activity Log')
 
 @section('content')
-<h1 class="h3 mb-1">Forensic Audit Trail</h1>
-<p class="text-muted small mb-4">
+<h1 class="h3 mb-1">Activity Log</h1>
+<p class="text-muted small mb-3">
     Append-only record of every create, update, delete, and restore across the system.
     Entries can never be edited or removed.
 </p>
+
+<div class="card p-3 mb-4 bg-body-tertiary">
+    <div class="row g-3 small">
+        <div class="col-md-6">
+            <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>What this is</div>
+            <p class="text-muted mb-0">
+                Every time a record is created, changed, deleted, or restored — an appointment,
+                a payment, inventory, staff, services, promos, leave — the system automatically
+                writes one line here: <em>who</em> did it, <em>when</em>, and the exact
+                <em>before → after</em> values. It's written by the app itself, not typed by
+                anyone, so it can't be forgotten or faked.
+            </p>
+        </div>
+        <div class="col-md-6">
+            <div class="fw-semibold mb-1"><i class="bi bi-shield-lock me-1"></i>Why it can't be tampered with</div>
+            <p class="text-muted mb-0">
+                Audit rows are immutable at the database-model level — any attempt to update or
+                delete one throws an error. There is deliberately no edit or delete button
+                anywhere on this page. Passwords and tokens are stripped before a change is
+                logged, so secrets never land in the trail. Only the Owner can view it.
+            </p>
+        </div>
+        <div class="col-12">
+            <div class="fw-semibold mb-1"><i class="bi bi-list-columns-reverse me-1"></i>Reading a row</div>
+            <p class="text-muted mb-0">
+                <strong>Who</strong> is the signed-in user who made the change (<em>System</em>
+                for automated jobs like appointment reminders). <strong>Event</strong> is
+                created / updated / deleted / restored. <strong>Record</strong> names the model
+                and its id (e.g. <code>Appointment #42</code>). <strong>Changes</strong> shows
+                each field that moved, old value in red → new value in green; for creates and
+                deletes, expand “View values” to see the full snapshot. Use the filters above
+                to narrow by event type, model, date range, or user.
+            </p>
+        </div>
+    </div>
+</div>
 
 <div class="card p-3 mb-3">
     <form method="GET" class="row g-2 align-items-end">
