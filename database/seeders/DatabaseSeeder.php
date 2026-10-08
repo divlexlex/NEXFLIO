@@ -19,6 +19,9 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             ServiceSeeder::class,
             PromoSeeder::class,
+            InventorySeeder::class,
+            MassageInventorySeeder::class,
+            AestheticInventorySeeder::class,
         ]);
     }
 }

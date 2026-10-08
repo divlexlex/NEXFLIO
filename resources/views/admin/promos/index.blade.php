@@ -73,7 +73,7 @@
                                             'active' => 'text-bg-success',
                                             'scheduled' => 'text-bg-warning',
                                             'expired' => 'text-bg-secondary',
-                                            default => 'text-bg-light text-dark',
+                                            default => 'text-bg-light',
                                         } }}">{{ ucfirst($promo->displayStatus()) }}</span>
                                     </td>
                                     <td class="text-end">

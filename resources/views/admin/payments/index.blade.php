@@ -9,7 +9,6 @@
     @foreach(['pending' => 'Pending', 'verified' => 'Verified', 'rejected' => 'Rejected', 'all' => 'All'] as $key => $label)
         <li class="nav-item">
             <a class="nav-link {{ $currentStatus === $key ? 'active' : '' }}"
-               style="{{ $currentStatus === $key ? 'background: var(--spa-espresso);' : 'color: var(--spa-espresso);' }}"
                href="{{ route('admin.payments', ['status' => $key]) }}">{{ $label }}</a>
         </li>
     @endforeach

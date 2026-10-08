@@ -10,24 +10,11 @@
     </button>
 </div>
 
-<ul class="nav nav-pills mb-3">
-    <li class="nav-item">
-        <a class="nav-link {{ $category === 'facial' ? 'active' : '' }}"
-           href="{{ route('admin.inventory', ['category' => 'facial']) }}">Facial</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {{ $category === 'massage' ? 'active' : '' }}"
-           href="{{ route('admin.inventory', ['category' => 'massage']) }}">Massage</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {{ $category === 'nails' ? 'active' : '' }}"
-           href="{{ route('admin.inventory', ['category' => 'nails']) }}">Nails</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {{ $category === 'aesthetic' ? 'active' : '' }}"
-           href="{{ route('admin.inventory', ['category' => 'aesthetic']) }}">Aesthetic</a>
-    </li>
-</ul>
+{{-- SHARED CATEGORY DROPDOWN --}}
+<div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+    @include('partials.inventory-category-select', ['current' => $category, 'label' => 'Category'])
+    <span class="small text-muted">{{ $items->count() }} item(s) in this category</span>
+</div>
 
 <div class="card p-3 mb-4">
     <div class="table-responsive">

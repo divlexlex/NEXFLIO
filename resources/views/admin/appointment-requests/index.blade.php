@@ -24,7 +24,6 @@
     @foreach(['pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected', 'all' => 'All'] as $key => $label)
         <li class="nav-item">
             <a class="nav-link {{ $currentStatus === $key ? 'active' : '' }}"
-               style="{{ $currentStatus === $key ? 'background: var(--spa-espresso);' : 'color: var(--spa-espresso);' }}"
                href="{{ route('admin.appointment-requests', ['status' => $key]) }}">
                 {{ $label }}@if($key === 'pending' && $pendingCount) <span class="badge text-bg-light ms-1">{{ $pendingCount }}</span>@endif
             </a>

@@ -156,11 +156,11 @@
     .promo-step-circle {
         display: inline-flex; align-items: center; justify-content: center;
         width: 26px; height: 26px; border-radius: 50%;
-        background: var(--spa-tan); color: var(--spa-espresso);
+        background: var(--nex-table-header-bg); color: var(--nex-text);
         font-size: 13px; font-weight: 600;
     }
-    .promo-step-circle.active { background: var(--spa-gold); color: #fff; }
-    .promo-step-circle.done { background: var(--spa-espresso); color: #fff; }
+    .promo-step-circle.active { background: var(--nex-primary-bg); color: var(--nex-primary-text); }
+    .promo-step-circle.done { background: var(--nex-sidebar-bg); color: var(--nex-sidebar-text); }
 </style>
 @endpush
 

@@ -6,7 +6,7 @@ use App\Models\Inventory;
 use Illuminate\Database\Seeder;
 
 /**
- * The 45 consumable/tooling items that belong to the Inventory page's "Nails"
+ * The 56 consumable/tooling items that belong to the Inventory page's "Nails"
  * tab (see App\Http\Controllers\Web\InventoryController::$validCategories and
  * resources/views/admin/inventory/index.blade.php).
  *
@@ -14,21 +14,25 @@ use Illuminate\Database\Seeder;
  * created one-by-one through the Admin "+ New Item" form — so this seeder is
  * the reproducible definition of this batch.
  *
- * Safe to re-run: each row is created only when its item_name does not exist
- * yet (including soft-deleted rows), so stock/price edits made later in the
- * Admin UI are never overwritten. quantity stays 0 (the project's default for
- * a new item created without an opening-stock count) and reorder_point uses
- * the New Item form's default of 3; staff top up stock via Receive.
+ * Safe to re-run: each row is created only when its (item_name, category)
+ * pair does not exist yet (including soft-deleted rows), so stock/price edits
+ * made later in the Admin UI are never overwritten. quantity stays 0 (the
+ * project's default for a new item created without an opening-stock count)
+ * and reorder_point uses the New Item form's default of 3; staff top up stock
+ * via Receive.
  */
 class InventorySeeder extends Seeder
 {
     public function run(): void
     {
         foreach ($this->nailsItems() as $itemName) {
+            // Keyed on item_name AND category (soft-deleted rows included) so
+            // an item that also lives in another category — Alcohol, Wipes and
+            // Orange Tissue are seeded under 'massage' too — still gets its own
+            // row here instead of being treated as a duplicate.
             Inventory::withTrashed()->firstOrCreate(
-                ['item_name' => $itemName],
+                ['item_name' => $itemName, 'category' => 'nails'],
                 [
-                    'category' => 'nails',
                     'unit' => 'pc',
                     'quantity' => 0,
                     'reorder_point' => 3,
@@ -92,6 +96,17 @@ class InventorySeeder extends Seeder
             'Monja',
             'Colure',
             'Creamer',
+            'Footbath',
+            'Foot Mask',
+            'Foot Treatment',
+            'Builder Gel',
+            'Dual Form',
+            'Paracetamol',
+            'Antacid',
+            'Loperamide',
+            'Footspa Blade',
+            'Exfoliating Foot Mask',
+            'Mefenamic',
         ];
     }
 }

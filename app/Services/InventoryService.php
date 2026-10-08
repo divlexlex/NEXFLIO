@@ -118,4 +118,113 @@ class InventoryService
             return $movements;
         });
     }
+
+    /**
+     * Applies a signed stock correction from a physical count: a positive
+     * $delta receives a brand-new batch valued at the item's current
+     * price_per_unit, a negative $delta drains existing batches FIFO (oldest
+     * first, one movement row per batch touched) — exactly the same guarantees
+     * as receive()/consume(), so the quantity cache, the batches and the
+     * append-only ledger stay in sync.
+     *
+     * Ledger rows always use the existing type 'adjustment' and carry a
+     * positive quantity (stock_movements.quantity is unsigned); $reference —
+     * the WeeklyInventoryCount that produced the variance — is what makes the
+     * direction readable.
+     *
+     * @return array<StockMovement>
+     *
+     * @throws InsufficientStockException when a negative correction exceeds
+     *                                    the batches actually on hand
+     */
+    public function adjust(
+        int $inventoryId,
+        int $delta,
+        ?int $userId = null,
+        ?string $reason = null,
+        ?Model $reference = null,
+    ): array {
+        if ($delta === 0) {
+            return [];
+        }
+
+        return DB::transaction(function () use ($inventoryId, $delta, $userId, $reason, $reference) {
+            $inventory = Inventory::lockForUpdate()->findOrFail($inventoryId);
+
+            if ($delta > 0) {
+                $unitCost = (float) $inventory->price_per_unit;
+
+                $batch = $inventory->batches()->create([
+                    'quantity_received' => $delta,
+                    'quantity_remaining' => $delta,
+                    'unit_cost' => $unitCost,
+                    'received_at' => now(),
+                    'received_by' => $userId,
+                ]);
+
+                $movement = StockMovement::create([
+                    'inventory_id' => $inventory->id,
+                    'inventory_batch_id' => $batch->id,
+                    'type' => StockMovement::TYPE_ADJUSTMENT,
+                    'quantity' => $delta,
+                    'unit_cost' => $unitCost,
+                    'reference_type' => $reference?->getMorphClass(),
+                    'reference_id' => $reference?->getKey(),
+                    'user_id' => $userId,
+                    'reason' => $reason,
+                ]);
+
+                $inventory->increment('quantity', $delta);
+
+                return [$movement];
+            }
+
+            $quantity = -$delta;
+
+            if ($inventory->quantity < $quantity) {
+                throw new InsufficientStockException($inventory->item_name, $quantity, $inventory->quantity);
+            }
+
+            $batches = $inventory->batches()
+                ->where('quantity_remaining', '>', 0)
+                ->orderBy('received_at')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            $remaining = $quantity;
+            $movements = [];
+
+            foreach ($batches as $batch) {
+                if ($remaining <= 0) {
+                    break;
+                }
+
+                $take = min($batch->quantity_remaining, $remaining);
+                $batch->decrement('quantity_remaining', $take);
+
+                $movements[] = StockMovement::create([
+                    'inventory_id' => $inventory->id,
+                    'inventory_batch_id' => $batch->id,
+                    'type' => StockMovement::TYPE_ADJUSTMENT,
+                    'quantity' => $take,
+                    'unit_cost' => $batch->unit_cost,
+                    'reference_type' => $reference?->getMorphClass(),
+                    'reference_id' => $reference?->getKey(),
+                    'user_id' => $userId,
+                    'reason' => $reason,
+                ]);
+
+                $remaining -= $take;
+            }
+
+            if ($remaining > 0) {
+                throw new InsufficientStockException($inventory->item_name, $quantity, $quantity - $remaining);
+            }
+
+            $inventory->decrement('quantity', $quantity);
+
+            return $movements;
+        });
+    }
 }

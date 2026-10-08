@@ -5,7 +5,7 @@
     <label class="form-label">Image</label>
     <div class="d-flex align-items-center gap-3 mb-2">
         <img id="{{ $prefix }}-image-preview" src="" alt=""
-             class="rounded border" style="width:64px;height:64px;object-fit:cover;display:none;background:var(--spa-tan);">
+             class="rounded border" style="width:64px;height:64px;object-fit:cover;display:none;background:var(--nex-table-header-bg);">
         <input type="file" name="image" id="{{ $prefix }}-image" accept="image/*" class="form-control">
     </div>
     <div class="form-check" id="{{ $prefix }}-remove-wrap" style="display:none;">

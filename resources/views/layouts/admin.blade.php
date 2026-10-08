@@ -8,43 +8,330 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
+        /* ============ NEXFLIO design tokens (single source of truth) ============
+           Every admin/manager surface is driven by these --nex-* variables.
+           Light tokens live on :root; dark tokens override on
+           html[data-bs-theme="dark"] (Bootstrap theme attribute in <head>). */
         :root {
-            --spa-cream: #FBF7F2;
-            --spa-tan: #EAD9C7;
-            --spa-latte: #B5895A;
-            --spa-gold: #A97C50;
-            --spa-metallic: #C9A24B;
-            --spa-espresso: #3A2317;
-            --spa-text: #2C1E14;
+            /* page / surfaces */
+            --nex-bg: #FAF5EE;
+            --nex-surface: #FFFFFF;
+            --nex-raised: #FFFFFF;
+            /* sidebar — always a dark brown with cream text, gold active */
+            --nex-sidebar-bg: #2E1B10;
+            --nex-sidebar-bg-end: #20140B;
+            --nex-sidebar-text: #F3E7D7;
+            --nex-sidebar-muted: rgba(243, 231, 215, .74);
+            --nex-sidebar-border: rgba(243, 231, 215, .16);
+            --nex-sidebar-active-bg: #C9A24B;
+            --nex-sidebar-active-text: #2E1B10;
+            /* text */
+            --nex-text: #2B1A12;
+            --nex-muted: #71604F;
+            --nex-border: #E4D5C3;
+            --nex-table-header-bg: #F3E9DC;
+            --nex-table-header-text: #2B1A12;
+            --nex-zebra: #FCF8F2;
+            /* brand / buttons / links */
+            --nex-primary-bg: #A97C50;
+            --nex-primary-text: #FFFFFF;
+            --nex-primary-hover: #8F653B;
+            --nex-accent: #B5895A;
+            --nex-gold: #C9A24B;
+            --nex-link: #8A5A2B;
+            --nex-link-hover: #6E4520;
+            /* status — success/danger are tint bg + strong text (AA);
+               warning badge is amber bg + near-black text in BOTH themes */
+            --nex-success-bg: #E2EFD9;
+            --nex-success-text: #1E4620;
+            --nex-success-border: #BFD9B0;
+            --nex-warning-bg: #F2C230;
+            --nex-warning-text: #3A2A05;
+            --nex-warning-border: #DCAB1C;
+            --nex-warning-strong: #7A5600;
+            --nex-warning-subtle-bg: #FBF0D4;
+            --nex-warning-subtle-text: #5B3E00;
+            --nex-warning-subtle-border: #E8D398;
+            --nex-danger-bg: #F7DDD9;
+            --nex-danger-text: #84261B;
+            --nex-danger-border: #E8B4AC;
         }
-        /* Dark mode: Bootstrap's data-bs-theme handles cards/tables/forms;
-           we just remap the page surfaces. Sidebar is already dark. */
         html[data-bs-theme="dark"] {
-            --spa-cream: #14100D;
-            --spa-tan: #3A2E24;
-            --spa-text: #F0E7DD;
+            --nex-bg: #17100B;
+            --nex-surface: #241811;
+            --nex-raised: #2E2015;
+            --nex-sidebar-bg: #120B07;
+            --nex-sidebar-bg-end: #0A0603;
+            --nex-sidebar-text: #F3E7D7;
+            --nex-sidebar-muted: rgba(243, 231, 215, .72);
+            --nex-sidebar-border: rgba(243, 231, 215, .12);
+            --nex-sidebar-active-bg: #C9A24B;
+            --nex-sidebar-active-text: #2E1B10;
+            --nex-text: #F5EBDD;
+            --nex-muted: #C8AE94;
+            --nex-border: #463322;
+            --nex-table-header-bg: #2E2015;
+            --nex-table-header-text: #F5EBDD;
+            --nex-zebra: #291B11;
+            --nex-primary-bg: #C9A24B;
+            --nex-primary-text: #241811;
+            --nex-primary-hover: #E0BC63;
+            --nex-accent: #B5895A;
+            --nex-gold: #C9A24B;
+            --nex-link: #D9B070;
+            --nex-link-hover: #E8C888;
+            --nex-success-bg: #1F3A1F;
+            --nex-success-text: #B8E0B8;
+            --nex-success-border: #3F6B3F;
+            --nex-warning-bg: #F2C230;
+            --nex-warning-text: #3A2A05;
+            --nex-warning-border: #C9A24B;
+            --nex-warning-strong: #F2C230;
+            --nex-warning-subtle-bg: #33250B;
+            --nex-warning-subtle-text: #F2C230;
+            --nex-warning-subtle-border: #6B5215;
+            --nex-danger-bg: #40160F;
+            --nex-danger-text: #F1B8AE;
+            --nex-danger-border: #7A2E23;
         }
-        body { background: var(--spa-cream); color: var(--spa-text); }
+
+        /* ------- Bootstrap 5.3 core variable remap ------- */
+        :root {
+            --bs-body-bg: var(--nex-bg);
+            --bs-body-color: var(--nex-text);
+            --bs-secondary-color: var(--nex-muted);
+            --bs-secondary-bg: var(--nex-zebra);
+            --bs-tertiary-bg: var(--nex-zebra);
+            --bs-emphasis-color: var(--nex-text);
+            --bs-border-color: var(--nex-border);
+            --bs-border-color-translucent: var(--nex-border);
+            --bs-card-bg: var(--nex-surface);
+            --bs-card-color: var(--nex-text);
+            --bs-card-border-color: var(--nex-border);
+            --bs-card-cap-bg: var(--nex-zebra);
+            --bs-modal-bg: var(--nex-surface);
+            --bs-modal-color: var(--nex-text);
+            --bs-modal-border-color: var(--nex-border);
+            --bs-dropdown-bg: var(--nex-surface);
+            --bs-dropdown-color: var(--nex-text);
+            --bs-dropdown-border-color: var(--nex-border);
+            --bs-dropdown-link-color: var(--nex-text);
+            --bs-dropdown-link-hover-bg: var(--nex-zebra);
+            --bs-dropdown-link-hover-color: var(--nex-text);
+            --bs-dropdown-link-active-bg: var(--nex-primary-bg);
+            --bs-dropdown-link-active-color: var(--nex-primary-text);
+            --bs-list-group-bg: var(--nex-surface);
+            --bs-list-group-color: var(--nex-text);
+            --bs-list-group-border-color: var(--nex-border);
+            --bs-list-group-action-hover-bg: var(--nex-zebra);
+            --bs-list-group-action-active-bg: var(--nex-zebra);
+            --bs-light: var(--nex-surface);
+            --bs-light-rgb: 255, 255, 255;
+            --bs-dark: var(--nex-sidebar-bg);
+            --bs-dark-rgb: 46, 27, 16;
+            --bs-primary: var(--nex-primary-bg);
+            --bs-primary-rgb: 169, 124, 80;
+            --bs-link-color: var(--nex-link);
+            --bs-link-hover-color: var(--nex-link-hover);
+            --bs-link-color-rgb: 138, 90, 43;
+            --bs-link-hover-color-rgb: 110, 69, 32;
+            --bs-focus-ring-color: rgba(169, 124, 80, .4);
+            --bs-nav-pills-link-active-bg: var(--nex-primary-bg);
+            --bs-nav-pills-link-active-color: var(--nex-primary-text);
+            --bs-progress-bar-bg: var(--nex-primary-bg);
+            --bs-table-color: var(--nex-text);
+            --bs-table-border-color: var(--nex-border);
+            --bs-table-striped-bg: var(--nex-zebra);
+            --bs-table-striped-color: var(--nex-text);
+            --bs-table-hover-bg: var(--nex-zebra);
+            --bs-table-hover-color: var(--nex-text);
+            --bs-table-active-bg: var(--nex-zebra);
+            --bs-table-active-color: var(--nex-text);
+            --bs-success-bg-subtle: var(--nex-success-bg);
+            --bs-success-text: var(--nex-success-text);
+            --bs-success-border-subtle: var(--nex-success-border);
+            --bs-warning-bg-subtle: var(--nex-warning-subtle-bg);
+            --bs-warning-text: var(--nex-warning-subtle-text);
+            --bs-warning-border-subtle: var(--nex-warning-subtle-border);
+            --bs-danger-bg-subtle: var(--nex-danger-bg);
+            --bs-danger-text: var(--nex-danger-text);
+            --bs-danger-border-subtle: var(--nex-danger-border);
+        }
+        html[data-bs-theme="dark"] {
+            --bs-body-bg: var(--nex-bg);
+            --bs-body-color: var(--nex-text);
+            --bs-secondary-color: var(--nex-muted);
+            --bs-secondary-bg: var(--nex-raised);
+            --bs-tertiary-bg: var(--nex-raised);
+            --bs-emphasis-color: var(--nex-text);
+            --bs-border-color: var(--nex-border);
+            --bs-border-color-translucent: var(--nex-border);
+            --bs-card-bg: var(--nex-surface);
+            --bs-card-color: var(--nex-text);
+            --bs-card-border-color: var(--nex-border);
+            --bs-card-cap-bg: var(--nex-zebra);
+            --bs-modal-bg: var(--nex-surface);
+            --bs-modal-color: var(--nex-text);
+            --bs-modal-border-color: var(--nex-border);
+            --bs-dropdown-bg: var(--nex-surface);
+            --bs-dropdown-color: var(--nex-text);
+            --bs-dropdown-border-color: var(--nex-border);
+            --bs-dropdown-link-color: var(--nex-text);
+            --bs-dropdown-link-hover-bg: var(--nex-raised);
+            --bs-dropdown-link-hover-color: var(--nex-text);
+            --bs-dropdown-link-active-bg: var(--nex-primary-bg);
+            --bs-dropdown-link-active-color: var(--nex-primary-text);
+            --bs-list-group-bg: var(--nex-surface);
+            --bs-list-group-color: var(--nex-text);
+            --bs-list-group-border-color: var(--nex-border);
+            --bs-list-group-action-hover-bg: var(--nex-raised);
+            --bs-list-group-action-active-bg: var(--nex-raised);
+            --bs-light: var(--nex-raised);
+            --bs-light-rgb: 46, 32, 21;
+            --bs-dark: var(--nex-raised);
+            --bs-dark-rgb: 46, 32, 21;
+            --bs-primary: var(--nex-primary-bg);
+            --bs-primary-rgb: 201, 162, 75;
+            --bs-link-color: var(--nex-link);
+            --bs-link-hover-color: var(--nex-link-hover);
+            --bs-link-color-rgb: 217, 176, 112;
+            --bs-link-hover-color-rgb: 232, 200, 136;
+            --bs-focus-ring-color: rgba(201, 162, 75, .45);
+            --bs-nav-pills-link-active-bg: var(--nex-primary-bg);
+            --bs-nav-pills-link-active-color: var(--nex-primary-text);
+            --bs-progress-bar-bg: var(--nex-primary-bg);
+            --bs-table-color: var(--nex-text);
+            --bs-table-border-color: var(--nex-border);
+            --bs-table-striped-bg: var(--nex-zebra);
+            --bs-table-striped-color: var(--nex-text);
+            --bs-table-hover-bg: var(--nex-zebra);
+            --bs-table-hover-color: var(--nex-text);
+            --bs-table-active-bg: var(--nex-zebra);
+            --bs-table-active-color: var(--nex-text);
+            --bs-success-bg-subtle: var(--nex-success-bg);
+            --bs-success-text: var(--nex-success-text);
+            --bs-success-border-subtle: var(--nex-success-border);
+            --bs-warning-bg-subtle: var(--nex-warning-subtle-bg);
+            --bs-warning-text: var(--nex-warning-subtle-text);
+            --bs-warning-border-subtle: var(--nex-warning-subtle-border);
+            --bs-danger-bg-subtle: var(--nex-danger-bg);
+            --bs-danger-text: var(--nex-danger-text);
+            --bs-danger-border-subtle: var(--nex-danger-border);
+        }
+
+        /* ------- base ------- */
+        body { background: var(--nex-bg); color: var(--nex-text); }
+        .main-content { margin-left: 240px; padding: 1.5rem; }
+        .card { border: 1px solid var(--nex-border); border-radius: .75rem; }
+        .text-gold { color: var(--nex-gold); }
+        a { text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        /* ------- sidebar ------- */
         .sidebar {
             width: 240px; height: 100vh;
-            background: linear-gradient(180deg, #3A2317 0%, #2A190F 100%);
+            background: linear-gradient(180deg, var(--nex-sidebar-bg) 0%, var(--nex-sidebar-bg-end) 100%);
             position: fixed; top: 0; left: 0;
             display: flex; flex-direction: column;
         }
         /* Nav list scrolls on its own; the brand (top) and the account/theme/
-           logout block (bottom) stay pinned and always visible, no matter how
-           many nav items there are. */
+           logout block (bottom) stay pinned and always visible. */
         .sidebar > .nav { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
-        .sidebar .nav-link { color: rgba(255,255,255,.75); border-radius: .5rem; transition: background .15s, color .15s; }
-        .sidebar .nav-link:hover { color: #fff; background: rgba(255,255,255,.08); }
-        .sidebar .nav-link.active { color: #fff; background: var(--spa-gold); }
-        .main-content { margin-left: 240px; padding: 1.5rem; }
-        .card { border: 1px solid var(--spa-tan); border-radius: .75rem; }
-        .text-gold { color: var(--spa-gold); }
-        .btn-spa { background: var(--spa-espresso); color: #fff; transition: background .2s; }
-        .btn-spa:hover { background: var(--spa-gold); color: #fff; }
-        html[data-bs-theme="dark"] .btn-spa { background: var(--spa-gold); }
-        html[data-bs-theme="dark"] .btn-spa:hover { background: var(--spa-metallic); }
+        .sidebar > a { color: var(--nex-sidebar-text) !important; }
+        .sidebar .nav-link { color: var(--nex-sidebar-muted); border-radius: .5rem; transition: background .15s, color .15s; }
+        .sidebar .nav-link:hover { color: var(--nex-sidebar-text); background: rgba(243, 231, 215, .08); }
+        .sidebar .nav-link.active { color: var(--nex-sidebar-active-text); background: var(--nex-sidebar-active-bg); font-weight: 600; }
+        .sidebar hr { border-color: var(--nex-sidebar-border); opacity: 1; }
+        .sidebar .text-white-50 { color: var(--nex-sidebar-muted) !important; }
+        .sidebar .btn-outline-light { color: var(--nex-sidebar-text); border-color: var(--nex-sidebar-border); }
+        .sidebar .btn-outline-light:hover { background: var(--nex-sidebar-active-bg); border-color: var(--nex-sidebar-active-bg); color: var(--nex-sidebar-active-text); }
+
+        /* ------- buttons ------- */
+        .btn { font-weight: 600; }
+        .btn-primary {
+            --bs-btn-color: var(--nex-primary-text);
+            --bs-btn-bg: var(--nex-primary-bg);
+            --bs-btn-border-color: var(--nex-primary-bg);
+            --bs-btn-hover-color: var(--nex-primary-text);
+            --bs-btn-hover-bg: var(--nex-primary-hover);
+            --bs-btn-hover-border-color: var(--nex-primary-hover);
+            --bs-btn-active-color: var(--nex-primary-text);
+            --bs-btn-active-bg: var(--nex-primary-hover);
+            --bs-btn-active-border-color: var(--nex-primary-hover);
+            --bs-btn-disabled-color: var(--nex-muted);
+            --bs-btn-disabled-bg: var(--nex-border);
+            --bs-btn-disabled-border-color: var(--nex-border);
+        }
+        .btn-outline-primary {
+            --bs-btn-color: var(--nex-primary-bg);
+            --bs-btn-border-color: var(--nex-primary-bg);
+            --bs-btn-hover-color: var(--nex-primary-text);
+            --bs-btn-hover-bg: var(--nex-primary-bg);
+            --bs-btn-hover-border-color: var(--nex-primary-bg);
+            --bs-btn-active-color: var(--nex-primary-text);
+            --bs-btn-active-bg: var(--nex-primary-bg);
+            --bs-btn-active-border-color: var(--nex-primary-bg);
+        }
+        .btn-light {
+            --bs-btn-color: var(--nex-text);
+            --bs-btn-bg: var(--nex-raised);
+            --bs-btn-border-color: var(--nex-border);
+            --bs-btn-hover-color: var(--nex-text);
+            --bs-btn-hover-bg: var(--nex-zebra);
+            --bs-btn-hover-border-color: var(--nex-border);
+            --bs-btn-active-color: var(--nex-text);
+            --bs-btn-active-bg: var(--nex-zebra);
+            --bs-btn-active-border-color: var(--nex-border);
+        }
+        .btn-spa { background: var(--nex-primary-bg); color: var(--nex-primary-text); border: 0; transition: background .2s; }
+        .btn-spa:hover, .btn-spa:focus { background: var(--nex-primary-hover); color: var(--nex-primary-text); }
+
+        /* ------- tables ------- */
+        .table { --bs-table-color: var(--nex-text); --bs-table-border-color: var(--nex-border); }
+        .table thead th { background: var(--nex-table-header-bg); color: var(--nex-table-header-text); font-weight: 600; }
+        .table-striped > tbody > tr:nth-of-type(odd) > * { --bs-table-bg: var(--nex-zebra); color: var(--nex-text); }
+        .table-hover > tbody > tr:hover > * { --bs-table-bg: var(--nex-zebra); color: var(--nex-text); }
+
+        /* ------- status chips / badges (AA-safe in both themes) ------- */
+        .text-bg-warning { background-color: var(--nex-warning-bg) !important; color: var(--nex-warning-text) !important; }
+        .text-warning { color: var(--nex-warning-strong) !important; }
+        .text-bg-success { background-color: var(--nex-success-bg) !important; color: var(--nex-success-text) !important; }
+        .text-bg-danger { background-color: var(--nex-danger-bg) !important; color: var(--nex-danger-text) !important; }
+        .text-bg-light { background-color: var(--nex-table-header-bg) !important; color: var(--nex-table-header-text) !important; }
+        .text-bg-secondary { background-color: var(--nex-sidebar-bg) !important; color: var(--nex-sidebar-text) !important; }
+        .text-bg-primary { background-color: var(--nex-primary-bg) !important; color: var(--nex-primary-text) !important; }
+        .text-success { color: var(--nex-success-text) !important; }
+        .text-danger { color: var(--nex-danger-text) !important; }
+
+        /* ------- alerts ------- */
+        .alert-success { --bs-alert-bg: var(--nex-success-bg); --bs-alert-color: var(--nex-success-text); --bs-alert-border-color: var(--nex-success-border); }
+        .alert-warning { --bs-alert-bg: var(--nex-warning-subtle-bg); --bs-alert-color: var(--nex-warning-subtle-text); --bs-alert-border-color: var(--nex-warning-subtle-border); }
+        .alert-danger { --bs-alert-bg: var(--nex-danger-bg); --bs-alert-color: var(--nex-danger-text); --bs-alert-border-color: var(--nex-danger-border); }
+        .alert-secondary { --bs-alert-bg: var(--nex-table-header-bg); --bs-alert-color: var(--nex-text); --bs-alert-border-color: var(--nex-border); }
+
+        /* ------- forms ------- */
+        .form-control, .form-select { background-color: var(--nex-raised); color: var(--nex-text); border-color: var(--nex-border); }
+        .form-control:focus, .form-select:focus { border-color: var(--nex-accent); box-shadow: 0 0 0 .25rem rgba(181, 137, 90, .25); }
+        .form-check-input:checked { background-color: var(--nex-accent); border-color: var(--nex-accent); }
+        .input-group-text { background-color: var(--nex-zebra); color: var(--nex-text); border-color: var(--nex-border); }
+
+        /* ------- pagination ------- */
+        .page-link {
+            --bs-pagination-bg: var(--nex-surface);
+            --bs-pagination-color: var(--nex-link);
+            --bs-pagination-border-color: var(--nex-border);
+            --bs-pagination-hover-bg: var(--nex-zebra);
+            --bs-pagination-hover-color: var(--nex-link-hover);
+            --bs-pagination-focus-bg: var(--nex-zebra);
+            --bs-pagination-focus-color: var(--nex-link);
+            --bs-pagination-active-bg: var(--nex-primary-bg);
+            --bs-pagination-active-border-color: var(--nex-primary-bg);
+            --bs-pagination-active-color: var(--nex-primary-text);
+            --bs-pagination-disabled-bg: var(--nex-bg);
+            --bs-pagination-disabled-color: var(--nex-muted);
+            --bs-pagination-disabled-border-color: var(--nex-border);
+        }
+
         @media (max-width: 991px) {
             .sidebar { position: static; width: 100%; height: auto; }
             .sidebar > .nav { flex: 0 0 auto; overflow-y: visible; }
@@ -66,7 +353,7 @@
         <a href="{{ route('admin.dashboard') }}" class="d-block text-white text-decoration-none fs-5 fw-bold mb-4 px-2">
             {{-- Shared by Owner (role 1) and Manager (role 2) — label reflects
                  whoever's actually signed in instead of always saying "Admin". --}}
-            NEXFLIO <small class="d-block fs-6 fw-normal opacity-50">Perfect Nails {{ auth()->user()->role_id === \App\Models\User::ROLE_SUPER_ADMIN ? 'Admin' : 'Manager' }}</small>
+            NEXFLIO <small class="d-block fs-6 fw-normal opacity-75">Perfect Nails {{ auth()->user()->role_id === \App\Models\User::ROLE_SUPER_ADMIN ? 'Admin' : 'Manager' }}</small>
         </a>
         <ul class="nav flex-column gap-1">
             @php

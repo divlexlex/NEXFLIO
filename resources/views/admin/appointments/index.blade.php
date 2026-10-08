@@ -26,11 +26,11 @@
     .fc .fc-daygrid-day-events { position: relative; }
 
     /* Grid follows the admin theme in both modes. */
-    .fc { --fc-border-color: var(--spa-tan); --fc-today-bg-color: rgba(201, 162, 75, .14); }
+    .fc { --fc-border-color: var(--nex-border); --fc-today-bg-color: rgba(201, 162, 75, .14); }
     .fc .fc-toolbar-title,
     .fc .fc-col-header-cell-cushion,
     .fc .fc-daygrid-day-number,
-    .fc .fc-list-day-text { color: var(--spa-text); }
+    .fc .fc-list-day-text { color: var(--nex-text); }
 
     html[data-bs-theme="dark"] .fc {
         --fc-page-bg-color: transparent;
@@ -39,7 +39,7 @@
         --fc-today-bg-color: rgba(201, 162, 75, .12);
     }
     html[data-bs-theme="dark"] .fc a,
-    html[data-bs-theme="dark"] .fc .fc-daygrid-day-number { color: var(--spa-text); }
+    html[data-bs-theme="dark"] .fc .fc-daygrid-day-number { color: var(--nex-text); }
     html[data-bs-theme="dark"] .fc .fc-daygrid-day.fc-day-other { opacity: .45; }
 
     /* Dark-mode chip colours (win over the inline light colours). */
@@ -52,10 +52,9 @@
     html[data-bs-theme="dark"] .fc .fc-event.nx-evt-walkin     { background-color: #1f3358 !important; border-color: #35528a !important; color: #9cc0ff !important; }
 
     .nx-legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-    .nx-drawer-row { display: flex; gap: .75rem; padding: .6rem 0; border-bottom: 1px solid var(--spa-tan); }
-    .nx-drawer-row .bi { color: var(--spa-gold); }
-    .nx-drawer-label { color: var(--spa-latte); font-size: .8rem; min-width: 92px; }
-    html[data-bs-theme="dark"] .nx-drawer-label { color: #b79a7a; }
+    .nx-drawer-row { display: flex; gap: .75rem; padding: .6rem 0; border-bottom: 1px solid var(--nex-border); }
+    .nx-drawer-row .bi { color: var(--nex-accent); }
+    .nx-drawer-label { color: var(--nex-muted); font-size: .8rem; min-width: 92px; }
 </style>
 @endpush
 
@@ -167,7 +166,7 @@
     <div class="offcanvas-body">
         <div class="d-flex align-items-center gap-3 mb-3">
             <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
-                 style="width:44px;height:44px;background:var(--spa-gold);color:#fff;" id="dw-initials">–</div>
+                 style="width:44px;height:44px;background:var(--nex-primary-bg);color:var(--nex-primary-text);" id="dw-initials">–</div>
             <div>
                 <div class="fw-semibold" id="dw-client">–</div>
                 <div class="small text-muted"><span id="dw-phone">–</span></div>
