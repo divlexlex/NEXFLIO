@@ -166,7 +166,7 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: kBlushAccent.withOpacity(0.3),
+                      color: kBlushAccent.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -218,7 +218,7 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
                   Text(
                     _description!,
                     style: TextStyle(
-                      color: context.appText.withOpacity(0.85),
+                      color: context.appText.withValues(alpha: 0.85),
                       height: 1.5,
                     ),
                   ),

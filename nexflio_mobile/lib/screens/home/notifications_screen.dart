@@ -138,7 +138,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: notification.isRead ? kCardColor : kSecondaryColor.withOpacity(0.3),
+          color: notification.isRead ? kCardColor : kSecondaryColor.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: kSecondaryColor),
         ),
@@ -166,7 +166,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   const SizedBox(height: 4),
                   Text(
                     notification.body,
-                    style: TextStyle(color: kTextColor.withOpacity(0.7), fontSize: 13),
+                    style: TextStyle(color: kTextColor.withValues(alpha: 0.7), fontSize: 13),
                   ),
                 ],
               ),

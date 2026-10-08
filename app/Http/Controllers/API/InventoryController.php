@@ -27,6 +27,7 @@ class InventoryController extends Controller
     {
         $validated = $request->validate([
             'item_name' => 'required|string|max:255',
+            'category' => 'nullable|string|in:facial,massage,nails,aesthetic',
             'unit' => 'required|string|max:50',
             'reorder_point' => 'required|integer|min:0',
             'price_per_unit' => 'required|numeric|min:0',
@@ -35,6 +36,7 @@ class InventoryController extends Controller
 
         $inventory = Inventory::create([
             'item_name' => $validated['item_name'],
+            'category' => $validated['category'] ?? null,
             'unit' => $validated['unit'],
             'quantity' => 0,
             'reorder_point' => $validated['reorder_point'],

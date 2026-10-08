@@ -95,11 +95,8 @@ class BookingController extends Controller
 
     public function serviceIndex()
     {
-        // Real, active, database-backed, branch-bookable services only — the
-        // temporary config/demo_services.php items shown on public browsing
-        // (see App\Support\ServiceCatalog) never appear here and can never
-        // be booked, since nothing on this page can produce anything but a
-        // real Service id.
+        // Real, active, database-backed, branch-bookable services only —
+        // nothing on this page can produce anything but a real Service id.
         $servicesByCategory = Service::bookableAtBranch()
             ->orderBy('name')
             ->get()
@@ -131,7 +128,7 @@ class BookingController extends Controller
 
         $personnelParam = $request->query('personnel'); // null | 'any' | numeric id
 
-        $eligiblePersonnel = $this->eligiblePersonnel($date);
+        $eligiblePersonnel = $this->eligiblePersonnel($date, $service);
         $eligibleIds = $eligiblePersonnel->pluck('id');
 
         // Drop a previously-picked personnel that's no longer eligible for
@@ -357,7 +354,7 @@ class BookingController extends Controller
 
         $personnelParam = $request->query('personnel');
 
-        $eligiblePersonnel = $this->eligiblePersonnel($date);
+        $eligiblePersonnel = $this->eligiblePersonnel($date, $service);
         $eligibleIds = $eligiblePersonnel->pluck('id');
 
         if ($personnelParam && $personnelParam !== 'any' && ! $eligibleIds->contains((int) $personnelParam)) {
@@ -578,7 +575,9 @@ class BookingController extends Controller
             ]);
 
             if ($personnel !== 'any') {
-                $eligible = $this->eligiblePersonnel($date)->pluck('id');
+                $serviceId = $request->query('service');
+                $service = $serviceId ? Service::find($serviceId) : null;
+                $eligible = $this->eligiblePersonnel($date, $service)->pluck('id');
                 if (! $eligible->contains((int) $personnel)) {
                     throw ValidationException::withMessages([
                         'personnel' => 'That personnel selection is no longer available for this date.',
@@ -655,14 +654,25 @@ class BookingController extends Controller
      * profile, not on break, no approved leave covering the date) — the
      * bookable staff pool the mobile app already uses.
      */
-    private function eligiblePersonnel(string $date)
+    private function eligiblePersonnel(string $date, ?Service $service = null)
     {
         $dayOfWeek = (int) Carbon::parse($date)->dayOfWeek; // 0=Sun
 
+        // Map service category to staff position for filtering
+        $positionFilter = $service?->category ? match ($service->category) {
+            'Facial' => \App\Enums\Position::FacialTechnician->value,
+            'Massage' => \App\Enums\Position::MassageTechnician->value,
+            'Nails' => \App\Enums\Position::NailTechnician->value,
+            default => null, // Lashes & Brows, Aesthetics, Head Spa, Home Service → show all
+        } : null;
+
         return User::where('role_id', User::ROLE_STAFF)
-            ->whereHas('staffProfile', function ($query) {
+            ->whereHas('staffProfile', function ($query) use ($positionFilter) {
                 $query->where('employment_status', 'active')
                     ->where('is_on_break', false);
+                if ($positionFilter) {
+                    $query->where('position', $positionFilter);
+                }
             })
             ->whereDoesntHave('leaveRequests', function ($leaves) use ($date) {
                 $leaves->where('status', LeaveRequest::STATUS_APPROVED)
@@ -670,8 +680,6 @@ class BookingController extends Controller
                     ->whereDate('end_date', '>=', $date);
             })
             ->where(function ($q) use ($dayOfWeek) {
-                // Available if: no staff_schedules row for this day (defaults to business hours),
-                // OR the schedule says is_available = true for this day.
                 $q->whereDoesntHave('staffSchedules', function ($sq) use ($dayOfWeek) {
                     $sq->where('day_of_week', $dayOfWeek);
                 })
@@ -826,13 +834,11 @@ class BookingController extends Controller
 
     private function personnelLabel(?string $personnel): string
     {
-        if ($personnel === 'any') {
-            return 'No preference — assigned automatically';
+        if ($personnel === 'any' || $personnel === null) {
+            return 'No preferred personnel';
         }
 
-        return $personnel
-            ? (User::find($personnel)?->name ?? 'Selected personnel')
-            : '—';
+        return User::find($personnel)?->name ?? 'Selected personnel';
     }
 
     private function minDate(): string

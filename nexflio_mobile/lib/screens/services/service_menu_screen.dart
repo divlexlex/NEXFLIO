@@ -349,7 +349,7 @@ class _ServiceMenuScreen extends State<ServiceMenuScreen> {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                       fontSize: 12,
                     ),
                     maxLines: 2,
@@ -364,7 +364,7 @@ class _ServiceMenuScreen extends State<ServiceMenuScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: kPrimaryColor.withOpacity(0.3),
+                          color: kPrimaryColor.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(

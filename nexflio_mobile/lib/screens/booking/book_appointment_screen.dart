@@ -317,7 +317,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
               filled: true,
               fillColor: kCardColor,
               hintText: "Anything the staff should know?",
-              hintStyle: TextStyle(color: kTextColor.withOpacity(0.5)),
+              hintStyle: TextStyle(color: kTextColor.withValues(alpha: 0.5)),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(color: kSecondaryColor),
@@ -354,7 +354,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                         const SizedBox(height: 8),
                         Text(
                           "Attach a screenshot or photo of your payment",
-                          style: TextStyle(color: kTextColor.withOpacity(0.6), fontSize: 12),
+                          style: TextStyle(color: kTextColor.withValues(alpha: 0.6), fontSize: 12),
                         ),
                       ],
                     )
@@ -447,7 +447,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         child: DropdownButton<T>(
           value: value,
           isExpanded: true,
-          hint: Text(hint, style: TextStyle(color: kTextColor.withOpacity(0.5))),
+          hint: Text(hint, style: TextStyle(color: kTextColor.withValues(alpha: 0.5))),
           items: items
               .map(
                 (item) => DropdownMenuItem<T>(

@@ -243,7 +243,7 @@ class _CardsTabState extends State<CardsTab> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: kSecondaryColor.withOpacity(0.3),
+                    color: kSecondaryColor.withValues(alpha: 0.3),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.card_giftcard, color: kPrimaryColor),
@@ -265,7 +265,7 @@ class _CardsTabState extends State<CardsTab> {
                         Text(
                           card.description!,
                           style: TextStyle(
-                            color: kTextColor.withOpacity(0.6),
+                            color: kTextColor.withValues(alpha: 0.6),
                             fontSize: 12,
                           ),
                         ),
@@ -310,7 +310,7 @@ class _CardsTabState extends State<CardsTab> {
         ),
         boxShadow: [
           BoxShadow(
-            color: gradientColors.last.withOpacity(0.3),
+            color: gradientColors.last.withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -325,7 +325,7 @@ class _CardsTabState extends State<CardsTab> {
             child: Icon(
               Icons.all_inclusive,
               size: 150,
-              color: Colors.white.withOpacity(0.05),
+              color: Colors.white.withValues(alpha: 0.05),
             ),
           ),
 
@@ -378,7 +378,7 @@ class _CardsTabState extends State<CardsTab> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: kSecondaryColor.withOpacity(0.3),
+                    color: kSecondaryColor.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: Colors.white24),
                   ),

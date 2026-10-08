@@ -107,7 +107,7 @@ class _CompleteServiceSheetState extends State<CompleteServiceSheet> {
           const SizedBox(height: 4),
           Text(
             "Log the products used (per whole unit/bottle). Leave empty if none.",
-            style: TextStyle(color: kTextColor.withOpacity(0.6), fontSize: 12),
+            style: TextStyle(color: kTextColor.withValues(alpha: 0.6), fontSize: 12),
           ),
           const SizedBox(height: 16),
           Flexible(child: _buildList()),
@@ -161,7 +161,7 @@ class _CompleteServiceSheetState extends State<CompleteServiceSheet> {
         padding: const EdgeInsets.all(20),
         child: Text(
           "No stock available — you can still complete the service.",
-          style: TextStyle(color: kTextColor.withOpacity(0.6)),
+          style: TextStyle(color: kTextColor.withValues(alpha: 0.6)),
         ),
       );
     }
@@ -199,7 +199,7 @@ class _CompleteServiceSheetState extends State<CompleteServiceSheet> {
                     Text(
                       "${option.quantity} ${option.unit}(s) in stock",
                       style: TextStyle(
-                        color: kTextColor.withOpacity(0.5),
+                        color: kTextColor.withValues(alpha: 0.5),
                         fontSize: 11,
                       ),
                     ),

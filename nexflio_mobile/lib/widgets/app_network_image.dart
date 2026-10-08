@@ -50,7 +50,7 @@ class AppNetworkImage extends StatelessWidget {
               height: 22,
               child: CircularProgressIndicator(strokeWidth: 2, color: kPrimaryColor),
             )
-          : Icon(placeholderIcon, color: kPrimaryColor.withOpacity(0.5), size: 36),
+          : Icon(placeholderIcon, color: kPrimaryColor.withValues(alpha: 0.5), size: 36),
     );
   }
 }

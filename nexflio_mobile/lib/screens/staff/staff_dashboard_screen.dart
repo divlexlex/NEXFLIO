@@ -320,7 +320,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
           _isOnBreak
               ? "You are hidden from the booking pool."
               : "Clients can book you.",
-          style: TextStyle(color: kTextColor.withOpacity(0.6), fontSize: 12),
+          style: TextStyle(color: kTextColor.withValues(alpha: 0.6), fontSize: 12),
         ),
       ),
     );
@@ -337,13 +337,13 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
       decoration: BoxDecoration(
         color: kCardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kSecondaryColor.withOpacity(0.5)),
+        border: Border.all(color: kSecondaryColor.withValues(alpha: 0.5)),
       ),
       child: ListTile(
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: kSecondaryColor.withOpacity(0.3),
+            color: kSecondaryColor.withValues(alpha: 0.3),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: kPrimaryColor, size: 20),
@@ -358,7 +358,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
         ),
         subtitle: Text(
           subtitle,
-          style: TextStyle(color: kTextColor.withOpacity(0.6), fontSize: 12),
+          style: TextStyle(color: kTextColor.withValues(alpha: 0.6), fontSize: 12),
         ),
         trailing: const Icon(Icons.chevron_right, color: kPrimaryColor),
         onTap: () => Navigator.push(context, fadeSlideRoute(screen)),

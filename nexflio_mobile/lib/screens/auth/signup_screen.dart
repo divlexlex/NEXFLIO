@@ -230,7 +230,7 @@ class _SignupScreenState extends State<SignupScreen> {
         filled: true,
         fillColor: kCardColor,
         hintText: hintText,
-        hintStyle: TextStyle(color: kTextColor.withOpacity(0.5)),
+        hintStyle: TextStyle(color: kTextColor.withValues(alpha: 0.5)),
         prefixIcon: Icon(icon, color: kPrimaryColor),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -265,7 +265,7 @@ class _SignupScreenState extends State<SignupScreen> {
         filled: true,
         fillColor: kCardColor,
         hintText: hintText,
-        hintStyle: TextStyle(color: kTextColor.withOpacity(0.5)),
+        hintStyle: TextStyle(color: kTextColor.withValues(alpha: 0.5)),
         prefixIcon: const Icon(Icons.lock_outline, color: kPrimaryColor),
         suffixIcon: IconButton(
           icon: Icon(

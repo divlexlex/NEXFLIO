@@ -202,7 +202,7 @@ class _StaffScheduleScreenState extends State<StaffScheduleScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -225,14 +225,14 @@ class _StaffScheduleScreenState extends State<StaffScheduleScreen> {
           const SizedBox(height: 4),
           Text(
             "${appointment.appointmentDate.toLocal().toString().split(' ').first} · ${appointment.startTime}",
-            style: TextStyle(color: kTextColor.withOpacity(0.6), fontSize: 12),
+            style: TextStyle(color: kTextColor.withValues(alpha: 0.6), fontSize: 12),
           ),
           if (appointment.notes != null && appointment.notes!.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
               appointment.notes!,
               style:
-                  TextStyle(color: kTextColor.withOpacity(0.7), fontSize: 12),
+                  TextStyle(color: kTextColor.withValues(alpha: 0.7), fontSize: 12),
             ),
           ],
           if (appointment.status == kStatusBooked) ...[

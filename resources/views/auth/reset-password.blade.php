@@ -25,17 +25,32 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">New Password</label>
-                        <input type="password" name="password"
-                               class="form-control @error('password') is-invalid @enderror" required>
-                        @error('password')
-                            <div class="invalid-feedback">{{ $message }}</div>
+                        <div class="password-toggle-wrap">
+                            <input type="password" name="password" id="reset-password"
+                                   autocomplete="new-password"
+                                   data-password-field="reset-password"
+                                   class="form-control @error('password') is-invalid @enderror" required>
+                            <button type="button" class="password-toggle" data-password-toggle tabindex="-1" aria-label="Show password">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        @if($errors->has('password'))
+                            <div class="invalid-feedback d-block">{{ $errors->first('password') }}</div>
                         @else
                             <div class="form-text">At least 8 characters.</div>
-                        @enderror
+                        @endif
                     </div>
                     <div class="mb-4">
                         <label class="form-label">Confirm New Password</label>
-                        <input type="password" name="password_confirmation" class="form-control" required>
+                        <div class="password-toggle-wrap">
+                            <input type="password" name="password_confirmation" id="reset-password-confirm"
+                                   autocomplete="new-password"
+                                   data-password-field="reset-password-confirm"
+                                   class="form-control @error('password') is-invalid @enderror" required>
+                            <button type="button" class="password-toggle" data-password-toggle tabindex="-1" aria-label="Show password">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
                     </div>
                     <button class="nx-btn nx-btn-primary w-100 py-2 justify-content-center">Reset Password</button>
                 </form>

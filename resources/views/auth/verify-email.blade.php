@@ -7,10 +7,7 @@
     <div class="row justify-content-center w-100">
         <div class="col-md-5 col-lg-4">
             <div class="nx-card p-4">
-                <h1 class="h3 text-center mb-1">Verify Your Account</h1>
-                <p class="text-center nx-text-secondary small mb-4">
-                    We sent a 6-digit code to <strong>{{ $email }}</strong>. Enter it below to continue.
-                </p>
+                <h1 class="h3 text-center mb-4">Verify Your Account</h1>
 
                 @if(session('status'))
                     <div class="alert alert-success small">{{ session('status') }}</div>

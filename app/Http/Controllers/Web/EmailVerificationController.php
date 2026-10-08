@@ -30,7 +30,7 @@ class EmailVerificationController extends Controller
             return redirect()->route('login');
         }
 
-        return view('auth.verify-email', ['email' => $user->email]);
+        return view('auth.verify-email');
     }
 
     public function verify(Request $request, EmailVerificationService $verification)

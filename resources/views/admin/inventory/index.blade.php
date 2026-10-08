@@ -3,12 +3,31 @@
 @section('title', 'Inventory')
 
 @section('content')
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0">Inventory</h1>
     <button class="btn btn-spa" data-bs-toggle="modal" data-bs-target="#newItemModal">
         <i class="bi bi-plus-lg me-1"></i>New Item
     </button>
 </div>
+
+<ul class="nav nav-pills mb-3">
+    <li class="nav-item">
+        <a class="nav-link {{ $category === 'facial' ? 'active' : '' }}"
+           href="{{ route('admin.inventory', ['category' => 'facial']) }}">Facial</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {{ $category === 'massage' ? 'active' : '' }}"
+           href="{{ route('admin.inventory', ['category' => 'massage']) }}">Massage</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {{ $category === 'nails' ? 'active' : '' }}"
+           href="{{ route('admin.inventory', ['category' => 'nails']) }}">Nails</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {{ $category === 'aesthetic' ? 'active' : '' }}"
+           href="{{ route('admin.inventory', ['category' => 'aesthetic']) }}">Aesthetic</a>
+    </li>
+</ul>
 
 <div class="card p-3 mb-4">
     <div class="table-responsive">
@@ -110,6 +129,16 @@
                 <div class="mb-2">
                     <label class="form-label">Item name</label>
                     <input name="item_name" class="form-control" required>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Category</label>
+                    <select name="category" class="form-select" required>
+                        <option value="">Select category</option>
+                        <option value="facial">Facial</option>
+                        <option value="massage">Massage</option>
+                        <option value="nails">Nails</option>
+                        <option value="aesthetic">Aesthetic</option>
+                    </select>
                 </div>
                 <div class="row">
                     <div class="col mb-2">

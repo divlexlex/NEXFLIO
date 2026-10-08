@@ -122,7 +122,7 @@
                             @endif
                         </td>
                         <td>{{ $appointment->service->name ?? '—' }}</td>
-                        <td>{{ $appointment->personnel->name ?? '—' }}</td>
+                        <td>{{ $appointment->personnel->name ?? 'No preferred personnel' }}</td>
                         <td>{{ $appointment->appointment_date->format('M j, Y') }} · {{ $appointment->start_time }}</td>
                         <td><span class="badge text-bg-light border">{{ $appointment->status->label() }}</span></td>
                         <td>
@@ -314,6 +314,37 @@
         </form>
     </div>
 </div>
+
+{{-- ASSIGN STAFF MODAL --}}
+<div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" id="assignForm" class="modal-content">
+            @csrf
+            @method('PATCH')
+            <div class="modal-header">
+                <h5 class="modal-title">Assign Staff</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">
+                    Assign a staff member to this appointment. The client will be notified.
+                </p>
+                <div class="mb-2">
+                    <label class="form-label">Staff</label>
+                    <select name="personnel_id" id="assign-personnel" class="form-select" required>
+                        @foreach($personnel as $member)
+                            <option value="{{ $member->id }}">{{ $member->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-spa">Assign</button>
+            </div>
+        </form>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -360,7 +391,7 @@
             document.getElementById('dw-type').textContent = p.bookingType || '—';
             document.getElementById('dw-date').textContent = p.dateLabel || '—';
             document.getElementById('dw-time').textContent = p.timeLabel || '';
-            document.getElementById('dw-staff').textContent = p.personnel || 'Unassigned';
+            document.getElementById('dw-staff').textContent = p.personnel || 'No preferred personnel';
             document.getElementById('dw-status').textContent = p.statusLabel || '—';
 
             const payRow = document.getElementById('dw-payment-row');
@@ -399,6 +430,18 @@
                 });
                 actions.appendChild(btn);
             });
+            if (!p.isTerminal) {
+                const assignBtn = document.createElement('button');
+                assignBtn.type = 'button';
+                assignBtn.className = 'btn btn-outline-secondary';
+                assignBtn.textContent = 'Assign Staff';
+                assignBtn.addEventListener('click', () => {
+                    document.getElementById('assignForm').action = statusBase + '/' + event.id + '/assign-personnel';
+                    document.getElementById('assign-personnel').value = p.personnelId || '';
+                    new bootstrap.Modal(document.getElementById('assignModal')).show();
+                });
+                actions.appendChild(assignBtn);
+            }
             if (!(p.actions || []).length) {
                 actions.innerHTML = '<p class="text-muted small mb-0">No actions available for a ' + esc(p.statusLabel).toLowerCase() + ' appointment.</p>';
             }

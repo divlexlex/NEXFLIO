@@ -13,7 +13,14 @@
                 </p>
 
                 @if(session('status'))
-                    <div class="alert alert-success small">{{ session('status') }}</div>
+                    <div class="alert alert-success small">
+                        {{ session('status') }}
+                    </div>
+                    <div class="alert alert-info small">
+                        <i class="bi bi-envelope-exclamation me-1"></i>
+                        <strong>Tip:</strong> The reset link may take a few minutes. If you don't see it, check your
+                        <strong>Spam</strong> or <strong>Junk</strong> folder.
+                    </div>
                 @endif
 
                 <form method="POST" action="{{ route('password.email') }}">

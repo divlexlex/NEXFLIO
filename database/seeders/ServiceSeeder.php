@@ -10,8 +10,7 @@ use Illuminate\Support\Facades\Storage;
 /**
  * Real Service catalog for Perfect Nails — every field here (name, category,
  * price, duration) is sourced from Perfect Nails' own approved price-list
- * references, the same content that used to live in the now-deleted
- * config/demo_services.php (frontend-only preview data). This is the single
+ * references. This is the single
  * source of truth now: everything here is a real, bookable, Admin-editable
  * `services` row — see App\Support\ServiceCatalog for how the public
  * Services page reads it, and App\Http\Controllers\Web\ServiceController for

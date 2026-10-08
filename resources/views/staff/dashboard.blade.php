@@ -62,7 +62,7 @@
     @else
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">
-                <thead><tr><th>Time</th><th>Client</th><th>Service</th><th>Status</th></tr></thead>
+                <thead><tr><th>Time</th><th>Client</th><th>Service</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                     @foreach($todaysAppointments as $appt)
                         <tr>
@@ -70,6 +70,15 @@
                             <td>{{ $appt->clientName() ?? '—' }}</td>
                             <td>{{ $appt->service->name ?? '—' }}</td>
                             <td><span class="badge text-bg-light text-dark">{{ $appt->status->label() }}</span></td>
+                            <td>
+                                @if($appt->status->value === 'in-service')
+                                    <form method="POST" action="{{ route('staff.appointments.complete', $appt->id) }}" class="d-inline"
+                                          onsubmit="return confirm('Mark this service as completed?')">
+                                        @csrf @method('PATCH')
+                                        <button class="btn btn-sm btn-spa">Finish Service</button>
+                                    </form>
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>

@@ -8,6 +8,7 @@ use App\Http\Requests\StoreLeaveRequest;
 use App\Models\Attendance;
 use App\Models\Commission;
 use App\Models\LeaveRequest;
+use App\Services\AppointmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -100,6 +101,29 @@ class StaffController extends Controller
         $request->user()->update(['password' => Hash::make($validated['password'])]);
 
         return back()->with('success', 'Password updated.');
+    }
+
+    /**
+     * Staff marks their own in-service appointment as completed.
+     * Only allowed for appointments assigned to the logged-in staff
+     * that are currently in-service.
+     */
+    public function completeService(Request $request, AppointmentService $appointmentService, $id)
+    {
+        $user = $request->user();
+
+        $appointment = $user->assignedAppointments()
+            ->where('id', $id)
+            ->where('status', AppointmentStatus::InService)
+            ->firstOrFail();
+
+        $appointmentService->transition(
+            $appointment,
+            AppointmentStatus::Completed,
+            $user->id
+        );
+
+        return back()->with('success', 'Service marked as completed.');
     }
 
     public function storeLeave(StoreLeaveRequest $request)

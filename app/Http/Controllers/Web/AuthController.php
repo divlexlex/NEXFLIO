@@ -56,10 +56,16 @@ class AuthController extends Controller
             ->orWhere('username', $validated['email'])
             ->first();
 
-        if (! $user || ! Hash::check($validated['password'], $user->password)) {
+        if (! $user) {
             return back()
                 ->withInput($request->only('email'))
-                ->withErrors(['email' => 'Invalid credentials.']);
+                ->withErrors(['email' => 'No account found with that email or username. Please create an account or check your spelling.']);
+        }
+
+        if (! Hash::check($validated['password'], $user->password)) {
+            return back()
+                ->withInput($request->only('email'))
+                ->withErrors(['password' => 'Incorrect password. Please try again or use "Forgot password?" to reset it.']);
         }
 
         Auth::login($user, $request->boolean('remember'));
@@ -117,7 +123,7 @@ class AuthController extends Controller
             'last_name' => 'required|string|max:100',
             'first_name' => 'required|string|max:100',
             'middle_name' => 'nullable|string|max:100',
-            'email' => 'required|string|email|unique:users,email',
+            'email' => 'required|string|email',
             // 09XXXXXXXXX or +639XXXXXXXXX — accepts both common PH mobile
             // formats without being stricter than that (no carrier-prefix
             // allowlist, no re-formatting of what the Client typed).
@@ -127,6 +133,37 @@ class AuthController extends Controller
         ], [
             'terms.accepted' => 'You must agree to the Terms & Conditions to create an account.',
         ]);
+
+        // The email uniqueness check is done here (not via `unique:users,email`
+        // above) so a half-finished registration — account created but email
+        // not verified yet — can resume the verification flow instead of being
+        // stuck behind a dead-end "The email has already been taken." error.
+        // withTrashed() matters: a soft-deleted account still owns the unique
+        // email, so it has to be treated as taken rather than re-created.
+        $existing = User::withTrashed()->where('email', $fields['email'])->first();
+
+        if ($existing && $existing->trashed()) {
+            return back()
+                ->withInput($request->only(['last_name', 'first_name', 'middle_name', 'mobile_number', 'email']))
+                ->withErrors(['email' => 'This email is already registered. Contact support if you want it restored.']);
+        }
+
+        if ($existing && $existing->hasVerifiedEmail()) {
+            return back()
+                ->withInput($request->only(['last_name', 'first_name', 'middle_name', 'mobile_number', 'email']))
+                ->withErrors(['email' => 'This email is already registered. Please sign in instead.']);
+        }
+
+        if ($existing) {
+            // Unverified account already exists (e.g. they registered moments
+            // ago but never got/finished the code). Resume that same flow —
+            // resend the code and let them prove the email, never error out.
+            $request->session()->put('verify_user_id', $existing->id);
+            $verification->issue($existing);
+
+            return redirect()->route('verification.show')
+                ->with('status', 'Account already exists but is not verified yet. We sent a new verification code to your email.');
+        }
 
         $user = DB::transaction(function () use ($fields) {
             $fullName = trim(preg_replace(

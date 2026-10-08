@@ -75,7 +75,7 @@ class HelpFaqScreen extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         faq['a']!,
-                        style: TextStyle(color: kTextColor.withOpacity(0.7)),
+                        style: TextStyle(color: kTextColor.withValues(alpha: 0.7)),
                       ),
                     ),
                   ),

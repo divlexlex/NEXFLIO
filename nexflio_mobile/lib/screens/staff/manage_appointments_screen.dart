@@ -245,7 +245,7 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: appointmentStatusColor(appointment.status)
-                      .withOpacity(0.1),
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -268,13 +268,13 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen> {
           Text(
             "${appointment.appointmentDate.toLocal().toString().split(' ').first} · "
             "${appointment.startTime} · with ${appointment.personnelName ?? 'Staff #${appointment.personnelId}'}",
-            style: TextStyle(color: kTextColor.withOpacity(0.6), fontSize: 12),
+            style: TextStyle(color: kTextColor.withValues(alpha: 0.6), fontSize: 12),
           ),
           if (appointment.notes != null && appointment.notes!.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
               appointment.notes!,
-              style: TextStyle(color: kTextColor.withOpacity(0.7), fontSize: 12),
+              style: TextStyle(color: kTextColor.withValues(alpha: 0.7), fontSize: 12),
             ),
           ],
           if (appointment.paymentProofUrl != null) ...[
@@ -291,7 +291,7 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen> {
                   errorBuilder: (context, error, stackTrace) => Container(
                     height: 60,
                     alignment: Alignment.center,
-                    color: kSecondaryColor.withOpacity(0.3),
+                    color: kSecondaryColor.withValues(alpha: 0.3),
                     child: Text(
                       "Proof of payment unavailable",
                       style: TextStyle(color: kTextColor, fontSize: 12),

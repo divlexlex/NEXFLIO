@@ -288,7 +288,7 @@ class _BookingTabState extends State<BookingTab> {
         border: Border.all(color: kSecondaryColor),
         boxShadow: [
           BoxShadow(
-            color: kTextColor.withOpacity(0.05),
+            color: kTextColor.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -302,8 +302,8 @@ class _BookingTabState extends State<BookingTab> {
             padding: const EdgeInsets.symmetric(vertical: 20),
             decoration: BoxDecoration(
               color: isUpcoming
-                  ? kPrimaryColor.withOpacity(0.1)
-                  : kSecondaryColor.withOpacity(0.3),
+                  ? kPrimaryColor.withValues(alpha: 0.1)
+                  : kSecondaryColor.withValues(alpha: 0.3),
               borderRadius: const BorderRadius.horizontal(
                 left: Radius.circular(16),
               ),
@@ -316,7 +316,7 @@ class _BookingTabState extends State<BookingTab> {
                   style: TextStyle(
                     color: isUpcoming
                         ? kAccentColor
-                        : kTextColor.withOpacity(0.6),
+                        : kTextColor.withValues(alpha: 0.6),
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                   ),
@@ -326,7 +326,7 @@ class _BookingTabState extends State<BookingTab> {
                   style: TextStyle(
                     color: isUpcoming
                         ? kPrimaryColor
-                        : kTextColor.withOpacity(0.6),
+                        : kTextColor.withValues(alpha: 0.6),
                     fontWeight: FontWeight.bold,
                     fontSize: 28,
                   ),
@@ -359,7 +359,7 @@ class _BookingTabState extends State<BookingTab> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
+                          color: statusColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -396,7 +396,7 @@ class _BookingTabState extends State<BookingTab> {
                           child: Text(
                             "with ${appointment.personnelName}",
                             style: TextStyle(
-                              color: kTextColor.withOpacity(0.7),
+                              color: kTextColor.withValues(alpha: 0.7),
                               fontSize: 12,
                             ),
                             overflow: TextOverflow.ellipsis,

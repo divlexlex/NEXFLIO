@@ -1,9 +1,7 @@
 {{-- Home Service Booking — Step 1: Service selection (Phase 3B). Real,
      active, Home-Service-eligible Service records only
      (BookingController@homeServiceIndex — services.service_location_type in
-     [home, both], App\Enums\ServiceLocationType). The temporary
-     config/demo_services.php "Home Service" category items shown on public
-     browsing never appear here, so a demo-only service can never be booked. --}}
+     [home, both], App\Enums\ServiceLocationType). --}}
 @extends('layouts.public')
 
 @php($homeSteps = ['Service', 'Address', 'Date & Time', 'Details', 'Review', 'Payment', 'Submitted'])

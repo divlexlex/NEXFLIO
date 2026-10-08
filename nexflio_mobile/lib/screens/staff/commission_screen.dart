@@ -163,7 +163,7 @@ class _CommissionScreenState extends State<CommissionScreen> {
               child: Center(
                 child: Text(
                   "No completed services this month yet.",
-                  style: TextStyle(color: kTextColor.withOpacity(0.6)),
+                  style: TextStyle(color: kTextColor.withValues(alpha: 0.6)),
                 ),
               ),
             )
@@ -268,7 +268,7 @@ class _CommissionScreenState extends State<CommissionScreen> {
                 Text(
                   "${entry.earnedAt.toLocal().toString().split(' ').first} · ₱${entry.servicePrice} @ ${entry.rate}%",
                   style: TextStyle(
-                    color: kTextColor.withOpacity(0.5),
+                    color: kTextColor.withValues(alpha: 0.5),
                     fontSize: 11,
                   ),
                 ),

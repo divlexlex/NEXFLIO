@@ -14,14 +14,25 @@ class InventoryController extends Controller
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
+        $validCategories = ['facial', 'massage', 'nails', 'aesthetic'];
+
+        $category = $request->get('category', 'facial');
+        if (! in_array($category, $validCategories, true)) {
+            $category = 'facial';
+        }
+
         return view('admin.inventory.index', [
+            'category' => $category,
             'items' => Inventory::with(['batches' => function ($query) {
                 $query->where('quantity_remaining', '>', 0)
                     ->orderBy('received_at')
                     ->orderBy('id');
-            }])->orderBy('item_name')->get(),
+            }])
+                ->where('category', $category)
+                ->orderBy('item_name')
+                ->get(),
             'recentMovements' => StockMovement::with(['inventory:id,item_name', 'user:id,name'])
                 ->latest()
                 ->limit(20)
@@ -33,6 +44,7 @@ class InventoryController extends Controller
     {
         $validated = $request->validate([
             'item_name' => 'required|string|max:255',
+            'category' => 'required|string|in:facial,massage,nails,aesthetic',
             'unit' => 'required|string|max:50',
             'reorder_point' => 'required|integer|min:0',
             'price_per_unit' => 'required|numeric|min:0',
@@ -41,6 +53,7 @@ class InventoryController extends Controller
 
         $inventory = Inventory::create([
             'item_name' => $validated['item_name'],
+            'category' => $validated['category'],
             'unit' => $validated['unit'],
             'quantity' => 0,
             'reorder_point' => $validated['reorder_point'],

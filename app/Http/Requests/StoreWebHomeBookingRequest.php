@@ -5,7 +5,6 @@ namespace App\Http\Requests;
 use App\Enums\AppointmentStatus;
 use App\Enums\ServiceLocationType;
 use App\Models\Appointment;
-use App\Models\LeaveRequest;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -43,16 +42,7 @@ class StoreWebHomeBookingRequest extends FormRequest
             return;
         }
 
-        $date = $this->input('appointment_date');
-        $time = $this->input('start_time');
-
-        if (! $date || ! $time) {
-            return;
-        }
-
-        $resolved = $this->firstAvailablePersonnelId($date, $time);
-
-        $this->merge(['personnel_id' => $resolved]);
+        $this->merge(['personnel_id' => null]);
     }
 
     public function rules(): array
@@ -66,7 +56,7 @@ class StoreWebHomeBookingRequest extends FormRequest
                     ->whereNull('deleted_at'),
             ],
             'personnel_id' => [
-                'required',
+                'nullable',
                 Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
             ],
             'appointment_date' => 'required|date|after_or_equal:today',
@@ -93,8 +83,7 @@ class StoreWebHomeBookingRequest extends FormRequest
     {
         return [
             'service_id.exists' => 'That service is not bookable as a Home Service.',
-            'personnel_id.required' => 'No personnel are available for that date and time. Please choose a different time.',
-            'personnel_id.exists' => 'No personnel are available for that date and time. Please choose a different time.',
+            'personnel_id.exists' => 'Selected personnel is not available.',
         ];
     }
 
@@ -102,6 +91,10 @@ class StoreWebHomeBookingRequest extends FormRequest
     {
         $validator->after(function (Validator $validator) {
             if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            if (! $this->integer('personnel_id')) {
                 return;
             }
 
@@ -124,40 +117,4 @@ class StoreWebHomeBookingRequest extends FormRequest
         });
     }
 
-    /**
-     * Same eligibility rule as StoreWebBranchBookingRequest — no separate
-     * Home Service staff pool exists in the schema. Home Service does not
-     * add any travel/buffer time on top of the service's own duration; see
-     * the completion report's Known Gaps.
-     */
-    private function firstAvailablePersonnelId(string $date, string $time): ?int
-    {
-        $eligible = User::where('role_id', User::ROLE_STAFF)
-            ->whereHas('staffProfile', function ($query) {
-                $query->where('employment_status', 'active')
-                    ->where('is_on_break', false);
-            })
-            ->whereDoesntHave('leaveRequests', function ($leaves) use ($date) {
-                $leaves->where('status', LeaveRequest::STATUS_APPROVED)
-                    ->whereDate('start_date', '<=', $date)
-                    ->whereDate('end_date', '>=', $date);
-            })
-            ->pluck('id');
-
-        if ($eligible->isEmpty()) {
-            return null;
-        }
-
-        $busy = Appointment::query()
-            ->whereIn('personnel_id', $eligible)
-            ->whereDate('appointment_date', $date)
-            ->where('start_time', $time)
-            ->whereNotIn('status', [
-                AppointmentStatus::Cancelled->value,
-                AppointmentStatus::NoShow->value,
-            ])
-            ->pluck('personnel_id');
-
-        return $eligible->diff($busy)->first();
-    }
 }

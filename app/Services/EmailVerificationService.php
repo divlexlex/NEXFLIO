@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Mail\VerificationCodeMail;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Throwable;
 
 /**
  * Issues and checks the 6-digit codes used to prove a Client actually
@@ -36,7 +38,20 @@ class EmailVerificationService
             'expires_at' => now()->addMinutes(self::EXPIRES_IN_MINUTES),
         ]);
 
-        Mail::to($user->email)->send(new VerificationCodeMail($code, $user->name));
+        try {
+            Mail::to($user->email)->send(new VerificationCodeMail($code, $user->name));
+        } catch (Throwable $e) {
+            // The registration already committed its user row before this
+            // ran, so a mail transport failure must NOT turn into an uncaught
+            // exception (that's what made the next attempt look like "email
+            // already exists"). The code is already stored — the Client can
+            // press Resend once the mailer is reachable again.
+            Log::warning('Verification email could not be sent.', [
+                'user_id' => $user->id,
+                'channel' => self::class,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

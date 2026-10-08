@@ -1,6 +1,5 @@
 {{-- Image catalog card. Pass $url for real DB-backed items (links to their detail
-     page) — omit it for temporary/no-record items (demo services) with no real
-     Service id.
+     page) — omit it for items without a detail page.
 
      For a no-$url item, the card must still never fabricate a booking: a Guest
      gets the existing "Get the App" modal, but an authenticated Client must NOT
@@ -9,7 +8,7 @@
      which only ever lists real, DB-backed, active services. This is the one
      spot in the whole Website where auth state has to be checked *inline*
      rather than relying on a destination page's own @auth block, because a
-     demo item has no detail page to route to at all.
+     card without $url has no detail page to route to at all.
      Expects: $title, $price; optional: $url, $imageUrl, $subtitle, $badge, $ctaText --}}
 @php
     $isLink = !empty($url);

@@ -133,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
         type: BottomNavigationBarType.fixed,
         backgroundColor: Theme.of(context).colorScheme.surface,
         selectedItemColor: Theme.of(context).colorScheme.onSurface,
-        unselectedItemColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+        unselectedItemColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
         currentIndex: _selectedIndex,
         onTap: (index) {
           // "Book" (2) and "Account" (4) require a signed-in user; send
@@ -267,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text(
                               AuthService.instance.currentUser!.email,
                               style: TextStyle(
-                                color: kTextColor.withOpacity(0.6),
+                                color: kTextColor.withValues(alpha: 0.6),
                                 fontSize: 13,
                               ),
                             ),
@@ -422,7 +422,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(18),
                           boxShadow: [
                             BoxShadow(
-                              color: kAccentColor.withOpacity(0.25),
+                              color: kAccentColor.withValues(alpha: 0.25),
                               blurRadius: 12,
                               offset: const Offset(0, 6),
                             ),
@@ -436,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Icon(
                                 Icons.spa,
                                 size: 90,
-                                color: Colors.white.withOpacity(0.12),
+                                color: Colors.white.withValues(alpha: 0.12),
                               ),
                             ),
                             Align(
@@ -599,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen> {
           border: Border.all(color: kSecondaryColor),
           boxShadow: [
             BoxShadow(
-              color: kTextColor.withOpacity(0.05),
+              color: kTextColor.withValues(alpha: 0.05),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -713,7 +713,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text(
                     article.excerpt,
                     style: TextStyle(
-                      color: kTextColor.withOpacity(0.6),
+                      color: kTextColor.withValues(alpha: 0.6),
                       fontSize: 12,
                     ),
                     maxLines: 1,

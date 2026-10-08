@@ -106,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   filled: true,
                   fillColor: kCardColor,
                   hintText: "Enter your email address",
-                  hintStyle: TextStyle(color: kTextColor.withOpacity(0.5)),
+                  hintStyle: TextStyle(color: kTextColor.withValues(alpha: 0.5)),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 16,
@@ -146,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   filled: true,
                   fillColor: kCardColor,
                   hintText: "Password",
-                  hintStyle: TextStyle(color: kTextColor.withOpacity(0.5)),
+                  hintStyle: TextStyle(color: kTextColor.withValues(alpha: 0.5)),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 16,

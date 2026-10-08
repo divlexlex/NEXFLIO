@@ -120,7 +120,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: kSecondaryColor.withOpacity(0.3),
+              color: kSecondaryColor.withValues(alpha: 0.3),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.receipt_long, color: kPrimaryColor),
@@ -139,7 +139,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                 ),
                 Text(
                   appointment.appointmentDate.toLocal().toString().split(' ').first,
-                  style: TextStyle(color: kTextColor.withOpacity(0.6), fontSize: 12),
+                  style: TextStyle(color: kTextColor.withValues(alpha: 0.6), fontSize: 12),
                 ),
               ],
             ),

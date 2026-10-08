@@ -118,6 +118,7 @@ class AppointmentController extends Controller
                     'timeLabel' => Carbon::parse($start)->format('g:i A')
                         .' – '.Carbon::parse($start)->addMinutes($duration)->format('g:i A'),
                     'personnel' => $appointment->personnel->name ?? null,
+                    'personnelId' => $appointment->personnel_id,
                     'status' => $appointment->status->value,
                     'statusLabel' => $appointment->status->label(),
                     'isTerminal' => $appointment->status->isTerminal(),
@@ -129,16 +130,21 @@ class AppointmentController extends Controller
                     'notes' => $appointment->notes,
                     // Which status actions the drawer should offer (server still
                     // re-validates each via AppointmentService::transition).
+                    // "Start service" is only available when a staff member is assigned.
                     'actions' => match ($appointment->status) {
                         AppointmentStatus::Unverified => [
                             ['to' => 'booked', 'label' => 'Confirm booking', 'style' => 'success'],
                             ['to' => 'cancelled', 'label' => 'Reject / Cancel', 'style' => 'outline-danger', 'reason' => true],
                         ],
-                        AppointmentStatus::Booked => [
-                            ['to' => 'in-service', 'label' => 'Start service', 'style' => 'primary'],
-                            ['to' => 'no-show', 'label' => 'Mark no-show', 'style' => 'outline-secondary'],
-                            ['to' => 'cancelled', 'label' => 'Cancel', 'style' => 'outline-danger'],
-                        ],
+                        AppointmentStatus::Booked => array_merge(
+                            $appointment->personnel_id ? [
+                                ['to' => 'in-service', 'label' => 'Start service', 'style' => 'primary'],
+                            ] : [],
+                            [
+                                ['to' => 'no-show', 'label' => 'Mark no-show', 'style' => 'outline-secondary'],
+                                ['to' => 'cancelled', 'label' => 'Cancel', 'style' => 'outline-danger'],
+                            ]
+                        ),
                         AppointmentStatus::InService => [
                             ['to' => 'completed', 'label' => 'Mark completed', 'style' => 'success'],
                             ['to' => 'cancelled', 'label' => 'Cancel', 'style' => 'outline-danger'],
@@ -269,5 +275,38 @@ class AppointmentController extends Controller
         }
 
         return back()->with('success', 'Appointment updated.');
+    }
+
+    /**
+     * Assign or reassign a staff member to an appointment — can be used even
+     * on already-approved (Booked) or in-service appointments.
+     */
+    public function assignPersonnel(Request $request, $id)
+    {
+        $appointment = Appointment::with('service')->findOrFail($id);
+
+        if ($appointment->status->isTerminal()) {
+            return back()->withErrors(['assign' => 'Cannot assign staff to a finished appointment.']);
+        }
+
+        $validated = $request->validate([
+            'personnel_id' => [
+                'required',
+                Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
+            ],
+        ]);
+
+        $appointment->update(['personnel_id' => $validated['personnel_id']]);
+
+        if ($appointment->user_id !== null) {
+            $staffName = User::find($validated['personnel_id'])?->name ?? 'a staff member';
+            Notification::create([
+                'user_id' => $appointment->user_id,
+                'title' => 'Staff assigned',
+                'body' => "{$staffName} has been assigned to your {$appointment->service->name} booking.",
+            ]);
+        }
+
+        return back()->with('success', 'Staff assigned to appointment.');
     }
 }

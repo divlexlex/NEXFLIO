@@ -163,7 +163,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         filled: true,
         fillColor: kCardColor,
         hintText: hint,
-        hintStyle: TextStyle(color: kTextColor.withOpacity(0.5)),
+        hintStyle: TextStyle(color: kTextColor.withValues(alpha: 0.5)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

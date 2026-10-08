@@ -215,6 +215,52 @@ button.nx-pill.active {
     box-shadow: 0 0 0 .2rem rgba(169, 137, 99, .25);
 }
 
+/* ---- Password visibility toggle ------------------------------------------
+   Borderless eye icon overlaid on the input's right edge. The wrapper
+   (.password-toggle-wrap, position:relative) must contain ONLY the input —
+   hint/error text lives as a sibling below it, otherwise the wrapper grows
+   taller than the field and the icon drifts off-centre. The button itself is
+   transparent with no outline: only the eye icon is visible and only the icon
+   is clickable/hoverable. */
+
+.password-toggle-wrap {
+    position: relative;
+}
+/* Leave room so the text never runs under the icon. */
+.password-toggle-wrap .form-control {
+    padding-right: 44px;
+}
+.password-toggle-wrap .password-toggle {
+    position: absolute;
+    /* Matches the input's own height (min-height 46px, padding 12px) rather
+       than the wrapper's, so the icon stays vertically centred on the field
+       whether or not a hint/error message is rendered below it. */
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--nx-text-secondary);
+    cursor: pointer;
+    line-height: 1;
+}
+.password-toggle-wrap .password-toggle:hover,
+.password-toggle-wrap .password-toggle:focus-visible {
+    color: var(--nx-accent);
+    outline: none;
+}
+/* Bootstrap 5 only auto-shows .invalid-feedback via a sibling selector on the
+   input, which the wrapper now sits between — so reveal it explicitly. */
+.password-toggle-wrap .form-control.is-invalid ~ .invalid-feedback {
+    display: block;
+}
+
 /* ---- Cards --------------------------------------------------------------- */
 
 .nx-card {

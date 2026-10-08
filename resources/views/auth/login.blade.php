@@ -21,6 +21,7 @@
                     <div class="mb-3">
                         <label class="form-label">Email or Username</label>
                         <input type="text" name="email" value="{{ old('email') }}"
+                               autocomplete="username"
                                class="form-control @error('email') is-invalid @enderror" required autofocus>
                         @error('email')
                             <div class="invalid-feedback">{{ $message }}</div>
@@ -28,7 +29,18 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Password</label>
-                        <input type="password" name="password" class="form-control" required>
+                        <div class="password-toggle-wrap">
+                            <input type="password" name="password" id="login-password"
+                                   autocomplete="current-password"
+                                   data-password-field="login-password"
+                                   class="form-control @error('password') is-invalid @enderror" required>
+                            <button type="button" class="password-toggle" data-password-toggle tabindex="-1" aria-label="Show password">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        @error('password')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                        @enderror
                     </div>
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div class="form-check mb-0">

@@ -163,7 +163,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -186,14 +186,14 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
           const SizedBox(height: 4),
           Text(
             leave.reason,
-            style: TextStyle(color: kTextColor.withOpacity(0.7), fontSize: 12),
+            style: TextStyle(color: kTextColor.withValues(alpha: 0.7), fontSize: 12),
           ),
           if (leave.reviewNotes != null && leave.reviewNotes!.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
               "Manager: ${leave.reviewNotes!}",
               style: TextStyle(
-                color: kPrimaryColor.withOpacity(0.9),
+                color: kPrimaryColor.withValues(alpha: 0.9),
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
               ),
@@ -285,7 +285,7 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final dateStyle = TextStyle(color: kTextColor.withOpacity(0.8));
+    final dateStyle = TextStyle(color: kTextColor.withValues(alpha: 0.8));
 
     return Container(
       padding: EdgeInsets.only(

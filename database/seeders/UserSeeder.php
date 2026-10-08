@@ -29,7 +29,7 @@ class UserSeeder extends Seeder
             );
         }
 
-        // Seed a demo staff employee with the new structure
+        // Seed a staff employee with the extended profile structure
         $staffEmail = 'staff@nexflio.test';
         $staffUser = User::query()->updateOrCreate(
             ['email' => $staffEmail],

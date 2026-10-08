@@ -12,9 +12,7 @@ use Illuminate\Support\Collection;
  * 'description'] — so views never need to branch on where a service came
  * from.
  *
- * Used to also top this up with temporary, frontend-only demo entries
- * (config/demo_services.php) while the Service table was empty; that file
- * has since been retired in favor of real, Admin-managed Service rows (see
+ * The catalog is entirely real, Admin-managed Service rows (see
  * database/seeders/ServiceSeeder.php) with real images on the storage disk.
  */
 class ServiceCatalog

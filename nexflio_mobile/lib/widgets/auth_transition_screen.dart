@@ -66,7 +66,7 @@ class _AuthTransitionScreenState extends State<AuthTransitionScreen>
                 child: Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(widget.icon, color: Colors.white, size: 56),

@@ -131,6 +131,7 @@ Route::prefix('staff')->name('staff.')->middleware(['auth', 'role:3'])->group(fu
     Route::post('/attendance/time-out', [StaffController::class, 'timeOut'])->name('attendance.time-out');
     Route::post('/leaves', [StaffController::class, 'storeLeave'])->name('leaves.store');
     Route::patch('/password', [StaffController::class, 'updatePassword'])->name('password.update');
+    Route::patch('/appointments/{id}/complete', [StaffController::class, 'completeService'])->name('appointments.complete');
 });
 
 // ===== Owner / Manager portal =====
@@ -143,6 +144,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
     Route::get('/appointments/feed', [AppointmentController::class, 'feed'])->name('appointments.feed');
     Route::post('/appointments/walk-in', [AppointmentController::class, 'storeWalkIn'])->name('appointments.walk-in');
     Route::patch('/appointments/{id}/override', [AppointmentController::class, 'override'])->name('appointments.override');
+    Route::patch('/appointments/{id}/assign-personnel', [AppointmentController::class, 'assignPersonnel'])->name('appointments.assign-personnel');
     Route::patch('/appointments/{id}/status', [AppointmentController::class, 'updateStatus'])->name('appointments.status');
 
     // Client-raised cancellation / reschedule request queue.

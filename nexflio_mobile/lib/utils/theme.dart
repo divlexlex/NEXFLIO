@@ -12,7 +12,7 @@ extension AppColors on BuildContext {
   Color get appBg => Theme.of(this).scaffoldBackgroundColor;
   Color get appSurface => Theme.of(this).colorScheme.surface;
   Color get appText => Theme.of(this).colorScheme.onSurface;
-  Color get appSubtle => appText.withOpacity(0.6);
+  Color get appSubtle => appText.withValues(alpha: 0.6);
   Color get appBorder => isDark ? kDarkBorder : kSecondaryColor;
   Color get appPrimary => Theme.of(this).colorScheme.primary;
 }
@@ -95,7 +95,7 @@ ThemeData _buildTheme(Brightness brightness) {
       filled: true,
       fillColor: surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      hintStyle: TextStyle(color: text.withOpacity(0.5)),
+      hintStyle: TextStyle(color: text.withValues(alpha: 0.5)),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: border),

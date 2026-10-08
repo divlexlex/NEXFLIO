@@ -62,17 +62,32 @@
                     <div class="row g-3 mb-1 mt-1">
                         <div class="col-md-6">
                             <label class="form-label">Password</label>
-                            <input type="password" name="password"
-                                   class="form-control @error('password') is-invalid @enderror" required>
-                            @error('password')
-                                <div class="invalid-feedback">{{ $message }}</div>
+                            <div class="password-toggle-wrap">
+                                <input type="password" name="password" id="register-password"
+                                       autocomplete="new-password"
+                                       data-password-field="register-password"
+                                       class="form-control @error('password') is-invalid @enderror" required>
+                                <button type="button" class="password-toggle" data-password-toggle tabindex="-1" aria-label="Show password">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            @if($errors->has('password'))
+                                <div class="invalid-feedback d-block">{{ $errors->first('password') }}</div>
                             @else
                                 <div class="form-text">At least 8 characters.</div>
-                            @enderror
+                            @endif
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Confirm Password</label>
-                            <input type="password" name="password_confirmation" class="form-control" required>
+                            <div class="password-toggle-wrap">
+                                <input type="password" name="password_confirmation" id="register-password-confirm"
+                                       autocomplete="new-password"
+                                       data-password-field="register-password-confirm"
+                                       class="form-control @error('password') is-invalid @enderror" required>
+                                <button type="button" class="password-toggle" data-password-toggle tabindex="-1" aria-label="Show password">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
 

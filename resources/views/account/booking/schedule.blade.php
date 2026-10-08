@@ -74,7 +74,7 @@
                                 <div class="col-sm-6 col-lg-4">
                                     <label class="nx-select-card d-flex align-items-center gap-2 {{ $personnelParam === 'any' ? 'is-selected' : '' }}">
                                         <input type="radio" name="personnel" value="any" {{ $personnelParam === 'any' ? 'checked' : '' }} onchange="document.getElementById('personnelForm').submit()">
-                                        <span>No preference<br><small class="nx-text-secondary">Any available personnel</small></span>
+                                        <span>No preferred personnel<br><small class="nx-text-secondary">Manager will assign staff</small></span>
                                     </label>
                                 </div>
                                 @foreach($eligiblePersonnel as $person)
@@ -107,8 +107,6 @@
                                        href="{{ route('account.booking.branch.details', ['service' => $service->id, 'date' => $date, 'personnel' => $personnelParam, 'time' => $slot['time']]) }}">
                                         {{ \Illuminate\Support\Carbon::parse($slot['time'])->format('g:i A') }}
                                     </a>
-                                @else
-                                    <span class="nx-slot-btn is-disabled">{{ \Illuminate\Support\Carbon::parse($slot['time'])->format('g:i A') }}</span>
                                 @endif
                             @endforeach
                         </div>

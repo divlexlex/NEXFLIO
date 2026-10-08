@@ -124,7 +124,7 @@ class _MyPackagesScreenState extends State<MyPackagesScreen> {
                           Text(
                             plan.description!,
                             style: TextStyle(
-                              color: kTextColor.withOpacity(0.6),
+                              color: kTextColor.withValues(alpha: 0.6),
                               fontSize: 12,
                             ),
                           ),

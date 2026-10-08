@@ -98,7 +98,7 @@ class StaffCredentialsTest extends TestCase
         // Old password no longer works, new one does.
         $this->post('/logout');
         $this->post('/login', ['email' => $creds['username'], 'password' => $creds['password']])
-            ->assertSessionHasErrors('email');
+            ->assertSessionHasErrors('password');
         $this->post('/login', ['email' => $creds['username'], 'password' => 'newpassword123'])
             ->assertRedirect(route('staff.dashboard'));
     }

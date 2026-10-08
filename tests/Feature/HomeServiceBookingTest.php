@@ -65,10 +65,9 @@ class HomeServiceBookingTest extends TestCase
     }
 
     // 1. Guest + a real service's detail page -> Book -> Guest modal.
-    // (There's no such thing as a "demo" service card anymore — the whole
-    // catalog is real, DB-backed Service rows now — so this is checked on
+    // The whole catalog is real, DB-backed Service rows — this is checked on
     // the detail page, which is what a Guest actually reaches from a
-    // Services grid card.)
+    // Services grid card.
     public function test_guest_sees_guest_modal_on_a_service_detail_page(): void
     {
         $this->get("/services/{$this->branchService->id}")
@@ -77,9 +76,8 @@ class HomeServiceBookingTest extends TestCase
     }
 
     // Modal regression fix: authenticated Client must NOT get the Guest
-    // modal on a demo-only service card — routed to the real booking start
-    // chooser instead.
-    public function test_authenticated_client_does_not_see_guest_modal_on_a_demo_service_card(): void
+    // modal — routed to the real booking start chooser instead.
+    public function test_authenticated_client_does_not_see_guest_modal_on_services_page(): void
     {
         $response = $this->actingAs($this->client)->get('/services');
 
@@ -156,12 +154,14 @@ class HomeServiceBookingTest extends TestCase
         $response->assertDontSee(route('account.booking.home.service'), false);
     }
 
-    // 6. Demo-only service: no fake appointment, graceful redirect to real
-    // DB-backed eligible services.
-    public function test_demo_only_service_can_never_reach_a_real_booking_route(): void
+    // 6. A non-existent service id can never produce a fake booking: hitting
+    // the wizard with a bogus id must gracefully redirect back to real,
+    // eligible services.
+    public function test_nonexistent_service_id_can_never_reach_a_booking_route(): void
     {
-        // No id exists for a demo item; hitting the wizard with a bogus id
-        // must bounce back to real service selection, never render/accept it.
+        // There's no Service row with this id; hitting the wizard with a
+        // bogus id must bounce back to real service selection, never
+        // render/accept it.
         $this->actingAs($this->client)
             ->get(route('account.booking.branch.schedule', ['service' => 999999]))
             ->assertRedirect(route('account.booking.branch.service'));

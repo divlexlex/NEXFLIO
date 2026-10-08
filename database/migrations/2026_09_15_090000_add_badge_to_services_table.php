@@ -12,8 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         // Optional short label ("New", "Best", "Most Booked"...) shown on the
-        // public Services card — previously only available on the temporary
-        // config/demo_services.php entries; now Admin-settable per real Service.
+        // public Services card; Admin-settable per real Service.
         Schema::table('services', function (Blueprint $table) {
             $table->string('badge', 50)->nullable()->after('status');
         });

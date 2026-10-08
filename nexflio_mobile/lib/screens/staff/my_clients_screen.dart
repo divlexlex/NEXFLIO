@@ -125,7 +125,7 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
     return ListView(
       children: [
         const SizedBox(height: 120),
-        Icon(Icons.people_outline, size: 64, color: kPrimaryColor.withOpacity(0.5)),
+        Icon(Icons.people_outline, size: 64, color: kPrimaryColor.withValues(alpha: 0.5)),
         const SizedBox(height: 12),
         Center(
           child: Text(
@@ -176,7 +176,7 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
           subtitle: Text(
             "${client.appointments.length} appointment(s) · "
             "${client.upcomingCount} upcoming",
-            style: TextStyle(color: kTextColor.withOpacity(0.6), fontSize: 12),
+            style: TextStyle(color: kTextColor.withValues(alpha: 0.6), fontSize: 12),
           ),
           children:
               client.appointments.map((a) => _buildAppointmentRow(a)).toList(),
@@ -211,7 +211,7 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
                 Text(
                   "$dateLabel · ${appt.startTime}",
                   style: TextStyle(
-                    color: kTextColor.withOpacity(0.6),
+                    color: kTextColor.withValues(alpha: 0.6),
                     fontSize: 11,
                   ),
                 ),
@@ -221,7 +221,7 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: appointmentStatusColor(appt.status).withOpacity(0.15),
+              color: appointmentStatusColor(appt.status).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(

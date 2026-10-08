@@ -1,7 +1,6 @@
 {{-- Branch Booking — Step 1: Service selection (Phase 3A). Real, active
-     Service records only (see BookingController@serviceIndex) — the
-     temporary config/demo_services.php items shown on public browsing
-     never appear here, so a demo-only service can never be booked. --}}
+     Service records only (see BookingController@serviceIndex) — only real,
+     DB-backed services can ever be booked. --}}
 @extends('layouts.public')
 
 @section('title', 'Book — Select a Service')

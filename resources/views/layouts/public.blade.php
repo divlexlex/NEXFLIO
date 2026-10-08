@@ -174,6 +174,26 @@
             sync();
         });
     })();
+
+    // Show/hide password toggles — any auth form field marked with
+    // data-password-field="<input id>" gets an eye button next to it. One
+    // delegated setup so every form (login, register, reset) shares it.
+    (function () {
+        document.querySelectorAll('[data-password-field]').forEach((input) => {
+            const button = input.parentElement.querySelector('[data-password-toggle]');
+            if (!button) return;
+
+            const icon = button.querySelector('i');
+            const toggle = () => {
+                const show = input.type === 'password';
+                input.type = show ? 'text' : 'password';
+                icon.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+                button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            };
+
+            button.addEventListener('click', toggle);
+        });
+    })();
 </script>
 
 @if(config('services.dialogflow.agent_id'))

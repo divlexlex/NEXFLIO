@@ -66,7 +66,7 @@ class AccountTab extends StatelessWidget {
                   border: Border.all(color: kSecondaryColor),
                   boxShadow: [
                     BoxShadow(
-                      color: kTextColor.withOpacity(0.05),
+                      color: kTextColor.withValues(alpha: 0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -97,7 +97,7 @@ class AccountTab extends StatelessWidget {
                             user?.email ?? "Not signed in",
                             style: TextStyle(
                               fontSize: 14,
-                              color: kTextColor.withOpacity(0.6),
+                              color: kTextColor.withValues(alpha: 0.6),
                             ),
                           ),
                           const SizedBox(height: 10),
@@ -116,7 +116,7 @@ class AccountTab extends StatelessWidget {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: kPrimaryColor.withOpacity(0.2),
+                                color: kPrimaryColor.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Text(
@@ -351,7 +351,7 @@ class AccountTab extends StatelessWidget {
       decoration: BoxDecoration(
         color: kCardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kSecondaryColor.withOpacity(0.5)),
+        border: Border.all(color: kSecondaryColor.withValues(alpha: 0.5)),
       ),
       child: SwitchListTile(
         value: isDark,
@@ -360,7 +360,7 @@ class AccountTab extends StatelessWidget {
         secondary: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: kSecondaryColor.withOpacity(0.3),
+            color: kSecondaryColor.withValues(alpha: 0.3),
             shape: BoxShape.circle,
           ),
           child: Icon(isDark ? Icons.dark_mode : Icons.light_mode,
@@ -388,13 +388,13 @@ class AccountTab extends StatelessWidget {
       decoration: BoxDecoration(
         color: kCardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kSecondaryColor.withOpacity(0.5)),
+        border: Border.all(color: kSecondaryColor.withValues(alpha: 0.5)),
       ),
       child: ListTile(
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: kSecondaryColor.withOpacity(0.3),
+            color: kSecondaryColor.withValues(alpha: 0.3),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: kPrimaryColor, size: 20),
