@@ -30,8 +30,14 @@
                 <div class="nx-booking-panel text-start mb-4">
                     <div class="nx-review-row">
                         <span class="nx-review-label">Service</span>
-                        <span class="nx-review-value">{{ $appointment->service->name ?? 'Service' }}</span>
+                        <span class="nx-review-value">{{ $appointment->displayServiceName() }}</span>
                     </div>
+                    @if($appointment->price !== null)
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Price</span>
+                            <span class="nx-review-value">₱{{ number_format((float) $appointment->price, 2) }}</span>
+                        </div>
+                    @endif
                     <div class="nx-review-row">
                         <span class="nx-review-label">Date</span>
                         <span class="nx-review-value">{{ $appointment->appointment_date->format('F j, Y') }}</span>

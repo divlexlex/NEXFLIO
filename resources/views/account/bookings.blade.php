@@ -80,7 +80,7 @@
                                 <div class="nx-booking-row">
                                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
                                         <h3 class="h6 mb-0">
-                                            {{ $appointment->service->name ?? 'Service' }}
+                                            {{ $appointment->displayServiceName() }}
                                             @if($appointment->address)
                                                 <span class="nx-badge ms-1"><i class="bi bi-house-heart me-1"></i>Home Service</span>
                                             @endif
@@ -91,6 +91,9 @@
                                         <i class="bi bi-calendar3 me-2"></i>{{ $appointment->appointment_date->format('F j, Y') }}
                                         &middot; {{ \Illuminate\Support\Carbon::parse($appointment->start_time)->format('g:i A') }}
                                     </p>
+                                    @if($appointment->price !== null)
+                                        <p class="small nx-text-secondary mb-1"><i class="bi bi-cash-coin me-2"></i>₱{{ number_format((float) $appointment->price, 2) }}</p>
+                                    @endif
                                     @if($appointment->personnel)
                                         <p class="small nx-text-secondary mb-0"><i class="bi bi-person me-2"></i>{{ $appointment->personnel->name }}</p>
                                     @endif
@@ -123,7 +126,7 @@
                                             <button type="button" class="nx-btn nx-btn-outline btn-sm js-change-request"
                                                     data-bs-toggle="modal" data-bs-target="#changeRequestModal"
                                                     data-appointment="{{ $appointment->id }}"
-                                                    data-service="{{ $appointment->service->name ?? 'Service' }}"
+                                                    data-service="{{ $appointment->displayServiceName() }}"
                                                     data-current="{{ $appointment->appointment_date->format('M j, Y') }} at {{ \Illuminate\Support\Carbon::parse($appointment->start_time)->format('g:i A') }}"
                                                     data-type="reschedule">
                                                 <i class="bi bi-calendar-event me-1"></i>Request reschedule
@@ -131,7 +134,7 @@
                                             <button type="button" class="nx-btn nx-btn-outline btn-sm js-change-request"
                                                     data-bs-toggle="modal" data-bs-target="#changeRequestModal"
                                                     data-appointment="{{ $appointment->id }}"
-                                                    data-service="{{ $appointment->service->name ?? 'Service' }}"
+                                                    data-service="{{ $appointment->displayServiceName() }}"
                                                     data-current="{{ $appointment->appointment_date->format('M j, Y') }} at {{ \Illuminate\Support\Carbon::parse($appointment->start_time)->format('g:i A') }}"
                                                     data-type="cancellation">
                                                 <i class="bi bi-x-circle me-1"></i>Request cancellation

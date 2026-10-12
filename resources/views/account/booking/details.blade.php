@@ -33,13 +33,13 @@
                     <hr class="my-4" style="border-color: var(--nx-border);">
 
                     <form method="GET" action="{{ route('account.booking.branch.review') }}">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel])
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel])
 
                         <label for="notes" class="form-label">Notes for the branch <span class="nx-text-secondary" style="font-weight:400;">(optional)</span></label>
                         <textarea name="notes" id="notes" rows="4" maxlength="1000" class="form-control" placeholder="Anything the team should know before your visit?">{{ $notes }}</textarea>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                            <a href="{{ route('account.booking.branch.schedule', ['service' => $service->id, 'date' => $date]) }}" class="nx-btn nx-btn-outline">
+                            <a href="{{ route('account.booking.branch.schedule', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date])) }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

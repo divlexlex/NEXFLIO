@@ -56,4 +56,10 @@ class Service extends Model
     {
         return $this->hasMany(Appointment::class);
     }
+
+    /** Saleable tiers (Solo / Couple / Barkada); empty for regular services. */
+    public function variants()
+    {
+        return $this->hasMany(ServiceVariant::class)->orderBy('sort')->orderBy('id');
+    }
 }

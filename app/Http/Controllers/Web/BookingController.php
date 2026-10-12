@@ -14,6 +14,7 @@ use App\Models\BlockedSlot;
 use App\Models\BusinessHours;
 use App\Models\LeaveRequest;
 use App\Models\Service;
+use App\Models\ServiceVariant;
 use App\Models\StaffSchedule;
 use App\Models\User;
 use App\Services\NotificationService;
@@ -109,7 +110,7 @@ class BookingController extends Controller
 
     public function serviceShow($id)
     {
-        $service = Service::bookableAtBranch()->findOrFail($id);
+        $service = Service::bookableAtBranch()->with('variants')->findOrFail($id);
 
         return view('account.booking.service-detail', [
             'service' => $service,
@@ -121,6 +122,11 @@ class BookingController extends Controller
         $service = $this->requireService($request, ServiceLocationType::bookableAtBranch(), 'account.booking.branch.service');
         if ($service instanceof \Illuminate\Http\RedirectResponse) {
             return $service;
+        }
+
+        $variant = $this->resolveVariant($request, $service);
+        if ($variant instanceof \Illuminate\Http\RedirectResponse) {
+            return $variant;
         }
 
         $date = $request->query('date') ?: now()->toDateString();
@@ -145,6 +151,7 @@ class BookingController extends Controller
 
         return view('account.booking.schedule', [
             'service' => $service,
+            'variant' => $variant,
             'date' => $date,
             'minDate' => $this->minDate(),
             'maxDate' => now()->addDays(self::BOOKING_WINDOW_DAYS)->toDateString(),
@@ -162,6 +169,11 @@ class BookingController extends Controller
             return $service;
         }
 
+        $variant = $this->resolveVariant($request, $service);
+        if ($variant instanceof \Illuminate\Http\RedirectResponse) {
+            return $variant;
+        }
+
         $scheduleError = $this->validateScheduleSelection($request, 'account.booking.branch.schedule');
         if ($scheduleError) {
             return $scheduleError;
@@ -169,6 +181,7 @@ class BookingController extends Controller
 
         return view('account.booking.details', [
             'service' => $service,
+            'variant' => $variant,
             'date' => $request->query('date'),
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
@@ -185,6 +198,11 @@ class BookingController extends Controller
             return $service;
         }
 
+        $variant = $this->resolveVariant($request, $service);
+        if ($variant instanceof \Illuminate\Http\RedirectResponse) {
+            return $variant;
+        }
+
         $scheduleError = $this->validateScheduleSelection($request, 'account.booking.branch.schedule');
         if ($scheduleError) {
             return $scheduleError;
@@ -192,6 +210,7 @@ class BookingController extends Controller
 
         return view('account.booking.review', [
             'service' => $service,
+            'variant' => $variant,
             'date' => $request->query('date'),
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
@@ -208,6 +227,11 @@ class BookingController extends Controller
             return $service;
         }
 
+        $variant = $this->resolveVariant($request, $service);
+        if ($variant instanceof \Illuminate\Http\RedirectResponse) {
+            return $variant;
+        }
+
         $scheduleError = $this->validateScheduleSelection($request, 'account.booking.branch.schedule');
         if ($scheduleError) {
             return $scheduleError;
@@ -215,6 +239,7 @@ class BookingController extends Controller
 
         return view('account.booking.payment', [
             'service' => $service,
+            'variant' => $variant,
             'date' => $request->query('date'),
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
@@ -226,10 +251,21 @@ class BookingController extends Controller
     {
         $validated = $request->validated();
 
-        $appointment = DB::transaction(function () use ($request, $validated) {
+        // Package tier (when the service has variants) resolved server-side
+        // from the DB — the browser only ever sends an id. A service without
+        // variants bills its listed price exactly as before.
+        $service = Service::findOrFail($validated['service_id']);
+        $variant = isset($validated['variant_id'])
+            ? $service->variants()->find($validated['variant_id'])
+            : null;
+        $price = $variant?->price ?? $service->price;
+
+        $appointment = DB::transaction(function () use ($request, $validated, $variant, $price) {
             $appointment = Appointment::create([
                 'user_id' => $request->user()->id,
                 'service_id' => $validated['service_id'],
+                'variant_label' => $variant?->label,
+                'booked_price' => $price,
                 'personnel_id' => $validated['personnel_id'],
                 'appointment_date' => $validated['appointment_date'],
                 'start_time' => $validated['start_time'],
@@ -237,10 +273,11 @@ class BookingController extends Controller
                 'status' => AppointmentStatus::Unverified,
             ]);
 
-            // Amount is always the service's listed price, taken server-side
-            // — never trusted from the browser (mirrors API\AppointmentController@store).
+            // Amount is the selected tier (or the service's listed price),
+            // taken server-side — never trusted from the browser (mirrors
+            // API\AppointmentController@store).
             $appointment->payment()->create([
-                'amount' => $appointment->service->price,
+                'amount' => $price,
                 'method' => $validated['method'] ?? 'gcash',
                 'proof_path' => $request->file('payment_proof')->store('payment_proofs', 'public'),
                 'status' => PaymentStatus::Pending,
@@ -256,7 +293,7 @@ class BookingController extends Controller
         $notificationService->notify(
             $appointment->user,
             'Booking received',
-            "We received your booking for {$appointment->service->name}. "
+            "We received your booking for {$appointment->displayServiceName()}. "
                 . 'You will be notified once your payment is verified.',
             new BookingReceivedMail($appointment),
             ['appointment_id' => $appointment->id]
@@ -552,6 +589,37 @@ class BookingController extends Controller
     }
 
     /**
+     * Branch Booking only. When the chosen service has saleable tiers
+     * (App\Models\ServiceVariant — e.g. the Head Spa packages' Solo/Couple/
+     * Barkada) the wizard must carry a `variant` query param that belongs to
+     * that service; a missing or foreign id bounces the Client back to the
+     * service page to pick a real one. Regular services (no variants) return
+     * null and every step behaves exactly as before. store() /
+     * StoreWebBranchBookingRequest re-check this authoritatively from the DB.
+     */
+    private function resolveVariant(Request $request, Service $service): ServiceVariant|\Illuminate\Http\RedirectResponse|null
+    {
+        $variants = $service->variants;
+
+        if ($variants->isEmpty()) {
+            return null;
+        }
+
+        $id = $request->query('variant');
+        $variant = $id !== null && $id !== ''
+            ? $variants->firstWhere('id', (int) $id)
+            : null;
+
+        if (! $variant) {
+            return redirect()
+                ->route('account.booking.branch.service.show', $service->id)
+                ->withErrors(['variant' => 'Please choose a package option to continue.']);
+        }
+
+        return $variant;
+    }
+
+    /**
      * Lightweight, redo-able check (not the source of truth — store() /
      * StoreWebBranchBookingRequest re-validates everything authoritatively)
      * that the date/time/personnel carried in the query string still look
@@ -586,7 +654,10 @@ class BookingController extends Controller
             }
         } catch (ValidationException $e) {
             return redirect()
-                ->route($scheduleRoute, $this->carryAddress($request, ['service' => $request->query('service')]))
+                ->route($scheduleRoute, $this->carryAddress($request, [
+                    'service' => $request->query('service'),
+                    'variant' => $request->query('variant'),
+                ]))
                 ->withErrors($e->errors());
         }
 

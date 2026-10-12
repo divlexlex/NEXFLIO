@@ -17,6 +17,8 @@ class Appointment extends Model
         'walk_in_name',
         'walk_in_phone',
         'service_id',
+        'variant_label',
+        'booked_price',
         'personnel_id',
         'appointment_date',
         'start_time',
@@ -30,6 +32,7 @@ class Appointment extends Model
         return [
             'status' => AppointmentStatus::class,
             'appointment_date' => 'datetime',
+            'booked_price' => 'decimal:2',
         ];
     }
 
@@ -96,5 +99,26 @@ class Appointment extends Model
     public function getPaymentProofPathAttribute(?string $value): ?string
     {
         return $value ?? $this->payment?->proof_path;
+    }
+
+    /**
+     * What the client was charged. Snapshot on the row for package tiers;
+     * rows booked before variants (or regular services) fall back to the
+     * service's current price.
+     */
+    public function getPriceAttribute(): ?string
+    {
+        return $this->booked_price ?? $this->service?->price;
+    }
+
+    /**
+     * Service name with the package tier when one was booked, e.g.
+     * "Package LIZ (Couple)". Plain name for regular services.
+     */
+    public function displayServiceName(): string
+    {
+        $name = $this->service?->name ?? 'Service';
+
+        return $this->variant_label ? $name.' ('.$this->variant_label.')' : $name;
     }
 }

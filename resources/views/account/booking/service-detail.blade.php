@@ -43,15 +43,45 @@
 
                     <hr class="my-4" style="border-color: var(--nx-border);">
 
-                    <div class="d-flex justify-content-between flex-wrap gap-2">
-                        <a href="{{ route('account.booking.branch.service') }}" class="nx-btn nx-btn-outline"
-                           data-bs-toggle="modal" data-bs-target="#bookServiceModal">
-                            <i class="bi bi-arrow-left me-1"></i>Back
-                        </a>
-                        <a href="{{ route('account.booking.branch.schedule', ['service' => $service->id]) }}" class="nx-btn nx-btn-primary">
-                            Continue <i class="bi bi-arrow-right ms-1"></i>
-                        </a>
-                    </div>
+                    @if($service->variants->isNotEmpty())
+                        {{-- Package service: the client must pick a tier; its
+                             price (not the base services.price) is what gets
+                             charged. Continue carries the chosen variant id. --}}
+                        <form method="GET" action="{{ route('account.booking.branch.schedule') }}">
+                            <input type="hidden" name="service" value="{{ $service->id }}">
+                            <label class="form-label nx-eyebrow mb-2">Package Option</label>
+                            <div class="row g-2 mb-4">
+                                @foreach($service->variants as $option)
+                                    <div class="col-sm-4">
+                                        <label class="nx-select-card d-flex flex-column gap-1 {{ $loop->first ? 'is-selected' : '' }}">
+                                            <input type="radio" name="variant" value="{{ $option->id }}" {{ $loop->first ? 'checked' : '' }}>
+                                            <span class="fw-semibold">{{ $option->label }}</span>
+                                            <small class="nx-text-secondary">₱{{ number_format($option->price, 2) }}@if($option->guestLabel()) &middot; {{ $option->guestLabel() }}@endif</small>
+                                        </label>
+                                    </div>
+                                @endforeach
+                            </div>
+                            <div class="d-flex justify-content-between flex-wrap gap-2">
+                                <a href="{{ route('account.booking.branch.service') }}" class="nx-btn nx-btn-outline"
+                                   data-bs-toggle="modal" data-bs-target="#bookServiceModal">
+                                    <i class="bi bi-arrow-left me-1"></i>Back
+                                </a>
+                                <button type="submit" class="nx-btn nx-btn-primary">
+                                    Continue <i class="bi bi-arrow-right ms-1"></i>
+                                </button>
+                            </div>
+                        </form>
+                    @else
+                        <div class="d-flex justify-content-between flex-wrap gap-2">
+                            <a href="{{ route('account.booking.branch.service') }}" class="nx-btn nx-btn-outline"
+                               data-bs-toggle="modal" data-bs-target="#bookServiceModal">
+                                <i class="bi bi-arrow-left me-1"></i>Back
+                            </a>
+                            <a href="{{ route('account.booking.branch.schedule', ['service' => $service->id]) }}" class="nx-btn nx-btn-primary">
+                                Continue <i class="bi bi-arrow-right ms-1"></i>
+                            </a>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>

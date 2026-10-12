@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             UserSeeder::class,
             ServiceSeeder::class,
+            ServiceVariantSeeder::class,
             PromoSeeder::class,
             InventorySeeder::class,
             MassageInventorySeeder::class,

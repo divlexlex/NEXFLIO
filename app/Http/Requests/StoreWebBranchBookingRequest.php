@@ -60,6 +60,10 @@ class StoreWebBranchBookingRequest extends FormRequest
                 'nullable',
                 Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
             ],
+            'variant_id' => [
+                'nullable',
+                Rule::exists('service_variants', 'id')->where('service_id', $this->input('service_id')),
+            ],
             'appointment_date' => 'required|date|after_or_equal:today',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
@@ -73,12 +77,15 @@ class StoreWebBranchBookingRequest extends FormRequest
         return [
             'service_id.exists' => 'That service is not bookable at the branch.',
             'personnel_id.exists' => 'Selected personnel is not available.',
+            'variant_id.exists' => 'That package option is not available for this service.',
         ];
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
+            $this->validateVariantChoice($validator);
+
             if ($validator->errors()->isNotEmpty()) {
                 return;
             }
@@ -105,6 +112,25 @@ class StoreWebBranchBookingRequest extends FormRequest
                 );
             }
         });
+    }
+
+    /**
+     * A tiered service must carry a variant_id that belongs to it. The
+     * foreign/invalid case is already rejected by the exists rule (scoped to
+     * service_id); this only adds the friendlier "you must pick one" error.
+     */
+    private function validateVariantChoice(Validator $validator): void
+    {
+        $serviceId = $this->integer('service_id');
+        $service = $serviceId ? \App\Models\Service::with('variants')->find($serviceId) : null;
+
+        if (! $service || $service->variants->isEmpty()) {
+            return;
+        }
+
+        if ($this->input('variant_id') === null || $this->input('variant_id') === '') {
+            $validator->errors()->add('variant_id', 'Please choose a package option for this service.');
+        }
     }
 
 }

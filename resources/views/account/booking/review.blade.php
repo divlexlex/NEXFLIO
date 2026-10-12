@@ -27,11 +27,11 @@
                     </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Service</span>
-                        <span class="nx-review-value">{{ $service->name }}</span>
+                        <span class="nx-review-value">{{ $service->name }}@if($variant) — {{ $variant->label }}@endif</span>
                     </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Price</span>
-                        <span class="nx-review-value">₱{{ number_format($service->price, 2) }}</span>
+                        <span class="nx-review-value">₱{{ number_format($variant?->price ?? $service->price, 2) }}</span>
                     </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Duration</span>
@@ -67,8 +67,8 @@
                     </div>
 
                     <form method="GET" action="{{ route('account.booking.branch.payment') }}" class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes])
-                        <a href="{{ route('account.booking.branch.details', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel]) }}" class="nx-btn nx-btn-outline">
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes])
+                        <a href="{{ route('account.booking.branch.details', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel])) }}" class="nx-btn nx-btn-outline">
                             <i class="bi bi-arrow-left me-1"></i>Back
                         </a>
                         <button type="submit" class="nx-btn nx-btn-primary">

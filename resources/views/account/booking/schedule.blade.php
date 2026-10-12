@@ -43,14 +43,15 @@
                             @endif
                         </div>
                         <div>
-                            <p class="fw-semibold mb-0">{{ $service->name }}</p>
-                            <p class="small nx-text-secondary mb-0">{{ $service->duration_minutes }} mins &middot; ₱{{ number_format($service->price, 2) }}</p>
+                            <p class="fw-semibold mb-0">{{ $service->name }}@if($variant) <span class="nx-text-secondary">— {{ $variant->label }}</span>@endif</p>
+                            <p class="small nx-text-secondary mb-0">{{ $service->duration_minutes }} mins &middot; ₱{{ number_format($variant?->price ?? $service->price, 2) }}</p>
                         </div>
                     </div>
 
                     {{-- DATE --}}
                     <form method="GET" action="{{ route('account.booking.branch.schedule') }}" id="dateForm">
                         <input type="hidden" name="service" value="{{ $service->id }}">
+                        @if($variant)<input type="hidden" name="variant" value="{{ $variant->id }}">@endif
                         <label class="form-label nx-eyebrow">Date</label>
                         <div class="d-flex gap-2 flex-wrap">
                             <input type="date" name="date" value="{{ $date }}" min="{{ $minDate }}" max="{{ $maxDate }}"
@@ -64,6 +65,7 @@
                     {{-- PERSONNEL --}}
                     <form method="GET" action="{{ route('account.booking.branch.schedule') }}" id="personnelForm">
                         <input type="hidden" name="service" value="{{ $service->id }}">
+                        @if($variant)<input type="hidden" name="variant" value="{{ $variant->id }}">@endif
                         <input type="hidden" name="date" value="{{ $date }}">
                         <label class="form-label nx-eyebrow">Preferred Spa Personnel</label>
 
@@ -104,7 +106,7 @@
                             @foreach($slots as $slot)
                                 @if($slot['available'])
                                     <a class="nx-slot-btn {{ $selectedTime === $slot['time'] ? 'is-selected' : '' }}"
-                                       href="{{ route('account.booking.branch.details', ['service' => $service->id, 'date' => $date, 'personnel' => $personnelParam, 'time' => $slot['time']]) }}">
+                                       href="{{ route('account.booking.branch.details', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'personnel' => $personnelParam, 'time' => $slot['time']])) }}">
                                         {{ \Illuminate\Support\Carbon::parse($slot['time'])->format('g:i A') }}
                                     </a>
                                 @endif

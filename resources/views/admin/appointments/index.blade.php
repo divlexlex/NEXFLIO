@@ -120,7 +120,7 @@
                                 <span class="badge text-bg-secondary">walk-in</span>
                             @endif
                         </td>
-                        <td>{{ $appointment->service->name ?? '—' }}</td>
+                        <td>{{ $appointment->displayServiceName() }}</td>
                         <td>{{ $appointment->personnel->name ?? 'No preferred personnel' }}</td>
                         <td>{{ $appointment->appointment_date->format('M j, Y') }} · {{ $appointment->start_time }}</td>
                         <td><span class="badge text-bg-light border">{{ $appointment->status->label() }}</span></td>

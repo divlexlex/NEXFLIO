@@ -47,7 +47,8 @@
                                     data-duration="{{ $service->duration_minutes }}"
                                     data-status="{{ $service->status }}"
                                     data-badge="{{ $service->badge }}"
-                                    data-image="{{ $service->image_url }}">
+                                    data-image="{{ $service->image_url }}"
+                                    data-variants="{{ $service->variants->map(fn ($v) => ['id' => $v->id, 'label' => $v->label, 'price' => $v->price, 'guests' => $v->guests, 'sort' => $v->sort])->values()->toJson() }}">
                                 Edit
                             </button>
                             <form method="POST" action="{{ url('admin/services') }}/{{ $service->id }}"
@@ -120,6 +121,18 @@
                         <option value="New"><option value="Best"><option value="Most Booked"><option value="Premium">
                     </datalist>
                 </div>
+
+                <hr class="my-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label mb-0 fw-semibold">Package Tiers <span class="text-muted fw-normal">(optional)</span></label>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="svc-add-variant"><i class="bi bi-plus-lg me-1"></i>Add tier</button>
+                </div>
+                <div class="form-text mt-0 mb-2">
+                    Selling this as packages (e.g. Solo / Couple / Barkada)? Add a row per tier — bookings then charge
+                    the selected tier's price instead of the Price above. Leave empty for a regular service.
+                </div>
+                <div id="svc-variants" class="d-flex flex-column gap-2"></div>
+
                 @include('admin.partials.image-field', ['prefix' => 'svc'])
             </div>
             <div class="modal-footer">
@@ -133,44 +146,91 @@
 
 @push('scripts')
 <script>
-    document.getElementById('serviceModal').addEventListener('show.bs.modal', (event) => {
-        const btn = event.relatedTarget;
-        const form = document.getElementById('serviceForm');
-        const methodHolder = document.getElementById('service-method-holder');
+    (function () {
+        const variantsWrap = document.getElementById('svc-variants');
+        let variantIndex = 0;
 
-        const preview = document.getElementById('svc-image-preview');
-        const removeWrap = document.getElementById('svc-remove-wrap');
-        const removeBox = document.getElementById('svc-remove-image');
+        function addVariantRow(data) {
+            data = data || {};
+            const idx = variantIndex++;
+            const row = document.createElement('div');
+            row.className = 'row g-2 align-items-center';
+            row.innerHTML =
+                '<div class="col-4"><input name="variants[' + idx + '][label]" class="form-control form-control-sm" placeholder="Label" maxlength="40" required></div>' +
+                '<div class="col-3"><input type="number" step="0.01" min="0.01" name="variants[' + idx + '][price]" class="form-control form-control-sm" placeholder="Price" required></div>' +
+                '<div class="col-2"><input type="number" min="1" name="variants[' + idx + '][guests]" class="form-control form-control-sm" placeholder="Guests"></div>' +
+                '<div class="col-2"><input type="number" min="0" name="variants[' + idx + '][sort]" class="form-control form-control-sm" placeholder="Sort" value="0"></div>' +
+                '<div class="col-1 text-end"><button type="button" class="btn btn-sm btn-outline-danger" title="Remove">&times;</button></div>' +
+                '<input type="hidden" name="variants[' + idx + '][id]">' +
+                '<input type="checkbox" name="variants[' + idx + '][remove]" value="1" class="d-none">';
 
-        if (btn.dataset.mode === 'edit') {
-            form.action = "{{ url('admin/services') }}/" + btn.dataset.id;
-            methodHolder.innerHTML = '<input type="hidden" name="_method" value="PATCH">';
-            document.getElementById('service-modal-title').textContent = 'Edit Service';
-            document.getElementById('svc-name').value = btn.dataset.name;
-            document.getElementById('svc-category').value = btn.dataset.category;
-            document.getElementById('svc-description').value = btn.dataset.description || '';
-            document.getElementById('svc-price').value = btn.dataset.price;
-            document.getElementById('svc-duration').value = btn.dataset.duration;
-            document.getElementById('svc-status').value = btn.dataset.status;
-            document.getElementById('svc-badge').value = btn.dataset.badge || '';
-            document.getElementById('svc-image').value = '';
-            removeBox.checked = false;
-            if (btn.dataset.image) {
-                preview.src = btn.dataset.image;
-                preview.style.display = 'block';
-                removeWrap.style.display = 'block';
+            row.querySelector('[name="variants[' + idx + '][label]"]').value = data.label || '';
+            row.querySelector('[name="variants[' + idx + '][price]"]').value = data.price != null ? data.price : '';
+            row.querySelector('[name="variants[' + idx + '][guests]"]').value = data.guests != null ? data.guests : '';
+            row.querySelector('[name="variants[' + idx + '][sort]"]').value = data.sort != null ? data.sort : 0;
+            row.querySelector('[name="variants[' + idx + '][id]"]').value = data.id != null ? data.id : '';
+
+            row.querySelector('button').addEventListener('click', () => {
+                const idInput = row.querySelector('[name="variants[' + idx + '][id]"]');
+                if (idInput.value) {
+                    // Saved tier: flag for deletion server-side and hide.
+                    row.querySelector('[name="variants[' + idx + '][remove]"]').checked = true;
+                    row.classList.add('d-none');
+                } else {
+                    row.remove();
+                }
+            });
+
+            variantsWrap.appendChild(row);
+        }
+
+        document.getElementById('svc-add-variant').addEventListener('click', () => addVariantRow());
+
+        document.getElementById('serviceModal').addEventListener('show.bs.modal', (event) => {
+            const btn = event.relatedTarget;
+            const form = document.getElementById('serviceForm');
+            const methodHolder = document.getElementById('service-method-holder');
+
+            const preview = document.getElementById('svc-image-preview');
+            const removeWrap = document.getElementById('svc-remove-wrap');
+            const removeBox = document.getElementById('svc-remove-image');
+
+            variantsWrap.innerHTML = '';
+
+            if (btn.dataset.mode === 'edit') {
+                form.action = "{{ url('admin/services') }}/" + btn.dataset.id;
+                methodHolder.innerHTML = '<input type="hidden" name="_method" value="PATCH">';
+                document.getElementById('service-modal-title').textContent = 'Edit Service';
+                document.getElementById('svc-name').value = btn.dataset.name;
+                document.getElementById('svc-category').value = btn.dataset.category;
+                document.getElementById('svc-description').value = btn.dataset.description || '';
+                document.getElementById('svc-price').value = btn.dataset.price;
+                document.getElementById('svc-duration').value = btn.dataset.duration;
+                document.getElementById('svc-status').value = btn.dataset.status;
+                document.getElementById('svc-badge').value = btn.dataset.badge || '';
+                document.getElementById('svc-image').value = '';
+                removeBox.checked = false;
+                if (btn.dataset.image) {
+                    preview.src = btn.dataset.image;
+                    preview.style.display = 'block';
+                    removeWrap.style.display = 'block';
+                } else {
+                    preview.style.display = 'none';
+                    removeWrap.style.display = 'none';
+                }
+
+                let variants = [];
+                try { variants = JSON.parse(btn.dataset.variants || '[]'); } catch (e) { variants = []; }
+                variants.forEach(addVariantRow);
             } else {
+                form.action = "{{ route('admin.services.store') }}";
+                methodHolder.innerHTML = '';
+                document.getElementById('service-modal-title').textContent = 'New Service';
+                form.reset();
                 preview.style.display = 'none';
                 removeWrap.style.display = 'none';
             }
-        } else {
-            form.action = "{{ route('admin.services.store') }}";
-            methodHolder.innerHTML = '';
-            document.getElementById('service-modal-title').textContent = 'New Service';
-            form.reset();
-            preview.style.display = 'none';
-            removeWrap.style.display = 'none';
-        }
-    });
+        });
+    })();
 </script>
 @endpush

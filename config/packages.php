@@ -92,9 +92,9 @@ return [
         [
             'name' => 'Package LIZ',
             'tiers' => [
-                ['label' => 'Solo', 'price' => 1799],
-                ['label' => 'Couple', 'price' => 3399],
-                ['label' => 'Barkada', 'price' => 6699],
+                ['label' => 'Solo', 'price' => 1899],
+                ['label' => 'Couple', 'price' => 3699],
+                ['label' => 'Barkada', 'price' => 7199],
             ],
             'inclusions' => [
                 '30 mins Japanese Head Spa',

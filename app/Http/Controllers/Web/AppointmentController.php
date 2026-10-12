@@ -99,7 +99,7 @@ class AppointmentController extends Controller
 
             return [
                 'id' => $appointment->id,
-                'title' => trim(($appointment->clientName() ?? 'Client').' · '.($appointment->service->name ?? '')),
+                'title' => trim(($appointment->clientName() ?? 'Client').' · '.($appointment->displayServiceName())),
                 'start' => $start,
                 'end' => Carbon::parse($start)->addMinutes($duration)->toIso8601String(),
                 'backgroundColor' => $bg,
@@ -110,9 +110,9 @@ class AppointmentController extends Controller
                     'client' => $appointment->clientName() ?? 'Client',
                     'phone' => $appointment->user?->clientProfile?->mobile_number ?? $appointment->walk_in_phone,
                     'returning' => in_array($appointment->user_id, $returningUserIds, true),
-                    'service' => $appointment->service->name ?? '—',
+                    'service' => $appointment->displayServiceName(),
                     'durationMins' => $duration,
-                    'price' => $appointment->service->price ? (float) $appointment->service->price : null,
+                    'price' => $appointment->price !== null ? (float) $appointment->price : null,
                     'bookingType' => $bookingType,
                     'dateLabel' => $appointment->appointment_date->format('M j, Y (D)'),
                     'timeLabel' => Carbon::parse($start)->format('g:i A')
