@@ -16,6 +16,11 @@ use Illuminate\Support\Facades\Storage;
  * Services page reads it, and App\Http\Controllers\Web\ServiceController for
  * how Admin edits it.
  *
+ * Trimmed to the owner's exact KEEP list (24 services). Every other row that
+ * used to live here was removed from the current database via the one-off
+ * ServiceCatalogTrimSeeder; the owner will re-add any other treatments later
+ * through the Admin "New Service" form.
+ *
  * Images: this project has no per-treatment product photography yet, so each
  * category is seeded with a representative photo from the site's existing
  * gallery/hero-slider assets (public/images/...), copied onto the public
@@ -101,57 +106,24 @@ class ServiceSeeder extends Seeder
             ['name' => 'Basic Facial', 'category' => 'Facial', 'price' => 349, 'duration_minutes' => 45],
             ['name' => 'Signature Facial', 'category' => 'Facial', 'price' => 599, 'duration_minutes' => 60],
             ['name' => 'Hydra Facial', 'category' => 'Facial', 'price' => 999, 'duration_minutes' => 60, 'badge' => 'Best'],
-            ['name' => 'Galvanic Facial', 'category' => 'Facial', 'price' => 599, 'duration_minutes' => 45, 'badge' => 'New'],
-            ['name' => 'Pimple & Acne Treatment', 'category' => 'Facial', 'price' => 849, 'duration_minutes' => 60],
 
             // ---- Massage -------------------------------------------------------
             ['name' => 'Swedish Massage', 'category' => 'Massage', 'price' => 599, 'duration_minutes' => 60, 'badge' => 'Most Booked'],
-            ['name' => 'Combination Massage', 'category' => 'Massage', 'price' => 699, 'duration_minutes' => 60],
-            ['name' => 'Deep Tissue Massage', 'category' => 'Massage', 'price' => 649, 'duration_minutes' => 60],
-            ['name' => 'Shiatsu / Dry Massage', 'category' => 'Massage', 'price' => 799, 'duration_minutes' => 60],
-            ['name' => 'Ventosa Massage', 'category' => 'Massage', 'price' => 799, 'duration_minutes' => 60],
             ['name' => 'Hot Stone Massage', 'category' => 'Massage', 'price' => 799, 'duration_minutes' => 60],
-            ['name' => 'Foot Reflexology', 'category' => 'Massage', 'price' => 299, 'duration_minutes' => 20],
-            ['name' => 'Hand Reflexology', 'category' => 'Massage', 'price' => 299, 'duration_minutes' => 20],
             ['name' => 'Aromatherapy (Herbal Ball)', 'category' => 'Massage', 'price' => 799, 'duration_minutes' => 60],
-            ['name' => 'Prenatal Massage', 'category' => 'Massage', 'price' => 999, 'duration_minutes' => 60],
-            ['name' => 'Postnatal Massage w/ Lactation', 'category' => 'Massage', 'price' => 899, 'duration_minutes' => 60],
-            ['name' => 'Twin Massage (Four Hands)', 'category' => 'Massage', 'price' => 1299, 'duration_minutes' => 60],
 
             // ---- Nails ---------------------------------------------------------
             ['name' => 'Manicure', 'category' => 'Nails', 'price' => 179, 'duration_minutes' => 30],
             ['name' => 'Pedicure', 'category' => 'Nails', 'price' => 199, 'duration_minutes' => 45],
             ['name' => 'Gel Manicure', 'category' => 'Nails', 'price' => 399, 'duration_minutes' => 60],
-            ['name' => 'Gel Pedicure', 'category' => 'Nails', 'price' => 399, 'duration_minutes' => 60],
-            ['name' => 'Gel Removal', 'category' => 'Nails', 'price' => 99, 'duration_minutes' => 20],
-            ['name' => 'French Tip', 'category' => 'Nails', 'price' => 49, 'duration_minutes' => 15],
-            ['name' => 'Cat Eye Polish', 'category' => 'Nails', 'price' => 99, 'duration_minutes' => 15],
-            ['name' => 'Soft Gel Extension', 'category' => 'Nails', 'price' => 499, 'duration_minutes' => 75],
-            ['name' => 'Soft Gel Removal', 'category' => 'Nails', 'price' => 299, 'duration_minutes' => 20],
-            ['name' => 'Nail Repair (Per Nail)', 'category' => 'Nails', 'price' => 99, 'duration_minutes' => 10],
-            ['name' => 'Nail Art — Cat Eye', 'category' => 'Nails', 'price' => 199, 'duration_minutes' => 20],
 
             // ---- Lashes & Brows --------------------------------------------------
             ['name' => 'Classic Lashes', 'category' => 'Lashes & Brows', 'price' => 349, 'duration_minutes' => 90],
-            ['name' => 'Cat Eye Lashes', 'category' => 'Lashes & Brows', 'price' => 499, 'duration_minutes' => 90],
-            ['name' => 'Wispy Lashes', 'category' => 'Lashes & Brows', 'price' => 499, 'duration_minutes' => 90],
-            ['name' => 'Hybrid Volume Lashes', 'category' => 'Lashes & Brows', 'price' => 599, 'duration_minutes' => 100],
             ['name' => 'Lash Lift', 'category' => 'Lashes & Brows', 'price' => 349, 'duration_minutes' => 60],
-            ['name' => 'Lash Tint', 'category' => 'Lashes & Brows', 'price' => 99, 'duration_minutes' => 20],
             ['name' => 'Brow Lamination', 'category' => 'Lashes & Brows', 'price' => 349, 'duration_minutes' => 45],
-            ['name' => 'Brow Threading', 'category' => 'Lashes & Brows', 'price' => 149, 'duration_minutes' => 15],
-            ['name' => 'Brow Tint', 'category' => 'Lashes & Brows', 'price' => 149, 'duration_minutes' => 20],
 
             // ---- Aesthetics ----------------------------------------------------
-            ['name' => 'Korean Pico Laser — Full Face', 'category' => 'Aesthetics', 'price' => 799, 'duration_minutes' => 30],
-            ['name' => 'IPL Hair Removal — Underarm', 'category' => 'Aesthetics', 'price' => 699, 'duration_minutes' => 20],
-            ['name' => 'IPL Hair Removal — Brazilian', 'category' => 'Aesthetics', 'price' => 1499, 'duration_minutes' => 30],
-            ['name' => 'RF Therapy — Full Face', 'category' => 'Aesthetics', 'price' => 599, 'duration_minutes' => 30],
-            ['name' => 'RF Therapy — Tummy', 'category' => 'Aesthetics', 'price' => 899, 'duration_minutes' => 45],
             ['name' => 'BB Glow', 'category' => 'Aesthetics', 'price' => 599, 'duration_minutes' => 45],
-            ['name' => 'BB Blush', 'category' => 'Aesthetics', 'price' => 349, 'duration_minutes' => 30],
-            ['name' => 'HIFU — Full Face', 'category' => 'Aesthetics', 'price' => 999, 'duration_minutes' => 60, 'badge' => 'Premium'],
-            ['name' => 'Meso Lipo Injection — V-Line', 'category' => 'Aesthetics', 'price' => 1999, 'duration_minutes' => 30],
             ['name' => 'Warts Removal (Per Area)', 'category' => 'Aesthetics', 'price' => 799, 'duration_minutes' => 20],
             ['name' => 'Whitening Body Scrub', 'category' => 'Aesthetics', 'price' => 799, 'duration_minutes' => 45],
 
@@ -173,7 +145,6 @@ class ServiceSeeder extends Seeder
             // ---- Home Service (minimum 90 mins per booking, per reference pricelist) --
             ['name' => 'Home Service — Swedish Massage', 'category' => 'Home Service', 'price' => 899, 'duration_minutes' => 90],
             ['name' => 'Home Service — Hot Stone Massage', 'category' => 'Home Service', 'price' => 1199, 'duration_minutes' => 90],
-            ['name' => 'Home Service — Prenatal Massage', 'category' => 'Home Service', 'price' => 1499, 'duration_minutes' => 90],
             ['name' => 'Home Service — Perfect Signature Massage', 'category' => 'Home Service', 'price' => 1499, 'duration_minutes' => 120, 'badge' => 'New'],
         ];
     }
