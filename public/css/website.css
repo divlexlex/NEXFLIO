@@ -21,6 +21,7 @@
     --nx-primary: #a98963;
     --nx-accent: #c59d5f;
     --nx-error: #b85c55;
+    --nx-brand-script: #8f6236;
 
     /* Radius */
     --nx-radius-sm: 8px;
@@ -49,6 +50,7 @@ html[data-bs-theme="dark"] {
     --nx-primary: #cda06a;
     --nx-accent: #e0b774;
     --nx-error: #d97f77;
+    --nx-brand-script: #e0b774;
     /* Warm-brown shadows vanish on a near-black page — use plain dark ones so
        cards still read as lifted in dark mode. */
     --nx-shadow-card: 0 2px 10px rgba(0, 0, 0, 0.35);
@@ -301,10 +303,47 @@ a.nx-card, a.nx-card:hover { text-decoration: none; color: inherit; }
     border-bottom: 1px solid var(--nx-border);
 }
 .nx-header .navbar-brand {
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 1;
+    text-decoration: none;
+}
+.nx-brand-words {
+    display: flex;
+    align-items: baseline;
+    column-gap: 6px;
+    white-space: nowrap;
+}
+.nx-brand-word {
     font-family: 'Playfair Display', serif;
     font-weight: 600;
-    font-size: 26px;
-    color: var(--nx-text-primary);
+    font-size: 38px;
+    line-height: 1;
+    color: var(--nx-brand-script);
+    white-space: nowrap;
+}
+.nx-brand-script {
+    font-family: 'Pinyon Script', cursive;
+    font-weight: 400;
+    font-size: 38px;
+    line-height: 1;
+    color: var(--nx-brand-script);
+    white-space: nowrap;
+}
+.nx-brand-sub {
+    font-family: 'Inter', sans-serif;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--nx-text-secondary);
+    margin-top: 3px;
+    white-space: nowrap;
+}
+@media (max-width: 575.98px) {
+    .nx-brand-word,
+    .nx-brand-script { font-size: 30px; }
+    .nx-brand-sub { font-size: 8.5px; letter-spacing: 0.26em; }
 }
 .nx-header .nav-link {
     position: relative;

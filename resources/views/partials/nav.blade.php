@@ -47,8 +47,12 @@
 @endphp
 <nav class="navbar navbar-expand-lg nx-header sticky-top">
     <div class="container py-2">
-        <a class="navbar-brand" href="{{ $logoHref }}">
-            Perfect <span class="nx-text-accent">Nails</span>
+        <a class="navbar-brand nx-brand-lockup" href="{{ $logoHref }}" aria-label="Perfect Nails — home">
+            <span class="nx-brand-words">
+                <span class="nx-brand-word">Perfect</span>
+                <span class="nx-brand-script">Nails</span>
+            </span>
+            <span class="nx-brand-sub">Wellness &amp; Aesthetics</span>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#publicNav" aria-controls="publicNav" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
