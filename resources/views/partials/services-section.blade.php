@@ -18,6 +18,7 @@
             <p class="text-center nx-text-secondary">Our service menu is being polished — check back soon.</p>
         @else
             @php($allServices = $servicesByCategory->flatten(1)->sortBy('name')->values())
+            @php($packageServices = $servicesByCategory->flatten(1)->whereIn('name', \App\Support\ServiceCatalog::PACKAGE_SERVICE_NAMES)->sortBy('name')->values())
             <div class="nx-search mb-4 mx-auto" style="max-width: 420px;">
                 <div class="input-group">
                     <span class="input-group-text bg-transparent border-end-0"><i class="bi bi-search"></i></span>
@@ -31,6 +32,10 @@
                     <button class="nav-link {{ $activeCategory ? '' : 'active' }}"
                             data-bs-toggle="pill" data-bs-target="#cat-all" type="button" role="tab">
                         <i class="bi bi-grid"></i>All Services
+                    </button>
+                    <button class="nav-link {{ $activeCategory === 'Packages' ? 'active' : '' }}"
+                            data-bs-toggle="pill" data-bs-target="#cat-packages" type="button" role="tab">
+                        <i class="bi bi-gift"></i>Packages
                     </button>
                     @foreach($servicesByCategory as $category => $services)
                         <button class="nav-link {{ $activeCategory === $category ? 'active' : '' }}"
@@ -58,6 +63,27 @@
                             @endforeach
                         </div>
                         <p class="nx-search-empty d-none text-center nx-text-secondary mt-4 mb-0">No services match your search.</p>
+                    </div>
+                    <div class="tab-pane fade {{ $activeCategory === 'Packages' ? 'show active' : '' }}" id="cat-packages" role="tabpanel">
+                        <div class="row g-3">
+                            @foreach($packageServices as $service)
+                                <div class="col-md-6 col-lg-4" data-service-name="{{ strtolower($service['name']) }}">
+                                    @include('partials.item-card', [
+                                        'url' => route('catalog.service', $service['id']),
+                                        'imageUrl' => $service['image_url'],
+                                        'title' => $service['name'],
+                                        'price' => $service['price'],
+                                        'subtitle' => $service['duration_minutes'] . ' mins',
+                                        'badge' => $service['badge'],
+                                        'ctaText' => 'Book',
+                                    ])
+                                </div>
+                            @endforeach
+                        </div>
+                        <p class="nx-search-empty d-none text-center nx-text-secondary mt-4 mb-0">No services match your search.</p>
+                        <p class="mt-4 mb-0">
+                            <a href="{{ route('packages') }}" class="nx-text-accent fw-semibold">See package tiers &amp; add-ons -&gt;</a>
+                        </p>
                     </div>
                     @foreach($servicesByCategory as $category => $services)
                         <div class="tab-pane fade {{ $activeCategory === $category ? 'show active' : '' }}" id="cat-{{ $loop->index }}" role="tabpanel">

@@ -18,8 +18,7 @@
     // the existing admin dashboard button below, unaffected.
     $guestLinks = [
         ['label' => 'Services', 'route' => 'services', 'href' => route('services')],
-        ['label' => 'Packages', 'route' => 'packages', 'href' => route('packages')],
-        ['label' => 'Offers', 'route' => 'offers', 'href' => route('offers')],
+        ['label' => 'Promo', 'route' => 'offers', 'href' => route('offers')],
         ['label' => 'About', 'route' => 'about', 'href' => route('about')],
         // Gallery and FAQs intentionally left out of primary navigation for now
         // (routes/views/config still exist at /gallery and /faqs — see PageController
@@ -28,15 +27,14 @@
     ];
 
     // Logged-in Client Website nav: Dashboard + Appointments replace Home,
-    // Services/Packages stay since Browse is still a core Client action.
+    // Services/Promo stay since Browse is still a core Client action.
     // About/Contact are one click away via the footer, so dropping them
     // here keeps the authenticated bar from feeling like Guest nav + extras.
     $clientLinks = [
         ['label' => 'Dashboard', 'route' => 'account.dashboard', 'href' => route('account.dashboard')],
         ['label' => 'Appointments', 'route' => 'account.bookings', 'href' => route('account.bookings')],
         ['label' => 'Services', 'route' => 'services', 'href' => route('services')],
-        ['label' => 'Packages', 'route' => 'packages', 'href' => route('packages')],
-        ['label' => 'Offers', 'route' => 'offers', 'href' => route('offers')],
+        ['label' => 'Promo', 'route' => 'offers', 'href' => route('offers')],
     ];
 
     $navLinks = $isClient ? $clientLinks : $guestLinks;

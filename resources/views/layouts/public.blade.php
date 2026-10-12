@@ -93,33 +93,23 @@
                 <li><a href="{{ route('services') }}">Massage</a></li>
                 <li><a href="{{ route('services') }}">Aesthetics</a></li>
                 <li><a href="{{ route('services') }}">Home Service</a></li>
+                <li><a href="{{ route('packages') }}">Packages</a></li>
+                <li><a href="{{ route('offers') }}">Promos</a></li>
             </ul>
         </div>
         <div>
             <h6>Company</h6>
             <ul class="list-unstyled d-flex flex-column gap-2 mb-0 mt-2">
                 <li><a href="{{ route('about') }}">About us</a></li>
-                <li><a href="{{ route('packages') }}">Packages</a></li>
                 <li><a href="{{ route('contact') }}">Contact us</a></li>
             </ul>
         </div>
         <div>
-            <h6>Booking</h6>
+            <h6>Booking Policies</h6>
             <ul class="list-unstyled d-flex flex-column gap-2 mb-0 mt-2">
-                {{-- This footer only ever renders for Guests now (see the
-                     @if above) — the authenticated-Client branch that used
-                     to live here is unreachable since the footer stopped
-                     showing for any signed-in user, so it's removed rather
-                     than kept as dead code. --}}
-                <li><a href="#" data-bs-toggle="modal" data-bs-target="#getAppModal">Get the App</a></li>
-                <li><a href="{{ route('login') }}">Management Login</a></li>
-            </ul>
-        </div>
-        <div>
-            <h6>Policies</h6>
-            <ul class="list-unstyled d-flex flex-column gap-2 mb-0 mt-2">
-                {{-- Previously linked to the now-unlisted /faqs page; repointed to
-                     Contact (an existing named route) so these aren't dead ends. --}}
+                {{-- Policy links moved here from the former Policies column;
+                     repointed to Contact (an existing named route) so these
+                     aren't dead ends. --}}
                 <li><a href="{{ route('contact') }}">Booking &amp; grace period</a></li>
                 <li><a href="{{ route('contact') }}">Cancellation</a></li>
             </ul>

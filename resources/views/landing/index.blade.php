@@ -298,9 +298,6 @@
                         Book an Appointment
                     </button>
                 @endauth
-                <button type="button" class="nx-btn nx-btn-outline" style="border-color:#fff; color:#fff;" data-bs-toggle="modal" data-bs-target="#getAppModal">
-                    Get the App
-                </button>
             </div>
         </div>
     </div>

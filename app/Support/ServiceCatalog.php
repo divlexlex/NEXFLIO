@@ -43,6 +43,23 @@ class ServiceCatalog
         'Home Service' => 'bi-house-heart',
     ];
 
+    /**
+     * The five package services — ordinary Service rows currently grouped
+     * under the 'Head Spa' category, surfaced as their own "Packages" tab in
+     * the services sidebar (partials/services-section.blade.php). This is a
+     * VIEW-level grouping only: these Services keep their real admin-set
+     * category (seeders / config/packages.php are untouched) and simply also
+     * appear in this extra tab. Single source of truth for "what counts as a
+     * package service" — the sidebar reads this list, nothing else.
+     */
+    public const PACKAGE_SERVICE_NAMES = [
+        'Package EXA',
+        'Package DEE',
+        'Package SAM',
+        'Package LIZ',
+        'Perfect Package',
+    ];
+
     public static function activeGroupedByCategory(): Collection
     {
         return static::active()
