@@ -33,22 +33,15 @@
                         @include('partials.booking.progress-compact', ['step' => 5])
                     </div>
 
-                    <p class="nx-text-secondary mb-4" id="pay-lead-online">
-                        @if($fee !== null)
-                            Only the ₱{{ number_format($fee, 2) }} reservation fee is due now — send it via
-                            GCash, Maya, GoTyme, bank transfer or card, then upload a screenshot or photo of
-                            the receipt below. Please send proof of payment to confirm your reservation.
-                            Reservation fees are deducted from the total cost of services. The current balance
-                            is paid at the branch. Our team verifies payments manually — you'll be notified as
-                            soon as your booking is confirmed. Thank you and we look forward to pamper you!
-                        @else
+                    @if($fee === null)
+                        <p class="nx-text-secondary mb-4" id="pay-lead-online">
                             Send the full amount via GCash, Maya, GoTyme, bank transfer or card, then upload a
                             screenshot or photo of the receipt below. Please send proof of payment to confirm
                             your reservation. Reservation fees are deducted from the total cost of services.
                             Our team verifies payments manually — you'll be notified as soon as your booking is
                             confirmed. Thank you and we look forward to pamper you!
-                        @endif
-                    </p>
+                        </p>
+                    @endif
                     <p class="nx-text-secondary mb-4 d-none" id="pay-lead-cash">
                         No payment needed now — your booking is confirmed immediately and you pay
                         <strong>₱{{ number_format($price, 2) }} in full at the branch</strong>.
@@ -206,7 +199,7 @@
             if (isCash) proofInput.value = '';
             refreshPreview();
             cashNote.classList.toggle('d-none', !isCash);
-            leadOnline.classList.toggle('d-none', isCash);
+            if (leadOnline) leadOnline.classList.toggle('d-none', isCash);
             leadCash.classList.toggle('d-none', !isCash);
             var detail = receivingMap[method.value] || '';
             receiving.textContent = detail;
