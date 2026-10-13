@@ -298,6 +298,10 @@ class BookingController extends Controller
                 'status' => $isCash ? AppointmentStatus::Booked : AppointmentStatus::Unverified,
             ]);
 
+            // Client-facing Appointment ID, assigned here (the id only
+            // exists post-insert) and saved in the same transaction.
+            $appointment->update(['reference_code' => $appointment->referenceCode()]);
+
             // Online + fee => only the down payment is charged now (the
             // balance settles at the branch). Cash => the full booked price
             // is owed at the branch; the row stays pending until the branch
@@ -572,6 +576,10 @@ class BookingController extends Controller
                 'notes' => $validated['notes'] ?? null,
                 'status' => $isCash ? AppointmentStatus::Booked : AppointmentStatus::Unverified,
             ]);
+
+            // Client-facing Appointment ID, assigned here (the id only
+            // exists post-insert) and saved in the same transaction.
+            $appointment->update(['reference_code' => $appointment->referenceCode()]);
 
             $paymentData = [
                 'amount' => $appointment->service->price,

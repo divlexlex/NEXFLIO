@@ -15,6 +15,7 @@ class Appointment extends Model
 
     protected $fillable = [
         'user_id',
+        'reference_code',
         'walk_in_name',
         'walk_in_phone',
         'service_id',
@@ -173,6 +174,24 @@ class Appointment extends Model
     public function getPriceAttribute(): ?string
     {
         return $this->booked_price ?? $this->service?->price;
+    }
+
+    /**
+     * Client-facing Appointment ID, e.g. PN-20261015-000123: PN, the
+     * creation date, and the appointment id 6-padded. Persisted to
+     * reference_code at creation (all three creation paths save it) so
+     * feeds and listings read it straight off the row; computed on the fly
+     * as the fallback for rows that predate the column.
+     */
+    public function referenceCode(): string
+    {
+        if ($this->reference_code) {
+            return $this->reference_code;
+        }
+
+        $date = ($this->created_at ?? now())->format('Ymd');
+
+        return sprintf('PN-%s-%06d', $date, (int) $this->id);
     }
 
     /**

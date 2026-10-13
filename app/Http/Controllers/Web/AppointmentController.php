@@ -99,7 +99,7 @@ class AppointmentController extends Controller
 
             return [
                 'id' => $appointment->id,
-                'title' => trim(($appointment->clientName() ?? 'Client').' · '.($appointment->displayServiceName())),
+                'title' => $appointment->referenceCode().' · '.($appointment->clientName() ?? 'Client').' · '.($appointment->displayServiceName()),
                 'start' => $start,
                 'end' => Carbon::parse($start)->addMinutes($duration)->toIso8601String(),
                 'backgroundColor' => $bg,
@@ -108,6 +108,7 @@ class AppointmentController extends Controller
                 'classNames' => ['nx-evt', 'nx-evt-'.$statusKey],
                 'extendedProps' => [
                     'client' => $appointment->clientName() ?? 'Client',
+                    'reference_code' => $appointment->referenceCode(),
                     'phone' => $appointment->user?->clientProfile?->mobile_number ?? $appointment->walk_in_phone,
                     'returning' => in_array($appointment->user_id, $returningUserIds, true),
                     'service' => $appointment->displayServiceName(),
@@ -201,6 +202,10 @@ class AppointmentController extends Controller
                 'notes' => $validated['notes'] ?? null,
                 'status' => AppointmentStatus::Booked,
             ]);
+
+            // Client-facing Appointment ID, assigned here (the id only
+            // exists post-insert) and saved in the same transaction.
+            $appointment->update(['reference_code' => $appointment->referenceCode()]);
 
             $appointment->payment()->create([
                 'amount' => $appointment->service->price,

@@ -29,6 +29,17 @@
                 <h1 class="mb-2" style="font-size: 30px;">
                     {{ $isCash ? 'Booking Confirmed' : 'Booking Request Submitted' }}
                 </h1>
+
+                {{-- Client-facing Appointment ID — the code the client quotes
+                     at the spa so the team can confirm the booking. Shown for
+                     every booking type, alongside (never replacing) the
+                     payment-state copy below. --}}
+                <div class="nx-booking-panel text-center mb-4 py-3">
+                    <p class="nx-eyebrow mb-1">Appointment ID</p>
+                    <p class="h4 mb-1" style="letter-spacing: 1px;">{{ $appointment->referenceCode() }}</p>
+                    <p class="small nx-text-secondary mb-0">Show this ID at the spa so we can confirm your booking.</p>
+                </div>
+
                 @if($isCash)
                     <p class="nx-text-secondary mb-4">
                         Your booking is <strong>confirmed</strong>. No payment was needed now —

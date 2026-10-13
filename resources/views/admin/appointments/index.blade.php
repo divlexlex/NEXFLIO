@@ -186,6 +186,7 @@
             <span class="badge text-bg-light border ms-auto d-none" id="dw-returning">Returning</span>
         </div>
 
+        <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-hash me-1"></i>Appointment ID</span><span class="fw-semibold" id="dw-refcode">–</span></div>
         <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-scissors me-1"></i>Service</span><span><span id="dw-service">–</span><br><span class="small text-muted" id="dw-servicemeta"></span></span></div>
         <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-tag me-1"></i>Type</span><span id="dw-type">–</span></div>
         <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-calendar3 me-1"></i>When</span><span><span id="dw-date">–</span><br><span class="small text-muted" id="dw-time"></span></span></div>
@@ -419,6 +420,7 @@
             const p = event.extendedProps;
             document.getElementById('dw-initials').textContent = (p.client || '?').trim().charAt(0).toUpperCase();
             document.getElementById('dw-client').textContent = p.client || '—';
+            document.getElementById('dw-refcode').textContent = p.reference_code || '—';
             document.getElementById('dw-phone').textContent = p.phone || 'No phone on file';
             document.getElementById('dw-returning').classList.toggle('d-none', !p.returning);
             document.getElementById('dw-service').textContent = p.service || '—';
