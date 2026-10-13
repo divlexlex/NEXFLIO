@@ -17,6 +17,7 @@ class PaymentRejectedMail extends Mailable implements ShouldQueue
     public function __construct(
         public readonly Appointment $appointment,
         public readonly ?string $reason = null,
+        public readonly ?string $category = null,
     ) {
     }
 
@@ -35,7 +36,10 @@ class PaymentRejectedMail extends Mailable implements ShouldQueue
                 . $this->appointment->appointment_date->format('F j, Y') . '.',
         ];
 
-        if ($this->reason) {
+        if ($this->categoryLabel() !== null) {
+            $lines[] = 'Payment rejected — '.$this->categoryLabel()
+                .($this->reason ? ": {$this->reason}" : '');
+        } elseif ($this->reason) {
             $lines[] = "Reason: {$this->reason}";
         }
 
@@ -46,5 +50,19 @@ class PaymentRejectedMail extends Mailable implements ShouldQueue
             'title' => 'We could not verify your payment',
             'lines' => $lines,
         ]);
+    }
+
+    /**
+     * Display label for the structured rejection category (see
+     * config/payment.php 'rejection_reasons'). Null when the rejection
+     * carries none (pre-category rejections, API cancels).
+     */
+    public function categoryLabel(): ?string
+    {
+        if (! $this->category) {
+            return null;
+        }
+
+        return config('payment.rejection_reasons.'.$this->category.'.label', $this->category);
     }
 }

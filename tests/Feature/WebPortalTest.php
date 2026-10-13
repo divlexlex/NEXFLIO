@@ -190,10 +190,24 @@ class WebPortalTest extends TestCase
 
         $this->actingAs($this->manager)
             ->patch("/admin/payments/{$payment->id}/reject", [])
-            ->assertSessionHasErrors('rejection_reason');
+            ->assertSessionHasErrors('rejection_category');
 
         $this->actingAs($this->manager)
             ->patch("/admin/payments/{$payment->id}/reject", [
+                'rejection_reason' => 'Blurry screenshot.',
+            ])
+            ->assertSessionHasErrors('rejection_category');
+
+        $this->actingAs($this->manager)
+            ->patch("/admin/payments/{$payment->id}/reject", [
+                'rejection_category' => 'not-a-category',
+                'rejection_reason' => 'Blurry screenshot.',
+            ])
+            ->assertSessionHasErrors('rejection_category');
+
+        $this->actingAs($this->manager)
+            ->patch("/admin/payments/{$payment->id}/reject", [
+                'rejection_category' => 'invalid_proof',
                 'rejection_reason' => 'Blurry screenshot.',
             ])
             ->assertSessionHasNoErrors();
@@ -201,6 +215,11 @@ class WebPortalTest extends TestCase
         $appointment->refresh();
         $this->assertSame(AppointmentStatus::Cancelled, $appointment->status);
         $this->assertSame(PaymentStatus::Rejected, $appointment->payment->status);
+        $this->assertSame('invalid_proof', $appointment->payment->rejection_category);
+        // Predefined reasons carry no free text — custom text exists only
+        // for "Other", so the stray note is ignored, not stored.
+        $this->assertNull($appointment->payment->rejection_reason);
+        $this->assertNull($appointment->payment->amount_received);
     }
 
     public function test_admin_pages_render_for_manager(): void

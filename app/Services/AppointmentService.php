@@ -29,7 +29,10 @@ class AppointmentService
 
     /**
      * @param array{
+     *     rejection_category?: string|null,
      *     rejection_reason?: string|null,
+     *     amount_received?: float|int|string|null,
+     *     payment_id?: int|null,
      *     items?: array<int, array{inventory_id: int, quantity: int}>,
      * } $options
      *
@@ -63,7 +66,14 @@ class AppointmentService
             throw new AuthorizationException('Only the assigned staff member or a manager can update this appointment.');
         }
 
-        if ($verificationStep && $target === AppointmentStatus::Cancelled && empty($options['rejection_reason'])) {
+        // Free text is required for "Other" and for category-less cancels
+        // (API, drawer) — predefined web-reject categories need none, since
+        // the form only asks for custom text on "Other".
+        $rejectCategory = $options['rejection_category'] ?? null;
+
+        if ($verificationStep && $target === AppointmentStatus::Cancelled
+            && ($rejectCategory === null || $rejectCategory === 'other')
+            && empty($options['rejection_reason'])) {
             throw ValidationException::withMessages([
                 'rejection_reason' => 'A rejection reason is required when rejecting a booking.',
             ]);
@@ -73,23 +83,28 @@ class AppointmentService
             $appointment->status = $target;
             $appointment->save();
 
-            // Confirming / rejecting resolves the booking-time payment — but
-            // only while it is still pending. A payment already verified
-            // (e.g. a branch settlement recorded before verification) is
-            // never flipped by a later cancel / no-show.
-            if ($verificationStep && $appointment->payment && $appointment->payment->status === PaymentStatus::Pending) {
-                $appointment->payment->update($target === AppointmentStatus::Booked
-                    ? [
+            if ($verificationStep && $target === AppointmentStatus::Booked) {
+                // Confirming verifies every still-pending payment — normally
+                // just the one, but a top-up booking also carries its pending
+                // topup row, which must count from here on (verifiedPaid()
+                // sums Verified rows, driving the post-verify state).
+                // Already-verified rows (settlements, partial receipts) and
+                // rejected rows are never touched.
+                foreach ($appointment->payments as $due) {
+                    if ($due->status !== PaymentStatus::Pending) {
+                        continue;
+                    }
+
+                    $due->update([
                         'status' => PaymentStatus::Verified,
                         'verified_by' => $actor->id,
                         'verified_at' => now(),
-                    ]
-                    : [
-                        'status' => PaymentStatus::Rejected,
-                        'verified_by' => $actor->id,
-                        'verified_at' => now(),
-                        'rejection_reason' => $options['rejection_reason'],
                     ]);
+                }
+            }
+
+            if ($verificationStep && $target === AppointmentStatus::Cancelled) {
+                $this->rejectPayment($appointment, $actor, $options);
             }
 
             if ($target === AppointmentStatus::Completed) {
@@ -104,7 +119,11 @@ class AppointmentService
                     $verificationStep && $target === AppointmentStatus::Booked
                         => new PaymentVerifiedMail($appointment),
                     $verificationStep && $target === AppointmentStatus::Cancelled
-                        => new PaymentRejectedMail($appointment, $options['rejection_reason'] ?? null),
+                        => new PaymentRejectedMail(
+                            $appointment,
+                            $options['rejection_reason'] ?? null,
+                            $options['rejection_category'] ?? null
+                        ),
                     default => null,
                 };
 
@@ -119,6 +138,83 @@ class AppointmentService
         });
 
         return $appointment->fresh(['user', 'service', 'personnel', 'payment']);
+    }
+
+    /**
+     * Marks the rejected payment row and records held money (step 2B).
+     *
+     * The row acted on is the payment the manager clicked (options
+     * payment_id from PaymentController@reject) — normally the primary,
+     * or a pending topup being rejected. Only a still-pending row is ever
+     * flipped; a payment already verified (e.g. a branch settlement recorded
+     * before verification) is never touched by a later cancel / no-show.
+     *
+     * Predefined reasons carry no free text (the web reject form only asks
+     * for custom text on "Other"); category-less cancels (API, drawer) keep
+     * storing the reason as before. amount_received only survives for
+     * eligible categories.
+     *
+     * When a topup_eligible reason recorded money (> 0), a Verified
+     * partial_receipt row is created for it — method and proof copied from
+     * the rejected row — so verifiedPaid() (which sums Verified rows) keeps
+     * reflecting what the branch actually holds. A top-up rejection also
+     * folds its amount into the ORIGINAL (primary) payment's
+     * amount_received, so the refundable total and the recomputed shortfall
+     * always cover ALL money held.
+     *
+     * @param array{rejection_category?: string|null, rejection_reason?: string|null, amount_received?: float|int|string|null, payment_id?: int|null} $options
+     */
+    private function rejectPayment(Appointment $appointment, User $actor, array $options): void
+    {
+        $primary = $appointment->payment;
+        $rejected = isset($options['payment_id'])
+            ? $appointment->payments->find($options['payment_id'])
+            : $primary;
+
+        if (! $rejected || $rejected->appointment_id !== $appointment->id) {
+            return;
+        }
+
+        if ($rejected->status !== PaymentStatus::Pending) {
+            return;
+        }
+
+        $category = $options['rejection_category'] ?? null;
+        $flags = $category ? config('payment.rejection_reasons.'.$category, []) : [];
+        $amountEligible = ! empty($flags['refund_eligible']) || ! empty($flags['topup_eligible']);
+
+        $rejected->update([
+            'status' => PaymentStatus::Rejected,
+            'verified_by' => $actor->id,
+            'verified_at' => now(),
+            'rejection_category' => $category,
+            'rejection_reason' => ($category !== null && $category !== 'other')
+                ? null
+                : ($options['rejection_reason'] ?? null),
+            'amount_received' => $amountEligible ? ($options['amount_received'] ?? null) : null,
+        ]);
+
+        $held = (float) ($rejected->fresh()->amount_received ?? 0);
+
+        if ($category === null
+            || empty($flags['topup_eligible'])
+            || $held <= 0) {
+            return;
+        }
+
+        $appointment->payments()->create([
+            'kind' => 'partial_receipt',
+            'amount' => $held,
+            'method' => $rejected->method,
+            'proof_path' => $rejected->proof_path,
+            'status' => PaymentStatus::Verified,
+            'verified_by' => $actor->id,
+            'verified_at' => now(),
+        ]);
+
+        if ($primary && $primary->id !== $rejected->id) {
+            $primary->increment('amount_received', $held);
+        }
     }
 
     /**

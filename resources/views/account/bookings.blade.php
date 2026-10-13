@@ -94,9 +94,56 @@
                                     @if($appointment->price !== null)
                                         <p class="small nx-text-secondary mb-1"><i class="bi bi-cash-coin me-2"></i>₱{{ number_format((float) $appointment->price, 2)}}</p>
                                         <p class="small nx-text-secondary mb-1"><i class="bi bi-wallet2 me-2"></i>{{ $appointment->paymentState() }}</p>
-                                        <p class="small nx-text-secondary mb-1"><i class="bi bi-hash me-2"></i>ID {{ $appointment->referenceCode() }}</p>
+                                        @php($showRefundButton = false)
+                                        @php($showContinueButton = false)
+                                        @if($appointment->payment?->status->value === 'rejected')
+                                            <p class="small nx-text-secondary mb-1"><i class="bi bi-x-circle me-2"></i>Payment rejected{{ $appointment->payment->rejectionCategoryLabel() ? ' — '.$appointment->payment->rejectionCategoryLabel() : '' }}{{ $appointment->payment->rejection_reason ? ': '.$appointment->payment->rejection_reason : '' }}</p>
+                                            {{-- Rejected-payment flags (step 2A refund + step 2B
+                                                 top-up). The action row itself lives at the very
+                                                 bottom of the card, sharing one line with the ID
+                                                 and personnel lines below. --}}
+                                            @php($refundEligible = (bool) config('payment.rejection_reasons.'.$appointment->payment->rejection_category.'.refund_eligible', false))
+                                            @php($refundAmount = (float) ($appointment->payment->amount_received ?? 0))
+                                            @php($showRefundButton = $refundEligible && $refundAmount > 0 && $appointment->payment->refund_status === null && ! $appointment->hasActiveTopup())
+                                            @php($showContinueButton = $appointment->canContinueBooking())
+                                            @if($refundEligible && $refundAmount > 0)
+                                                @if($appointment->payment->refund_status === 'requested')
+                                                    <p class="small nx-text-secondary mb-1"><i class="bi bi-hourglass-split me-2"></i>Refund requested — the branch will send ₱{{ number_format($refundAmount, 2) }} back via your payment method.</p>
+                                                @elseif($appointment->payment->refund_status === 'sent')
+                                                    <p class="small nx-text-secondary mb-1"><i class="bi bi-check-circle me-2"></i>Refund sent (₱{{ number_format($refundAmount, 2) }}) on {{ $appointment->payment->refund_sent_at?->format('M j, Y') }}.</p>
+                                                @endif
+                                            @endif
+                                        @endif
+                                        @if($showRefundButton || $showContinueButton)
+                                            {{-- Bottom line of the card: ID + personnel stay
+                                                 bottom-left, both action buttons sit bottom-right
+                                                 in identical solid styling — text is the only
+                                                 difference. No top margin beyond the card's
+                                                 normal line spacing. --}}
+                                            <div class="d-flex justify-content-between align-items-end flex-wrap gap-2">
+                                                <div>
+                                                    <p class="small nx-text-secondary mb-1"><i class="bi bi-hash me-2"></i>ID {{ $appointment->referenceCode() }}</p>
+                                                    @if($appointment->personnel)
+                                                        <p class="small nx-text-secondary mb-0"><i class="bi bi-person me-2"></i>{{ $appointment->personnel->name }}</p>
+                                                    @endif
+                                                </div>
+                                                <div class="d-flex gap-2 flex-wrap">
+                                                    @if($showRefundButton)
+                                                        <form method="POST" action="{{ route('account.bookings.refund', $appointment->id) }}">
+                                                            @csrf
+                                                            <button class="nx-btn nx-btn-primary btn-sm">Request refund of ₱{{ number_format($refundAmount, 2) }}</button>
+                                                        </form>
+                                                    @endif
+                                                    @if($showContinueButton)
+                                                        <a href="{{ route('account.bookings.topup', $appointment->id) }}" class="nx-btn nx-btn-primary btn-sm">Continue to book this — add ₱{{ number_format($appointment->shortfall(), 2) }}</a>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        @else
+                                            <p class="small nx-text-secondary mb-1"><i class="bi bi-hash me-2"></i>ID {{ $appointment->referenceCode() }}</p>
+                                        @endif
                                     @endif
-                                    @if($appointment->personnel)
+                                    @if($appointment->personnel && ! ($showRefundButton || $showContinueButton))
                                         <p class="small nx-text-secondary mb-0"><i class="bi bi-person me-2"></i>{{ $appointment->personnel->name }}</p>
                                     @endif
                                     @if($appointment->address)

@@ -8,6 +8,7 @@ use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 class Appointment extends Model
 {
@@ -54,17 +55,22 @@ class Appointment extends Model
         return $this->belongsTo(User::class, 'personnel_id');
     }
 
+    /**
+     * The booking-time (primary) payment row — always the FIRST payment on
+     * the appointment (oldestOfMany), never a later settlement, partial
+     * receipt, or top-up. Every "primary payment" read in the codebase goes
+     * through here.
+     */
     public function payment()
     {
-        return $this->hasOne(Payment::class);
+        return $this->hasOne(Payment::class)->oldestOfMany();
     }
 
     /**
      * Every payment row on this booking — the first is the booking-time
      * payment (online reservation fee / full online amount / cash promise),
-     * later rows are branch settlements recorded at the spa. payment()
-     * (hasOne) is kept for the many single-payment reads and always resolves
-     * to that first row.
+     * later rows are branch settlements, partial receipts, or top-ups.
+     * payment() (hasOne) always resolves to that first row.
      */
     public function payments()
     {
@@ -94,6 +100,98 @@ class Appointment extends Model
     }
 
     /**
+     * Money the branch actually holds from topup_eligible rejections —
+     * verified partial_receipt rows only. The rejected primary row itself
+     * never counts (it was never collected).
+     */
+    public function partialReceiptTotal(): float
+    {
+        $payments = $this->relationLoaded('payments')
+            ? $this->payments
+            : $this->payments()->get();
+
+        return (float) $payments
+            ->where('kind', 'partial_receipt')
+            ->where('status', PaymentStatus::Verified)
+            ->sum('amount');
+    }
+
+    /**
+     * What the client still has to add to complete the original charge:
+     * primary payment amount minus recorded partial receipts, never
+     * negative. Drives the "Continue to book this" amount and the top-up
+     * charge — always recomputed, never stored.
+     */
+    public function shortfall(): float
+    {
+        $primary = $this->payment;
+
+        if (! $primary) {
+            return 0;
+        }
+
+        return max(0, round((float) $primary->amount - $this->partialReceiptTotal(), 2));
+    }
+
+    /** A top-up that still matters: kind topup, Pending or already Verified. */
+    public function hasActiveTopup(): bool
+    {
+        $payments = $this->relationLoaded('payments')
+            ? $this->payments
+            : $this->payments()->get();
+
+        return $payments
+            ->where('kind', 'topup')
+            ->whereIn('status', [PaymentStatus::Pending, PaymentStatus::Verified])
+            ->isNotEmpty();
+    }
+
+    /**
+     * Whether "Continue to book this" may be offered: rejected primary with
+     * a topup_eligible category, no refund in motion, no live top-up, money
+     * still missing, and the slot still upcoming. Every condition is
+     * re-checked server-side on the top-up form and on submit.
+     */
+    public function canContinueBooking(): bool
+    {
+        $primary = $this->payment;
+
+        if (! $primary || $primary->status !== PaymentStatus::Rejected) {
+            return false;
+        }
+
+        $flags = $primary->rejection_category
+            ? config('payment.rejection_reasons.'.$primary->rejection_category, [])
+            : [];
+
+        if (empty($flags['topup_eligible'])) {
+            return false;
+        }
+
+        if ($primary->refund_status !== null) {
+            return false;
+        }
+
+        if ($this->hasActiveTopup()) {
+            return false;
+        }
+
+        if ($this->shortfall() <= 0) {
+            return false;
+        }
+
+        try {
+            $start = Carbon::parse(
+                $this->appointment_date->toDateString().' '.substr((string) $this->start_time, 0, 5)
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $start->isFuture();
+    }
+
+    /**
      * Client/manager-facing payment state, derived from the booked total plus
      * verified payments only — pending proofs and cash promises never count
      * as paid.
@@ -102,6 +200,16 @@ class Appointment extends Model
     {
         if ($this->balanceDue() <= 0) {
             return 'Paid in full';
+        }
+
+        // A rejected booking-time payment on a dead booking is its own state —
+        // without this it falls through to "Awaiting payment verification",
+        // which wrongly reads as actionable on cancelled bookings in the
+        // client History. Live bookings (e.g. Booked via a verified top-up)
+        // skip this and derive off the held money below instead.
+        if ($this->payment?->status === PaymentStatus::Rejected
+            && in_array($this->status, [AppointmentStatus::Cancelled, AppointmentStatus::NoShow], true)) {
+            return 'Payment rejected';
         }
 
         if ($this->verifiedPaid() > 0) {

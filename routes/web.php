@@ -77,6 +77,13 @@ Route::prefix('account')->name('account.')->middleware(['auth', 'role:4'])->grou
     // them in the /admin queue before anything on the appointment changes.
     Route::post('/bookings/{appointment}/change-requests', [ClientAccountController::class, 'storeChangeRequest'])->name('bookings.change-request');
     Route::delete('/bookings/{appointment}/change-requests/{changeRequest}', [ClientAccountController::class, 'withdrawChangeRequest'])->name('bookings.change-request.withdraw');
+    // Refund request on a rejected booking (step 2A) — the booking owner's
+    // own appointment only; ClientAccountController@requestRefund guards.
+    Route::post('/bookings/{appointment}/refund', [ClientAccountController::class, 'requestRefund'])->name('bookings.refund');
+    // Top-up shortfall on a rejected booking (step 2B) — form + submit, both
+    // owner-only and gated by Appointment::canContinueBooking().
+    Route::get('/bookings/{appointment}/topup', [ClientAccountController::class, 'showTopupForm'])->name('bookings.topup');
+    Route::post('/bookings/{appointment}/topup', [ClientAccountController::class, 'storeTopup'])->name('bookings.topup.store');
 
     Route::get('/profile', [ClientAccountController::class, 'profile'])->name('profile');
     Route::patch('/profile', [ClientAccountController::class, 'updateProfile'])->name('profile.update');
@@ -158,6 +165,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
     Route::get('/payments', [PaymentController::class, 'index'])->name('payments');
     Route::patch('/payments/{id}/verify', [PaymentController::class, 'verify'])->name('payments.verify');
     Route::patch('/payments/{id}/reject', [PaymentController::class, 'reject'])->name('payments.reject');
+    // Step 2A refund settlement — manager/admin only (group middleware);
+    // the controller only accepts rejected payments with a pending request.
+    Route::patch('/payments/{id}/refund-sent', [PaymentController::class, 'markRefundSent'])->name('payments.refund-sent');
 
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory');
     Route::post('/inventory', [InventoryController::class, 'store'])->name('inventory.store');
