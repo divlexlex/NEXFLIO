@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Enums\AppointmentStatus;
 use App\Enums\Gender;
+use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAppointmentChangeRequest;
 use App\Models\Appointment;
@@ -17,6 +18,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 
 /**
@@ -237,6 +239,119 @@ class ClientAccountController extends Controller
         $changeRequest->delete();
 
         return back()->with('success', 'Request withdrawn.');
+    }
+
+    /**
+     * Client asks for their money back on a rejected booking. Only the
+     * booking owner, only on the rejected booking-time payment, only when
+     * the rejection category is refund-eligible with money recorded, only
+     * once, and never while a top-up is in flight (choosing top-up hides
+     * the refund path and vice versa) — every condition re-checked here
+     * server-side, never trusted from the button that posted. The branch
+     * settles it on the Payments page (PaymentController@markRefundSent).
+     */
+    public function requestRefund(Appointment $appointment)
+    {
+        $appointment->loadMissing(['payment', 'payments']);
+        $payment = $appointment->payment;
+
+        $eligible = $appointment->user_id === Auth::id()
+            && $payment !== null
+            && $payment->status === PaymentStatus::Rejected
+            && $payment->refund_status === null
+            && ! $appointment->hasActiveTopup()
+            && (float) ($payment->amount_received ?? 0) > 0
+            && (bool) config('payment.rejection_reasons.'.$payment->rejection_category.'.refund_eligible', false);
+
+        if (! $eligible) {
+            return back()->withErrors(['refund' => 'A refund cannot be requested for this booking.']);
+        }
+
+        $payment->update([
+            'refund_status' => 'requested',
+            'refund_requested_at' => now(),
+        ]);
+
+        return back()->with('success', 'Refund requested — the branch will send it back via your payment method.');
+    }
+
+    /**
+     * Top-up form (step 2B) for a rejected booking the client wants to
+     * continue instead of refunding. Owner only; canContinueBooking() gates
+     * every condition (rejected + topup-eligible + no refund in motion + no
+     * live top-up + shortfall left + future slot).
+     */
+    public function showTopupForm(Appointment $appointment)
+    {
+        abort_unless($appointment->user_id === Auth::id(), 403);
+
+        $appointment->loadMissing(['service', 'personnel', 'payment', 'payments']);
+
+        if (! $appointment->canContinueBooking()) {
+            return redirect()->route('account.bookings')
+                ->withErrors(['topup' => 'This booking can no longer be continued.']);
+        }
+
+        return view('account.topup', [
+            'appointment' => $appointment,
+            'shortfall' => $appointment->shortfall(),
+        ]);
+    }
+
+    /**
+     * Submits the shortfall top-up: creates a Pending topup payment for the
+     * server-recomputed shortfall (the amount is display-only on the form,
+     * never trusted from the browser) and resurrects the appointment
+     * Cancelled → Unverified so it rejoins the verification queue. The
+     * direct status write is deliberate — terminal statuses have no normal
+     * outgoing transition, and there are no payment side effects to run
+     * here (the Pending topup row above is the proof awaiting review).
+     */
+    public function storeTopup(Request $request, Appointment $appointment)
+    {
+        abort_unless($appointment->user_id === Auth::id(), 403);
+
+        $appointment->loadMissing(['service', 'payment', 'payments']);
+
+        if (! $appointment->canContinueBooking()) {
+            return back()->withErrors(['topup' => 'This booking can no longer be continued.']);
+        }
+
+        $shortfall = $appointment->shortfall();
+
+        $validated = $request->validate([
+            'method' => [
+                'required',
+                Rule::in(array_diff(array_keys(config('payment.methods', [])), ['cash'])),
+            ],
+            'payment_proof' => 'required|image|max:5120',
+        ]);
+
+        // The slot may have been taken while the booking sat cancelled —
+        // refuse instead of double-booking; the client can still refund.
+        if ($appointment->personnel_id && Appointment::query()
+            ->where('personnel_id', $appointment->personnel_id)
+            ->whereDate('appointment_date', $appointment->appointment_date->toDateString())
+            ->where('start_time', $appointment->start_time)
+            ->where('status', '!=', AppointmentStatus::Cancelled->value)
+            ->exists()) {
+            return back()->withErrors(['topup' => 'That time slot was just taken. You may request a refund instead.']);
+        }
+
+        DB::transaction(function () use ($request, $appointment, $validated, $shortfall) {
+            $appointment->payments()->create([
+                'kind' => 'topup',
+                'amount' => $shortfall,
+                'method' => $validated['method'],
+                'proof_path' => $request->file('payment_proof')->store('payment_proofs', 'public'),
+                'status' => PaymentStatus::Pending,
+            ]);
+
+            $appointment->update(['status' => AppointmentStatus::Unverified]);
+        });
+
+        return redirect()->route('account.bookings')
+            ->with('success', 'Top-up submitted — the team will verify your proof shortly.');
     }
 
     public function profile()
