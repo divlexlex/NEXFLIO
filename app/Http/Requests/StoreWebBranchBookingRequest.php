@@ -96,6 +96,7 @@ class StoreWebBranchBookingRequest extends FormRequest
         $validator->after(function (Validator $validator) {
             $this->validateVariantChoice($validator);
             $this->validateGuestCount($validator);
+            $this->validatePackageCash($validator);
 
             if ($validator->errors()->isNotEmpty()) {
                 return;
@@ -161,6 +162,25 @@ class StoreWebBranchBookingRequest extends FormRequest
 
         if ($this->input('guests') === null || $this->input('guests') === '') {
             $validator->errors()->add('guests', 'Please tell us how many guests this booking is for.');
+        }
+    }
+
+    /**
+     * Package bookings (the booked service has variants) must pay the
+     * reservation fee online with proof — Cash is rejected server-side, so
+     * hiding the option in the view alone is never enough to bypass it.
+     */
+    private function validatePackageCash(Validator $validator): void
+    {
+        if ($this->input('method') !== 'cash') {
+            return;
+        }
+
+        $serviceId = $this->integer('service_id');
+        $service = $serviceId ? \App\Models\Service::with('variants')->find($serviceId) : null;
+
+        if ($service && $service->variants->isNotEmpty()) {
+            $validator->errors()->add('method', 'Cash is not available for package bookings.');
         }
     }
 

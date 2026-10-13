@@ -76,8 +76,11 @@
                             Only the ₱{{ number_format($fee, 2) }} reservation fee is due online now — the
                             current balance is paid at the branch. Please send proof of payment to confirm
                             your reservation. Reservation fees are deducted from the total cost of services.
-                            Prefer to pay everything at the spa? Choose <strong>Cash</strong> on the next step
-                            — no upload needed. Thank you and we look forward to pamper you!
+                            @if(! $isPackage)
+                                Prefer to pay everything at the spa? Choose <strong>Cash</strong> on the next step
+                                — no upload needed.
+                            @endif
+                            Thank you and we look forward to pamper you!
                         @else
                             You can pay online now (proof of payment required — your slot is only reserved
                             after our team verifies it), or choose <strong>Cash</strong> on the next step to pay

@@ -79,9 +79,13 @@
                         <label class="form-label" for="pay-method">Payment method</label>
                         <select name="method" id="pay-method" class="form-select mb-2" style="max-width: 260px;">
                             @foreach(config('payment.methods', []) as $value => $label)
+                                @continue($isPackage && $value === 'cash')
                                 <option value="{{ $value }}" @selected(old('method') === $value || (old('method') === null && $value === 'gcash'))>{{ $label }}</option>
                             @endforeach
                         </select>
+                        @if($isPackage)
+                            <p class="small nx-text-secondary mb-4">Package bookings require the reservation fee to be paid online with proof of payment — Cash is not available for packages. The remaining balance is paid at the branch on your appointment day.</p>
+                        @endif
                         <p class="small nx-text-secondary mb-4 d-none" id="pay-receiving"></p>
 
                         <div id="pay-proof-block">

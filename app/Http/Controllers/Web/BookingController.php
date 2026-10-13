@@ -226,6 +226,9 @@ class BookingController extends Controller
             'notes' => $request->query('notes'),
             'client' => Auth::user(),
             'guests' => $this->queryGuests($request),
+            // Packages (services with variants) never offer Cash — the
+            // reservation fee must be paid online with proof.
+            'isPackage' => $service->variants->isNotEmpty(),
             ...$this->feeQuote($service, $variant, $this->queryGuests($request)),
         ]);
     }
@@ -255,6 +258,9 @@ class BookingController extends Controller
             'personnel' => $request->query('personnel'),
             'notes' => $request->query('notes'),
             'guests' => $this->queryGuests($request),
+            // Packages (services with variants) never offer Cash — the
+            // reservation fee must be paid online with proof.
+            'isPackage' => $service->variants->isNotEmpty(),
             ...$this->feeQuote($service, $variant, $this->queryGuests($request)),
         ]);
     }

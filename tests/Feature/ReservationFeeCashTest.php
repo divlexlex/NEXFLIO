@@ -227,7 +227,9 @@ class ReservationFeeCashTest extends TestCase
             ->assertSee('Payable at the branch');
     }
 
-    public function test_cash_fee_booking_owes_full_price_at_branch(): void
+    // Packages must pay the reservation fee online — Cash is rejected
+    // server-side even when forged past the (option-less) payment step.
+    public function test_cash_package_booking_is_rejected(): void
     {
         $this->actingAs($this->client)->post(
             route('account.booking.branch.store'),
@@ -237,12 +239,9 @@ class ReservationFeeCashTest extends TestCase
                 'method' => 'cash',
                 'payment_proof' => null,
             ])
-        )->assertRedirect();
+        )->assertSessionHasErrors('method');
 
-        $appointment = Appointment::latest('id')->firstOrFail();
-        $this->assertSame(AppointmentStatus::Booked, $appointment->status);
-        $this->assertEquals(3699, (float) $appointment->payment->amount);
-        $this->assertSame('Cash — pay at the branch', $appointment->paymentState());
+        $this->assertSame(0, Appointment::count());
     }
 
     public function test_online_booking_still_requires_proof(): void
