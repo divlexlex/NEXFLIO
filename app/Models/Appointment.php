@@ -91,6 +91,32 @@ class Appointment extends Model
             ->sum('amount');
     }
 
+    /** Verified money collected online (fees, partial receipts, top-ups) — everything not taken at the branch. */
+    public function paidOnline(): float
+    {
+        $payments = $this->relationLoaded('payments')
+            ? $this->payments
+            : $this->payments()->get();
+
+        return (float) $payments
+            ->where('status', PaymentStatus::Verified)
+            ->where('kind', '!=', 'branch')
+            ->sum('amount');
+    }
+
+    /** Verified money taken at the branch — kind='branch' rows stamped by the branch-payment endpoint only. */
+    public function paidAtBranch(): float
+    {
+        $payments = $this->relationLoaded('payments')
+            ? $this->payments
+            : $this->payments()->get();
+
+        return (float) $payments
+            ->where('status', PaymentStatus::Verified)
+            ->where('kind', 'branch')
+            ->sum('amount');
+    }
+
     /** What's still owed at the branch: booked total minus verified money, never negative. */
     public function balanceDue(): float
     {

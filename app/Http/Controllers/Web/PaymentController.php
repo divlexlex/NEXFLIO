@@ -6,10 +6,12 @@ use App\Enums\AppointmentStatus;
 use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Mail\RefundSentMail;
+use App\Models\Appointment;
 use App\Models\Payment;
 use App\Services\AppointmentService;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
 
 /**
@@ -22,23 +24,71 @@ class PaymentController extends Controller
     {
     }
 
+    /**
+     * Payments page, grouped as ONE card per appointment (an appointment
+     * with several payment rows — fee + settlement, partial + top-up —
+     * lists once, with all its rows inside). Tabs pick appointments by the
+     * payment states they hold: Pending = a pending non-cash payment (cash
+     * needs no verification, as before), Verified / Rejected = any row in
+     * that state, All = any payment at all. Cards sort by most recent
+     * payment activity.
+     */
     public function index(Request $request)
     {
         $status = $request->query('status', PaymentStatus::Pending->value);
+        $balance = $request->query('balance', 'all');
+        if (! in_array($balance, ['all', 'due', 'paid'], true)) {
+            $balance = 'all';
+        }
 
-        $payments = Payment::with(['appointment.user', 'appointment.service', 'appointment.personnel', 'verifier'])
-            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
-            // Cash bookings are confirmed at once and settle at the branch
-            // (see AppointmentController@recordBranchPayment) — there is no
-            // proof to verify, so they never sit in the pending queue.
-            ->when($status === 'pending', fn ($query) => $query->where('method', '!=', 'cash'))
-            ->orderByDesc('created_at')
-            ->paginate(15)
-            ->withQueryString();
+        $query = Appointment::with([
+            'user', 'service', 'personnel',
+            'payments' => fn ($query) => $query->orderBy('id'),
+            'payments.verifier',
+        ])
+            ->select('appointments.*')
+            ->selectSub(
+                Payment::selectRaw('MAX(created_at)')->whereColumn('appointment_id', 'appointments.id'),
+                'last_payment_at'
+            )
+            ->orderByDesc('last_payment_at')
+            ->when($status === 'pending', fn ($query) => $query->whereHas(
+                'payments',
+                fn ($query) => $query->where('status', PaymentStatus::Pending->value)->where('method', '!=', 'cash')
+            ))
+            ->when($status === 'verified' || $status === 'rejected', fn ($query) => $query->whereHas(
+                'payments',
+                fn ($query) => $query->where('status', $status)
+            ))
+            ->when($status === 'all', fn ($query) => $query->whereHas('payments'));
+
+        if ($balance === 'all') {
+            $appointments = $query->paginate(15)->withQueryString();
+        } else {
+            // balanceDue() is derived from verified sums, not a column — so
+            // the balance filter runs in PHP over the tab's rows, then
+            // paginates the result manually (same page size, query kept).
+            $filtered = $query->get()->filter(function (Appointment $appointment) use ($balance) {
+                $due = $appointment->balanceDue();
+
+                return $balance === 'due' ? $due > 0 : $due <= 0;
+            })->values();
+
+            $page = LengthAwarePaginator::resolveCurrentPage();
+            $perPage = 15;
+            $appointments = new LengthAwarePaginator(
+                $filtered->slice(($page - 1) * $perPage, $perPage)->values(),
+                $filtered->count(),
+                $perPage,
+                $page,
+                ['path' => $request->url(), 'query' => $request->query()]
+            );
+        }
 
         return view('admin.payments.index', [
-            'payments' => $payments,
+            'appointments' => $appointments,
             'currentStatus' => $status,
+            'currentBalance' => $balance,
             // Eligibility flags for the reject modal's toggles, keyed by
             // category — the modal JS only reads flags, never category keys.
             'rejectionFlags' => collect(config('payment.rejection_reasons', []))

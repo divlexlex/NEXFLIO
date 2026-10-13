@@ -73,7 +73,10 @@ class AdminAppointmentCalendarTest extends TestCase
         $this->assertSame('Online Booking', $p['bookingType']);
         $this->assertSame('Prefers soft pink.', $p['notes']);
         $this->assertNotNull($p['payment']);
-        $this->assertSame('booked', $p['actions'][0]['to']); // "Confirm booking"
+        // Money decisions happen in Payments: an Unverified booking with a
+        // pending payment offers no drawer status actions, just the lock flag.
+        $this->assertSame([], $p['actions']);
+        $this->assertTrue($p['verificationLocked']);
     }
 
     public function test_walk_in_shows_as_walk_in_type(): void
@@ -92,16 +95,22 @@ class AdminAppointmentCalendarTest extends TestCase
         $this->assertSame('Counter Guest', $event['extendedProps']['client']);
     }
 
-    public function test_manager_confirms_an_unverified_booking_from_the_drawer(): void
+    // The drawer/web endpoint refuses to confirm or cancel an Unverified
+    // booking with a pending payment — Payments verify/reject are the only
+    // doors for the verification step.
+    public function test_drawer_transitions_refused_for_pending_payment(): void
     {
         $appt = $this->booking(AppointmentStatus::Unverified);
 
-        $this->actingAs($this->manager)
-            ->patch(route('admin.appointments.status', $appt), ['status' => 'booked'])
-            ->assertRedirect();
+        foreach (['booked', 'cancelled'] as $target) {
+            $this->actingAs($this->manager)
+                ->from(route('admin.appointments'))
+                ->patch(route('admin.appointments.status', $appt), ['status' => $target])
+                ->assertSessionHasErrors('status');
+        }
 
-        $this->assertSame(AppointmentStatus::Booked, $appt->fresh()->status);
-        $this->assertSame(PaymentStatus::Verified, $appt->fresh()->payment->status);
+        $this->assertSame(AppointmentStatus::Unverified, $appt->fresh()->status);
+        $this->assertSame(PaymentStatus::Pending, $appt->fresh()->payment->status);
     }
 
     public function test_manager_cancels_from_the_drawer(): void

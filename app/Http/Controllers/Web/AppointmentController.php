@@ -97,6 +97,12 @@ class AppointmentController extends Controller
                 ? config('payment.methods.'.$payment->method, ucfirst((string) $payment->method))
                 : null;
 
+            // Money decisions happen in Payments: an Unverified booking
+            // whose primary payment is still pending is locked here — no
+            // Confirm / Reject actions, just a hint to use Payments.
+            $verificationLocked = $appointment->status === AppointmentStatus::Unverified
+                && $payment?->status === PaymentStatus::Pending;
+
             return [
                 'id' => $appointment->id,
                 'title' => $appointment->referenceCode().' · '.($appointment->clientName() ?? 'Client').' · '.($appointment->displayServiceName()),
@@ -128,21 +134,21 @@ class AppointmentController extends Controller
                         'amount' => (float) $payment->amount,
                         'proofUrl' => $payment->proof_path ? Storage::url($payment->proof_path) : null,
                     ] : null,
-                    // Branch-settlement state for the details drawer: what the
-                    // client still owes and whether the manager may record a
-                    // branch payment right now (balance left, booking still
-                    // active). Everyone viewing this feed is manager-or-above
-                    // (route middleware), so no extra gate is needed here —
-                    // recordBranchPayment re-checks authoritatively.
+                    // Payment state for the details drawer: what the client has
+                    // paid / still owes. Settlement itself now lives on the
+                    // Payments page (PaymentController@index), not here.
                     'paymentState' => $appointment->paymentState(),
                     'balanceDue' => $appointment->balanceDue(),
-                    'canSettle' => $appointment->balanceDue() > 0
-                        && ! in_array($appointment->status, [AppointmentStatus::Cancelled, AppointmentStatus::NoShow], true),
                     'notes' => $appointment->notes,
-                    // Which status actions the drawer should offer (server still
-                    // re-validates each via AppointmentService::transition).
+                    // Money decisions happen in Payments, not here: an
+                    // Unverified booking with a still-pending payment offers
+                    // NO status actions in the drawer (see verificationLocked
+                    // below) — the updateStatus endpoint refuses them too.
+                    // Which status actions the drawer should offer (server
+                    // still re-validates each via AppointmentService::transition).
                     // "Start service" is only available when a staff member is assigned.
-                    'actions' => match ($appointment->status) {
+                    'verificationLocked' => $verificationLocked,
+                    'actions' => $verificationLocked ? [] : match ($appointment->status) {
                         AppointmentStatus::Unverified => [
                             ['to' => 'booked', 'label' => 'Confirm booking', 'style' => 'success'],
                             ['to' => 'cancelled', 'label' => 'Reject / Cancel', 'style' => 'outline-danger', 'reason' => true],
@@ -241,6 +247,21 @@ class AppointmentController extends Controller
             'rejection_reason' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        // Money decisions happen in Payments, not here: an Unverified
+        // booking with a still-pending payment can only leave verification
+        // through the Payments verify/reject routes (the API keeps its own
+        // path — this guard is web-only by scope).
+        if ($appointment->status === AppointmentStatus::Unverified
+            && $appointment->payment?->status === PaymentStatus::Pending
+            && in_array($validated['status'], [
+                AppointmentStatus::Booked->value,
+                AppointmentStatus::Cancelled->value,
+            ], true)) {
+            return back()->withErrors([
+                'status' => 'This booking still has a pending payment — verify or reject it in Payments first.',
+            ]);
+        }
+
         try {
             $appointmentService->transition(
                 $appointment,
@@ -284,6 +305,7 @@ class AppointmentController extends Controller
         ]);
 
         $appointment->payments()->create([
+            'kind' => 'branch',
             'amount' => $validated['amount'],
             'method' => $validated['method'] ?? 'cash',
             'status' => PaymentStatus::Verified,

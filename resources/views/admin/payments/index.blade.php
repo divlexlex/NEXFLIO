@@ -5,52 +5,115 @@
 @section('content')
 <h1 class="h3 mb-4">Payment Verification</h1>
 
-<ul class="nav nav-pills mb-3">
-    @foreach(['pending' => 'Pending', 'verified' => 'Verified', 'rejected' => 'Rejected', 'all' => 'All'] as $key => $label)
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+<ul class="nav nav-pills mb-0">
+    @foreach(['all' => 'All', 'verified' => 'Verified', 'pending' => 'Pending', 'rejected' => 'Rejected'] as $key => $label)
         <li class="nav-item">
             <a class="nav-link {{ $currentStatus === $key ? 'active' : '' }}"
-               href="{{ route('admin.payments', ['status' => $key]) }}">{{ $label }}</a>
+               href="{{ route('admin.payments', array_filter(['status' => $key, 'balance' => $currentBalance !== 'all' ? $currentBalance : null])) }}">{{ $label }}</a>
         </li>
     @endforeach
 </ul>
 
+{{-- Balance filter — narrows the active tab's cards by the appointment's
+     derived balanceDue(), via query params so it survives reloads and tab
+     switches (see PaymentController@index). --}}
+<form method="GET" action="{{ route('admin.payments') }}" class="d-flex align-items-center gap-2 mb-0">
+    <input type="hidden" name="status" value="{{ $currentStatus }}">
+    <label class="form-label small text-muted mb-0" for="balance-filter">Amounts</label>
+    <select name="balance" id="balance-filter" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+        @foreach(['all' => 'All amounts', 'due' => 'With balance due', 'paid' => 'Paid in full'] as $value => $label)
+            <option value="{{ $value }}" @selected($currentBalance === $value)>{{ $label }}</option>
+        @endforeach
+    </select>
+</form>
+</div>
+
 <div class="row g-3">
-    @forelse($payments as $payment)
+    @forelse($appointments as $appointment)
+        @php($balanceDue = $appointment->balanceDue())
+        @php($pendingPayment = $appointment->payments->first(fn ($p) => $p->status->value === 'pending'))
+        {{-- Header badge from the payment state: Paid in full / Cancelled /
+             Pending verification (Pending tab) / Booked (active, owing). --}}
+        @php($badge = $balanceDue <= 0 ? ['Paid in full', 'success'] : ($appointment->status->value === 'cancelled' ? ['Cancelled', 'danger'] : (($currentStatus === 'pending' || $appointment->status->value === 'unverified') ? ['Pending verification', 'warning'] : ['Booked', 'primary'])))
         <div class="col-md-6 col-xl-4">
             <div class="card p-3 h-100">
                 <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div>
-                        <strong>{{ $payment->appointment?->clientName() ?? '—' }}</strong>
-                        <div class="small text-muted">
-                            {{ $payment->appointment?->service?->name }} ·
-                            {{ $payment->appointment?->appointment_date?->format('M j') }}
-                            {{ $payment->appointment?->start_time }}
-                        </div>
-                        <div class="small text-muted">
-                            with {{ $payment->appointment?->personnel?->name ?? '—' }} · {{ strtoupper($payment->method) }}
-                            @if($payment->kindLabel())
-                                <span class="badge text-bg-info ms-1">{{ $payment->kindLabel() }}</span>
-                            @endif
-                        </div>
-                    </div>
-                    <span class="fs-5 fw-bold text-gold">₱{{ number_format($payment->amount, 2) }}</span>
+                    <strong>{{ $appointment->clientName() ?? '—' }}</strong>
+                    <span class="badge text-bg-{{ $badge[1] }}">{{ $badge[0] }}</span>
+                </div>
+                <div class="small text-muted">
+                    {{ $appointment->displayServiceName() }} ·
+                    {{ $appointment->appointment_date?->format('M j') }}
+                    {{ $appointment->start_time }}
+                </div>
+                <div class="small text-muted mb-2">
+                    with {{ $appointment->personnel?->name ?? '—' }} · ID {{ $appointment->referenceCode() }}
                 </div>
 
-                @if($payment->proof_path)
-                    <a href="{{ asset('storage/' . $payment->proof_path) }}" target="_blank" rel="noopener">
-                        <img src="{{ asset('storage/' . $payment->proof_path) }}"
-                             alt="Proof of payment" class="img-fluid rounded mb-2"
-                             style="max-height: 180px; object-fit: cover; width: 100%;">
-                    </a>
-                @else
-                    <div class="bg-light rounded text-center text-muted small py-4 mb-2">
-                        No proof image (cash / walk-in)
-                    </div>
-                @endif
+                <div class="small mb-2">
+                    <div class="text-muted">Paid online ₱{{ number_format($appointment->paidOnline(), 2) }}</div>
+                    <div class="text-muted">Paid at branch ₱{{ number_format($appointment->paidAtBranch(), 2) }}</div>
+                    <div class="fw-bold">Balance due ₱{{ number_format($balanceDue, 2) }}</div>
+                </div>
 
-                @if($payment->status->value === 'pending')
+                @foreach($appointment->payments as $payment)
+                    <div class="border-top py-2 small">
+                        <div class="d-flex justify-content-between align-items-center gap-2">
+                            <span>
+                                @if($payment->kindLabel())
+                                    <span class="badge text-bg-info me-1">{{ $payment->kindLabel() }}</span>
+                                @endif
+                                {{ strtoupper($payment->method) }} · ₱{{ number_format($payment->amount, 2) }}
+                            </span>
+                            <span class="badge {{ match($payment->status->value) {
+                                'verified' => 'text-bg-success',
+                                'rejected' => 'text-bg-danger',
+                                default => 'text-bg-warning',
+                            } }}">{{ ucfirst($payment->status->value) }}</span>
+                        </div>
+                        @if($payment->status->value === 'verified' && $payment->verifier)
+                            <div class="text-muted">by {{ $payment->verifier->name }} · {{ $payment->verified_at?->format('M j, g:i A') }}</div>
+                        @endif
+                        @if($payment->proof_path)
+                            <a href="{{ asset('storage/' . $payment->proof_path) }}" target="_blank" rel="noopener" class="small">View proof <i class="bi bi-box-arrow-up-right"></i></a>
+                        @endif
+                        @if($payment->status->value === 'rejected')
+                            @if($payment->rejection_reason)
+                                <div class="text-muted mt-1">Reason: {{ $payment->rejection_reason }}</div>
+                            @endif
+                            @if($payment->rejectionCategoryLabel())
+                                <div class="text-muted mt-1">Category: {{ $payment->rejectionCategoryLabel() }}</div>
+                            @endif
+                            @if($payment->refund_status === 'requested')
+                                <div class="mt-2">Refund requested: ₱{{ number_format((float) ($payment->amount_received ?? 0), 2) }}</div>
+                                <form method="POST" action="{{ route('admin.payments.refund-sent', $payment->id) }}" class="mt-2">
+                                    @csrf @method('PATCH')
+                                    <button class="btn btn-success btn-sm w-100">
+                                        <i class="bi bi-send me-1"></i>Mark refund sent
+                                    </button>
+                                </form>
+                            @elseif($payment->refund_status === 'sent')
+                                <div class="text-muted mt-1">Refund sent (₱{{ number_format((float) ($payment->amount_received ?? 0), 2) }}){{ $payment->refund_sent_at ? ' · '.$payment->refund_sent_at->format('M j, g:i A') : '' }}</div>
+                            @endif
+                        @endif
+                    </div>
+                @endforeach
+
+                @if($pendingPayment)
+                    @if($pendingPayment->proof_path)
+                        <a href="{{ asset('storage/' . $pendingPayment->proof_path) }}" target="_blank" rel="noopener">
+                            <img src="{{ asset('storage/' . $pendingPayment->proof_path) }}"
+                                 alt="Proof of payment" class="img-fluid rounded mb-2"
+                                 style="max-height: 180px; object-fit: cover; width: 100%;">
+                        </a>
+                    @else
+                        <div class="bg-light rounded text-center text-muted small py-4 mb-2">
+                            No proof image (cash / walk-in)
+                        </div>
+                    @endif
                     <div class="d-flex gap-2 mt-auto">
-                        <form method="POST" action="{{ route('admin.payments.verify', $payment->id) }}" class="flex-fill">
+                        <form method="POST" action="{{ route('admin.payments.verify', $pendingPayment->id) }}" class="flex-fill">
                             @csrf @method('PATCH')
                             <button class="btn btn-success btn-sm w-100">
                                 <i class="bi bi-check-lg me-1"></i>Verify
@@ -58,37 +121,41 @@
                         </form>
                         <button class="btn btn-outline-danger btn-sm flex-fill"
                                 data-bs-toggle="modal" data-bs-target="#rejectModal"
-                                data-id="{{ $payment->id }}"
-                                data-amount="{{ $payment->amount }}">
+                                data-id="{{ $pendingPayment->id }}"
+                                data-amount="{{ $pendingPayment->amount }}">
                             <i class="bi bi-x-lg me-1"></i>Reject
                         </button>
                     </div>
-                @else
-                    <div class="small mt-auto">
-                        <span class="badge {{ $payment->status->value === 'verified' ? 'text-bg-success' : 'text-bg-danger' }}">
-                            {{ ucfirst($payment->status->value) }}
-                        </span>
-                        @if($payment->verifier)
-                            by {{ $payment->verifier->name }} · {{ $payment->verified_at?->format('M j, g:i A') }}
-                        @endif
-                        @if($payment->rejection_reason)
-                            <div class="text-muted mt-1">Reason: {{ $payment->rejection_reason }}</div>
-                        @endif
-                        @if($payment->rejectionCategoryLabel())
-                            <div class="text-muted mt-1">Category: {{ $payment->rejectionCategoryLabel() }}</div>
-                        @endif
-                        {{-- Step 2A refund settlement: only a rejected payment
-                             the client asked back for offers the button. --}}
-                        @if($payment->status->value === 'rejected' && $payment->refund_status === 'requested')
-                            <div class="mt-2">Refund requested: ₱{{ number_format((float) ($payment->amount_received ?? 0), 2) }}</div>
-                            <form method="POST" action="{{ route('admin.payments.refund-sent', $payment->id) }}" class="mt-2">
-                                @csrf @method('PATCH')
-                                <button class="btn btn-success btn-sm w-100">
-                                    <i class="bi bi-send me-1"></i>Mark refund sent
-                                </button>
+                @endif
+
+                {{-- Branch settlement: a Booked / In-Service appointment that
+                     still owes money gets ONE settle form here, prefilled
+                     with the balance due. Fully settled ones show Paid in
+                     full instead. Posts to the existing branch-payment
+                     route; its guards apply unchanged. --}}
+                @if(in_array($appointment->status->value, ['booked', 'in-service'], true))
+                    <div class="mt-3 pt-3 border-top">
+                        @if($balanceDue > 0)
+                            <form method="POST" action="{{ route('admin.appointments.branch-payment', $appointment->id) }}">
+                                @csrf
+                                <label class="form-label small mb-1" for="settle-amount-{{ $appointment->id }}">Record branch payment</label>
+                                <div class="d-flex gap-2">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">₱</span>
+                                        <input type="number" name="amount" id="settle-amount-{{ $appointment->id }}" class="form-control"
+                                               value="{{ number_format($balanceDue, 2, '.', '') }}" min="0.01" step="0.01"
+                                               max="{{ number_format($balanceDue, 2, '.', '') }}" required>
+                                    </div>
+                                    <select name="method" class="form-select form-select-sm" style="max-width: 110px;">
+                                        @foreach(config('payment.methods', []) as $value => $label)
+                                            <option value="{{ $value }}" @selected($value === 'cash')>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <button class="btn btn-sm btn-spa w-100 mt-2">Record Payment</button>
                             </form>
-                        @elseif($payment->status->value === 'rejected' && $payment->refund_status === 'sent')
-                            <div class="text-muted mt-1">Refund sent (₱{{ number_format((float) ($payment->amount_received ?? 0), 2) }}){{ $payment->refund_sent_at ? ' · '.$payment->refund_sent_at->format('M j, g:i A') : '' }}</div>
+                        @else
+                            <div class="small text-muted"><i class="bi bi-check-circle me-1"></i>Paid in full</div>
                         @endif
                     </div>
                 @endif
@@ -101,7 +168,7 @@
     @endforelse
 </div>
 
-<div class="mt-3">{{ $payments->links() }}</div>
+<div class="mt-3">{{ $appointments->links() }}</div>
 
 {{-- REJECT MODAL --}}
 <div class="modal fade" id="rejectModal" tabindex="-1">
