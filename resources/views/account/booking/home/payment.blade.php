@@ -69,6 +69,31 @@
                                 <input type="file" name="payment_proof" id="pay-proof" accept="image/*" required class="form-control @error('payment_proof') is-invalid @enderror">
                                 <p class="small nx-text-secondary mt-2 mb-0">JPG or PNG, up to 5MB.</p>
                             </div>
+                            {{-- Receipt check — inside the proof block so it
+                                 hides/shows together with it when Cash is
+                                 picked. Appears only while a file is selected;
+                                 opens the full-size modal below for inspection
+                                 instead of embedding a large image in the step.
+                                 Reads as a plain accent-colored link, not a
+                                 button: no border, no background. --}}
+                            <style>
+                                .nx-preview-link {
+                                    background: none; border: none; padding: 0;
+                                    font-size: 13px; font-weight: 500;
+                                    color: var(--nx-accent); text-decoration: none;
+                                    cursor: pointer;
+                                }
+                                .nx-preview-link:hover {
+                                    color: var(--nx-accent); text-decoration: underline;
+                                    filter: brightness(1.15);
+                                }
+                            </style>
+                            <div class="mt-2 d-none" id="pay-preview-wrap">
+                                <button type="button" class="nx-preview-link me-2" data-bs-toggle="modal" data-bs-target="#pay-preview-modal">
+                                    <i class="bi bi-eye me-1"></i>View image
+                                </button>
+                                <span class="small nx-text-secondary">Double-check your receipt before submitting.</span>
+                            </div>
                             @error('payment_proof')
                                 <div class="text-danger small mb-3">{{ $message }}</div>
                             @enderror
@@ -92,6 +117,22 @@
             </div>
         </div>
     </div>
+
+    {{-- Full-size receipt preview — read-only inspection, closing it changes
+         nothing about the selected file or the form. --}}
+    <div class="modal fade" id="pay-preview-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 nx-body" style="border-radius: var(--nx-radius-lg); overflow: hidden;">
+                <div class="modal-header" style="border-color: var(--nx-border);">
+                    <h2 class="h5 mb-0">Proof of payment</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-2 text-center">
+                    <img id="pay-preview-full" src="" alt="Proof of payment full size" class="img-fluid w-100">
+                </div>
+            </div>
+        </div>
+    </div>
 </section>
 @endsection
 
@@ -104,19 +145,43 @@
         var cashNote = document.getElementById('pay-cash-note');
         var leadOnline = document.getElementById('pay-lead-online');
         var leadCash = document.getElementById('pay-lead-cash');
+        var previewWrap = document.getElementById('pay-preview-wrap');
+        var previewFull = document.getElementById('pay-preview-full');
+        var previewUrl = null;
         if (!method) return;
+
+        function clearPreview() {
+            if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+            previewFull.removeAttribute('src');
+            previewWrap.classList.add('d-none');
+        }
+
+        // Points the modal at the selected receipt (an image only — anything
+        // else keeps the button row hidden) and reveals the "View image"
+        // row. Always revokes the previous object URL first so the modal
+        // never shows a stale file.
+        function refreshPreview() {
+            clearPreview();
+            var file = proofInput.files && proofInput.files[0];
+            if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
+            previewUrl = URL.createObjectURL(file);
+            previewFull.src = previewUrl;
+            previewWrap.classList.remove('d-none');
+        }
 
         function sync() {
             var isCash = method.value === 'cash';
             proofBlock.classList.toggle('d-none', isCash);
             proofInput.required = !isCash;
             if (isCash) proofInput.value = '';
+            refreshPreview();
             cashNote.classList.toggle('d-none', !isCash);
             leadOnline.classList.toggle('d-none', isCash);
             leadCash.classList.toggle('d-none', !isCash);
         }
 
         method.addEventListener('change', sync);
+        proofInput.addEventListener('change', refreshPreview);
         sync();
     })();
 </script>

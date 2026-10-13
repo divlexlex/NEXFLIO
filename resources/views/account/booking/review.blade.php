@@ -74,15 +74,16 @@
                         <i class="bi bi-info-circle me-1"></i>
                         @if($fee !== null)
                             Only the ₱{{ number_format($fee, 2) }} reservation fee is due online now — the
-                            ₱{{ number_format($balance, 2) }} balance is paid at the branch. Prefer to pay
-                            everything at the spa? Choose <strong>Cash</strong> on the next step — no upload needed.
-                            Your slot is only reserved after our team verifies an online payment; a Cash booking is
-                            confirmed immediately.
+                            current balance is paid at the branch. Please send proof of payment to confirm
+                            your reservation. Reservation fees are deducted from the total cost of services.
+                            Prefer to pay everything at the spa? Choose <strong>Cash</strong> on the next step
+                            — no upload needed. Thank you and we look forward to pamper you!
                         @else
                             You can pay online now (proof of payment required — your slot is only reserved
                             after our team verifies it), or choose <strong>Cash</strong> on the next step to pay
-                            the full amount at the branch with no upload. Either way this booking is not
-                            confirmed yet.
+                            the full amount at the branch with no upload. Please send proof of payment to confirm
+                            your reservation. Reservation fees are deducted from the total cost of services.
+                            Either way this booking is not confirmed yet. Thank you and we look forward to pamper you!
                         @endif
                     </div>
 
