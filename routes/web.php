@@ -146,6 +146,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
     Route::patch('/appointments/{id}/override', [AppointmentController::class, 'override'])->name('appointments.override');
     Route::patch('/appointments/{id}/assign-personnel', [AppointmentController::class, 'assignPersonnel'])->name('appointments.assign-personnel');
     Route::patch('/appointments/{id}/status', [AppointmentController::class, 'updateStatus'])->name('appointments.status');
+    // Branch settlement — money collected at the spa against the remaining
+    // balance. Manager/Admin only (group middleware); the controller refuses
+    // zero-balance and Cancelled/No-Show bookings.
+    Route::post('/appointments/{id}/branch-payment', [AppointmentController::class, 'recordBranchPayment'])->name('appointments.branch-payment');
 
     // Client-raised cancellation / reschedule request queue.
     Route::get('/appointment-requests', [AppointmentRequestController::class, 'index'])->name('appointment-requests');

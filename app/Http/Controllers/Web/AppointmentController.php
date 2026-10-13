@@ -22,7 +22,7 @@ class AppointmentController extends Controller
 {
     public function index(Request $request)
     {
-        $appointments = Appointment::with(['user', 'service', 'personnel', 'payment'])
+        $appointments = Appointment::with(['user', 'service', 'personnel', 'payment', 'payments'])
             ->when($request->query('status'), fn ($query, $status) => $query->where('status', $status))
             ->orderByDesc('appointment_date')
             ->paginate(15)
@@ -53,6 +53,7 @@ class AppointmentController extends Controller
             'service:id,name,duration_minutes,price',
             'personnel:id,name',
             'payment',
+            'payments',
             'address',
         ])
             ->when($request->query('start'), fn ($query, $start) => $query->where('appointment_date', '>=', $start))
@@ -92,10 +93,9 @@ class AppointmentController extends Controller
             };
 
             $payment = $appointment->payment;
-            $methodLabel = $payment ? match ($payment->method) {
-                'cash' => 'Cash', 'gcash' => 'GCash', 'bank_transfer' => 'Bank transfer', 'card' => 'Card',
-                default => ucfirst((string) $payment->method),
-            } : null;
+            $methodLabel = $payment
+                ? config('payment.methods.'.$payment->method, ucfirst((string) $payment->method))
+                : null;
 
             return [
                 'id' => $appointment->id,
@@ -127,6 +127,16 @@ class AppointmentController extends Controller
                         'amount' => (float) $payment->amount,
                         'proofUrl' => $payment->proof_path ? Storage::url($payment->proof_path) : null,
                     ] : null,
+                    // Branch-settlement state for the details drawer: what the
+                    // client still owes and whether the manager may record a
+                    // branch payment right now (balance left, booking still
+                    // active). Everyone viewing this feed is manager-or-above
+                    // (route middleware), so no extra gate is needed here —
+                    // recordBranchPayment re-checks authoritatively.
+                    'paymentState' => $appointment->paymentState(),
+                    'balanceDue' => $appointment->balanceDue(),
+                    'canSettle' => $appointment->balanceDue() > 0
+                        && ! in_array($appointment->status, [AppointmentStatus::Cancelled, AppointmentStatus::NoShow], true),
                     'notes' => $appointment->notes,
                     // Which status actions the drawer should offer (server still
                     // re-validates each via AppointmentService::transition).
@@ -240,6 +250,43 @@ class AppointmentController extends Controller
         }
 
         return back()->with('success', 'Appointment updated to "'.AppointmentStatus::from($validated['status'])->label().'".');
+    }
+
+    /**
+     * Record a branch settlement: money collected at the spa against the
+     * remaining balance (cash down-payment bookings, reservation-fee
+     * balances). Creates an immediately-Verified payment row attributed to
+     * the current manager — the appointment status itself never moves here.
+     * Refused when nothing is owed or the booking is Cancelled / No-Show.
+     */
+    public function recordBranchPayment(Request $request, $id)
+    {
+        $appointment = Appointment::with(['service', 'payments'])->findOrFail($id);
+
+        if (in_array($appointment->status, [AppointmentStatus::Cancelled, AppointmentStatus::NoShow], true)) {
+            return back()->withErrors(['branch_payment' => 'Cannot record a payment on a cancelled or no-show appointment.']);
+        }
+
+        $balance = $appointment->balanceDue();
+
+        if ($balance <= 0) {
+            return back()->withErrors(['branch_payment' => 'This booking has no remaining balance.']);
+        }
+
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01', "max:{$balance}"],
+            'method' => ['sometimes', Rule::in(array_keys(config('payment.methods', [])))],
+        ]);
+
+        $appointment->payments()->create([
+            'amount' => $validated['amount'],
+            'method' => $validated['method'] ?? 'cash',
+            'status' => PaymentStatus::Verified,
+            'verified_by' => $request->user()->id,
+            'verified_at' => now(),
+        ]);
+
+        return back()->with('success', 'Branch payment of ₱'.number_format((float) $validated['amount'], 2).' recorded.');
     }
 
     /**

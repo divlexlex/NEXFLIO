@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -26,6 +27,42 @@ class BookingReceivedMail extends Mailable implements ShouldQueue
     public function content(): Content
     {
         $service = $this->appointment->service->name ?? 'your service';
+
+        $price = (float) ($this->appointment->booked_price ?? $this->appointment->service?->price ?? 0);
+        $paidNow = (float) ($this->appointment->payment?->amount ?? 0);
+
+        // Cash bookings are confirmed at once — the whole price is payable
+        // at the branch. Online bookings that only paid the reservation fee
+        // still owe the balance at the branch.
+        if ($this->appointment->status === AppointmentStatus::Booked
+            && $this->appointment->payment?->method === 'cash') {
+            return new Content(view: 'mail.notification', with: [
+                'title' => 'Your booking is confirmed!',
+                'lines' => [
+                    "Hi {$this->appointment->clientName()},",
+                    "Thank you for booking {$service} on "
+                        . $this->appointment->appointment_date->format('F j, Y')
+                        . " at {$this->appointment->start_time}.",
+                    'Your booking is confirmed — please pay ₱'.number_format($price, 2)
+                        . ' at the branch.',
+                ],
+            ]);
+        }
+
+        if ($paidNow < $price) {
+            return new Content(view: 'mail.notification', with: [
+                'title' => 'We received your booking!',
+                'lines' => [
+                    "Hi {$this->appointment->clientName()},",
+                    "Thank you for booking {$service} on "
+                        . $this->appointment->appointment_date->format('F j, Y')
+                        . " at {$this->appointment->start_time}.",
+                    'Our manager is verifying your reservation fee of ₱'.number_format($paidNow, 2)
+                        . '. The remaining ₱'.number_format($price - $paidNow, 2)
+                        . ' is payable at the branch.',
+                ],
+            ]);
+        }
 
         return new Content(view: 'mail.notification', with: [
             'title' => 'We received your booking!',

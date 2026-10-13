@@ -175,7 +175,7 @@ class ClientAccountController extends Controller
     public function bookings()
     {
         $appointments = Appointment::with([
-            'service', 'personnel', 'address',
+            'service', 'personnel', 'address', 'payment', 'payments',
             'pendingChangeRequest.requestedPersonnel:id,name',
         ])
             ->where('user_id', Auth::id())

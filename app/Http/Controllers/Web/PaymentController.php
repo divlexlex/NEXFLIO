@@ -25,6 +25,10 @@ class PaymentController extends Controller
 
         $payments = Payment::with(['appointment.user', 'appointment.service', 'appointment.personnel', 'verifier'])
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            // Cash bookings are confirmed at once and settle at the branch
+            // (see AppointmentController@recordBranchPayment) — there is no
+            // proof to verify, so they never sit in the pending queue.
+            ->when($status === 'pending', fn ($query) => $query->where('method', '!=', 'cash'))
             ->orderByDesc('created_at')
             ->paginate(15)
             ->withQueryString();

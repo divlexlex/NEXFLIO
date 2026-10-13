@@ -73,7 +73,11 @@ class AppointmentService
             $appointment->status = $target;
             $appointment->save();
 
-            if ($verificationStep && $appointment->payment) {
+            // Confirming / rejecting resolves the booking-time payment — but
+            // only while it is still pending. A payment already verified
+            // (e.g. a branch settlement recorded before verification) is
+            // never flipped by a later cancel / no-show.
+            if ($verificationStep && $appointment->payment && $appointment->payment->status === PaymentStatus::Pending) {
                 $appointment->payment->update($target === AppointmentStatus::Booked
                     ? [
                         'status' => PaymentStatus::Verified,

@@ -92,7 +92,8 @@
                                         &middot; {{ \Illuminate\Support\Carbon::parse($appointment->start_time)->format('g:i A') }}
                                     </p>
                                     @if($appointment->price !== null)
-                                        <p class="small nx-text-secondary mb-1"><i class="bi bi-cash-coin me-2"></i>₱{{ number_format((float) $appointment->price, 2) }}</p>
+                                        <p class="small nx-text-secondary mb-1"><i class="bi bi-cash-coin me-2"></i>₱{{ number_format((float) $appointment->price, 2)}}</p>
+                                        <p class="small nx-text-secondary mb-1"><i class="bi bi-wallet2 me-2"></i>{{ $appointment->paymentState() }}</p>
                                     @endif
                                     @if($appointment->personnel)
                                         <p class="small nx-text-secondary mb-0"><i class="bi bi-person me-2"></i>{{ $appointment->personnel->name }}</p>

@@ -1,31 +1,53 @@
 {{-- Branch Booking (Phase 3A) and Home Service Booking (Phase 3B) — final
      Submitted step, shared by both flows (BookingController@success serves
      both account.booking.branch.success and account.booking.home.success).
-     The appointment now exists with status Unverified
-     (App\Enums\AppointmentStatus) — it is NOT confirmed. Wording here must
-     never claim confirmation; that only happens after Management verifies
-     the payment (existing Admin verification workflow —
-     App\Services\AppointmentService::transition). The address block below
-     renders only when $appointment->address exists (Home Service only) —
-     see App\Models\AppointmentAddress. --}}
+     Online bookings land here with status Unverified
+     (App\Enums\AppointmentStatus) — NOT confirmed; that only happens after
+     Management verifies the payment (existing Admin verification workflow —
+     App\Services\AppointmentService::transition). Cash bookings are confirmed
+     at once (Booked) with the full amount payable at the branch. Bookings
+     that only paid the reservation fee online show the remaining branch
+     balance. The address block below renders only when
+     $appointment->address exists (Home Service only) — see
+     App\Models\AppointmentAddress. --}}
 @extends('layouts.public')
 
 @section('title', 'Booking Request Submitted')
 
 @section('content')
+@php($isCash = $appointment->status->value === 'booked')
+@php($paidNow = (float) ($appointment->payment?->amount ?? 0))
+@php($total = (float) ($appointment->price ?? 0))
+@php($hasBalance = ! $isCash && $paidNow < $total)
 <section class="nx-booking-floating-section">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-12 col-md-9 col-lg-6 text-center">
                 <div class="nx-booking-success-icon">
-                    <i class="bi bi-hourglass-split"></i>
+                    <i class="bi {{ $isCash ? 'bi-check-circle' : 'bi-hourglass-split' }}"></i>
                 </div>
-                <h1 class="mb-2" style="font-size: 30px;">Booking Request Submitted</h1>
-                <p class="nx-text-secondary mb-4">
-                    Your booking is <strong>pending verification</strong>. Our team is reviewing your
-                    proof of payment and will confirm your appointment shortly — you'll get a
-                    notification the moment it's verified.
-                </p>
+                <h1 class="mb-2" style="font-size: 30px;">
+                    {{ $isCash ? 'Booking Confirmed' : 'Booking Request Submitted' }}
+                </h1>
+                @if($isCash)
+                    <p class="nx-text-secondary mb-4">
+                        Your booking is <strong>confirmed</strong>. No payment was needed now —
+                        please pay <strong>₱{{ number_format($total, 2) }} at the branch</strong>.
+                    </p>
+                @elseif($hasBalance)
+                    <p class="nx-text-secondary mb-4">
+                        Your booking is <strong>pending verification</strong>. Our team is reviewing your
+                        reservation fee of <strong>₱{{ number_format($paidNow, 2) }}</strong> and will confirm
+                        your appointment shortly — the remaining
+                        <strong>₱{{ number_format($total - $paidNow, 2) }}</strong> is payable at the branch.
+                    </p>
+                @else
+                    <p class="nx-text-secondary mb-4">
+                        Your booking is <strong>pending verification</strong>. Our team is reviewing your
+                        proof of payment and will confirm your appointment shortly — you'll get a
+                        notification the moment it's verified.
+                    </p>
+                @endif
 
                 <div class="nx-booking-panel text-start mb-4">
                     <div class="nx-review-row">
@@ -36,6 +58,22 @@
                         <div class="nx-review-row">
                             <span class="nx-review-label">Price</span>
                             <span class="nx-review-value">₱{{ number_format((float) $appointment->price, 2) }}</span>
+                        </div>
+                    @endif
+                    @if($hasBalance)
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Reservation fee (paid online)</span>
+                            <span class="nx-review-value">₱{{ number_format($paidNow, 2) }}</span>
+                        </div>
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Balance (pay at the branch)</span>
+                            <span class="nx-review-value">₱{{ number_format($total - $paidNow, 2) }}</span>
+                        </div>
+                    @endif
+                    @if($isCash)
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Payable at the branch</span>
+                            <span class="nx-review-value">₱{{ number_format($total, 2) }} (Cash)</span>
                         </div>
                     @endif
                     <div class="nx-review-row">

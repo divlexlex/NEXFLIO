@@ -69,6 +69,17 @@
     </button>
 </div>
 
+@if(session('success'))
+    <div class="alert alert-success">{{ session('success') }}</div>
+@endif
+@if($errors->any())
+    <div class="alert alert-danger">
+        @foreach($errors->all() as $error)
+            <div>{{ $error }}</div>
+        @endforeach
+    </div>
+@endif
+
 {{-- LEGEND --}}
 <div class="d-flex flex-wrap gap-3 mb-2 small">
     @foreach([
@@ -131,6 +142,7 @@
                                     'rejected' => 'text-bg-danger',
                                     default => 'text-bg-warning',
                                 } }}">{{ ucfirst($appointment->payment->status->value) }}</span>
+                                <div class="small text-muted mt-1">{{ $appointment->paymentState() }}</div>
                             @else
                                 <span class="text-muted small">—</span>
                             @endif
@@ -179,7 +191,33 @@
         <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-calendar3 me-1"></i>When</span><span><span id="dw-date">–</span><br><span class="small text-muted" id="dw-time"></span></span></div>
         <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-person-badge me-1"></i>Staff</span><span id="dw-staff">–</span></div>
         <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-flag me-1"></i>Status</span><span class="badge text-bg-light border" id="dw-status">–</span></div>
-        <div class="nx-drawer-row" id="dw-payment-row"><span class="nx-drawer-label"><i class="bi bi-cash-coin me-1"></i>Payment</span><span><span id="dw-payment">–</span> <a href="#" target="_blank" class="ms-1 small d-none" id="dw-proof">View proof <i class="bi bi-box-arrow-up-right"></i></a></span></div>
+        <div class="nx-drawer-row" id="dw-payment-row"><span class="nx-drawer-label"><i class="bi bi-cash-coin me-1"></i>Payment</span><span><span id="dw-payment">–</span> <a href="#" target="_blank" class="ms-1 small d-none" id="dw-proof">View proof <i class="bi bi-box-arrow-up-right"></i></a><br><span class="small text-muted" id="dw-paystate"></span></span></div>
+        <div class="nx-drawer-row d-none" id="dw-settle-row">
+            <span class="nx-drawer-label"><i class="bi bi-wallet2 me-1"></i>Settle</span>
+            <span class="flex-fill">
+                {{-- Branch settlement: money collected at the spa against the
+                     remaining balance. Shown only when a balance is left on an
+                     active booking (see openDrawer); the endpoint re-checks
+                     both conditions plus the amount cap server-side. --}}
+                <form method="POST" id="dw-settleForm">
+                    @csrf
+                    <label class="form-label small mb-1">Record branch payment</label>
+                    <div class="d-flex gap-2">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">₱</span>
+                            <input type="number" name="amount" id="dw-settle-amount" class="form-control"
+                                   min="0.01" step="0.01" required>
+                        </div>
+                        <select name="method" class="form-select form-select-sm" style="max-width: 110px;">
+                            @foreach(config('payment.methods', []) as $value => $label)
+                                <option value="{{ $value }}" @selected($value === 'cash')>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <button class="btn btn-sm btn-spa w-100 mt-2">Record Payment</button>
+                </form>
+            </span>
+        </div>
         <div class="nx-drawer-row" id="dw-notes-row"><span class="nx-drawer-label"><i class="bi bi-sticky me-1"></i>Notes</span><span class="small" id="dw-notes"></span></div>
 
         <div class="d-grid gap-2 mt-3" id="dw-actions"></div>
@@ -403,6 +441,19 @@
                 else { proof.classList.add('d-none'); }
             } else {
                 payRow.classList.add('d-none');
+            }
+            document.getElementById('dw-paystate').textContent = p.paymentState || '';
+
+            const settleRow = document.getElementById('dw-settle-row');
+            const settleForm = document.getElementById('dw-settleForm');
+            const settleAmount = document.getElementById('dw-settle-amount');
+            if (p.canSettle) {
+                settleRow.classList.remove('d-none');
+                settleForm.action = statusBase + '/' + event.id + '/branch-payment';
+                settleAmount.value = Number(p.balanceDue || 0).toFixed(2);
+                settleAmount.max = Number(p.balanceDue || 0).toFixed(2);
+            } else {
+                settleRow.classList.add('d-none');
             }
 
             const notesRow = document.getElementById('dw-notes-row');

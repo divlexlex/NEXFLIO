@@ -6,6 +6,7 @@ use App\Enums\AppointmentStatus;
 use App\Enums\ServiceLocationType;
 use App\Models\Appointment;
 use App\Models\User;
+use App\Support\ReservationFee;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -67,8 +68,17 @@ class StoreWebBranchBookingRequest extends FormRequest
             'appointment_date' => 'required|date|after_or_equal:today',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
-            'payment_proof' => 'required|image|max:5120',
-            'method' => ['sometimes', Rule::in(['gcash', 'bank_transfer', 'card'])],
+            // Guest count for a reservation-fee booking without package
+            // variants (1->Single, 2->Couple, 3+->Barkada — see
+            // config/booking.php). Required in that case (see
+            // validateGuestCount() below); ignored otherwise.
+            'guests' => 'nullable|integer|min:1|max:30',
+            // Cash needs no proof (paid at the branch); every other method
+            // still needs the manual proof upload. The `sometimes` default
+            // stays gcash in BookingController@store, so a missing method
+            // still requires proof via required_unless below.
+            'payment_proof' => 'nullable|required_unless:method,cash|image|max:5120',
+            'method' => ['sometimes', Rule::in(array_keys(config('payment.methods', [])))],
         ];
     }
 
@@ -85,6 +95,7 @@ class StoreWebBranchBookingRequest extends FormRequest
     {
         $validator->after(function (Validator $validator) {
             $this->validateVariantChoice($validator);
+            $this->validateGuestCount($validator);
 
             if ($validator->errors()->isNotEmpty()) {
                 return;
@@ -130,6 +141,26 @@ class StoreWebBranchBookingRequest extends FormRequest
 
         if ($this->input('variant_id') === null || $this->input('variant_id') === '') {
             $validator->errors()->add('variant_id', 'Please choose a package option for this service.');
+        }
+    }
+
+    /**
+     * A fee-category service without variants prices its reservation fee off
+     * the guest count, so the count is required there. Variant bookings take
+     * the fee from the tier instead (guests ignored); non-fee services never
+     * need it.
+     */
+    private function validateGuestCount(Validator $validator): void
+    {
+        $serviceId = $this->integer('service_id');
+        $service = $serviceId ? \App\Models\Service::with('variants')->find($serviceId) : null;
+
+        if (! $service || ! ReservationFee::appliesTo($service) || $service->variants->isNotEmpty()) {
+            return;
+        }
+
+        if ($this->input('guests') === null || $this->input('guests') === '') {
+            $validator->errors()->add('guests', 'Please tell us how many guests this booking is for.');
         }
     }
 

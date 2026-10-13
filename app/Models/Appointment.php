@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AppointmentStatus;
+use App\Enums\PaymentStatus;
 use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,6 +20,7 @@ class Appointment extends Model
         'service_id',
         'variant_label',
         'booked_price',
+        'guests',
         'personnel_id',
         'appointment_date',
         'start_time',
@@ -54,6 +56,68 @@ class Appointment extends Model
     public function payment()
     {
         return $this->hasOne(Payment::class);
+    }
+
+    /**
+     * Every payment row on this booking — the first is the booking-time
+     * payment (online reservation fee / full online amount / cash promise),
+     * later rows are branch settlements recorded at the spa. payment()
+     * (hasOne) is kept for the many single-payment reads and always resolves
+     * to that first row.
+     */
+    public function payments()
+    {
+        return $this->hasMany(Payment::class)->orderBy('id');
+    }
+
+    /** Sum of verified payment amounts — the only money that counts. */
+    public function verifiedPaid(): float
+    {
+        // Reuse the eager-loaded collection when the caller already loaded
+        // `payments` (admin list, My Bookings) instead of re-querying per row.
+        $payments = $this->relationLoaded('payments')
+            ? $this->payments
+            : $this->payments()->get();
+
+        return (float) $payments
+            ->where('status', PaymentStatus::Verified)
+            ->sum('amount');
+    }
+
+    /** What's still owed at the branch: booked total minus verified money, never negative. */
+    public function balanceDue(): float
+    {
+        $total = (float) ($this->booked_price ?? $this->service?->price ?? 0);
+
+        return max(0, round($total - $this->verifiedPaid(), 2));
+    }
+
+    /**
+     * Client/manager-facing payment state, derived from the booked total plus
+     * verified payments only — pending proofs and cash promises never count
+     * as paid.
+     */
+    public function paymentState(): string
+    {
+        if ($this->balanceDue() <= 0) {
+            return 'Paid in full';
+        }
+
+        if ($this->verifiedPaid() > 0) {
+            return 'Down payment paid — balance ₱'.number_format($this->balanceDue(), 2);
+        }
+
+        // The payments() relation is id-ordered; reorder() so "latest" really
+        // means latest instead of appending a second ORDER BY clause.
+        $method = ($this->relationLoaded('payments') ? $this->payments->sortByDesc('id')->first() : null)
+            ?? $this->payments()->reorder()->latest('id')->first();
+        $method = $method?->method ?? $this->payment?->method;
+
+        if ($method === 'cash') {
+            return 'Cash — pay at the branch';
+        }
+
+        return 'Awaiting payment verification';
     }
 
     /**

@@ -18,6 +18,7 @@ use App\Models\ServiceVariant;
 use App\Models\StaffSchedule;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Support\ReservationFee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -179,6 +180,11 @@ class BookingController extends Controller
             return $scheduleError;
         }
 
+        // Reservation-fee bookings without package variants price the fee off
+        // the guest count, so the Details step must ask for it (required).
+        // Variant bookings take the fee from the tier instead and never ask.
+        $needsGuests = ReservationFee::appliesTo($service) && $service->variants->isEmpty();
+
         return view('account.booking.details', [
             'service' => $service,
             'variant' => $variant,
@@ -188,6 +194,8 @@ class BookingController extends Controller
             'personnelLabel' => $this->personnelLabel($request->query('personnel')),
             'client' => Auth::user(),
             'notes' => $request->query('notes'),
+            'needsGuests' => $needsGuests,
+            'guests' => $request->query('guests'),
         ]);
     }
 
@@ -217,6 +225,8 @@ class BookingController extends Controller
             'personnelLabel' => $this->personnelLabel($request->query('personnel')),
             'notes' => $request->query('notes'),
             'client' => Auth::user(),
+            'guests' => $this->queryGuests($request),
+            ...$this->feeQuote($service, $variant, $this->queryGuests($request)),
         ]);
     }
 
@@ -244,6 +254,8 @@ class BookingController extends Controller
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
             'notes' => $request->query('notes'),
+            'guests' => $this->queryGuests($request),
+            ...$this->feeQuote($service, $variant, $this->queryGuests($request)),
         ]);
     }
 
@@ -254,34 +266,52 @@ class BookingController extends Controller
         // Package tier (when the service has variants) resolved server-side
         // from the DB — the browser only ever sends an id. A service without
         // variants bills its listed price exactly as before.
-        $service = Service::findOrFail($validated['service_id']);
+        $service = Service::with('variants')->findOrFail($validated['service_id']);
         $variant = isset($validated['variant_id'])
-            ? $service->variants()->find($validated['variant_id'])
+            ? $service->variants->firstWhere('id', (int) $validated['variant_id'])
             : null;
-        $price = $variant?->price ?? $service->price;
+        $price = (float) ($variant?->price ?? $service->price);
 
-        $appointment = DB::transaction(function () use ($request, $validated, $variant, $price) {
+        // The reservation fee is always re-derived here — a browser-supplied
+        // amount is never trusted. Cash skips the fee entirely: the full
+        // booked price is payable at the branch.
+        $method = $validated['method'] ?? 'gcash';
+        $isCash = $method === 'cash';
+        $guests = isset($validated['guests']) ? (int) $validated['guests'] : null;
+        $fee = ReservationFee::for($service, $variant?->label, $guests);
+
+        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee, $guests) {
             $appointment = Appointment::create([
                 'user_id' => $request->user()->id,
                 'service_id' => $validated['service_id'],
                 'variant_label' => $variant?->label,
                 'booked_price' => $price,
+                // Guest count only matters for a fee booking without
+                // variants; anything else stays null.
+                'guests' => ($variant === null && ReservationFee::appliesTo($service)) ? $guests : null,
                 'personnel_id' => $validated['personnel_id'],
                 'appointment_date' => $validated['appointment_date'],
                 'start_time' => $validated['start_time'],
                 'notes' => $validated['notes'] ?? null,
-                'status' => AppointmentStatus::Unverified,
+                // Cash needs no verification — the client pays at the
+                // branch, so the booking is confirmed immediately.
+                'status' => $isCash ? AppointmentStatus::Booked : AppointmentStatus::Unverified,
             ]);
 
-            // Amount is the selected tier (or the service's listed price),
-            // taken server-side — never trusted from the browser (mirrors
-            // API\AppointmentController@store).
-            $appointment->payment()->create([
-                'amount' => $price,
-                'method' => $validated['method'] ?? 'gcash',
-                'proof_path' => $request->file('payment_proof')->store('payment_proofs', 'public'),
+            // Online + fee => only the down payment is charged now (the
+            // balance settles at the branch). Cash => the full booked price
+            // is owed at the branch; the row stays pending until the branch
+            // records it — pending cash never counts as paid (see
+            // Appointment::paymentState()).
+            $paymentData = [
+                'amount' => $isCash ? $price : ($fee ?? $price),
+                'method' => $method,
                 'status' => PaymentStatus::Pending,
-            ]);
+            ];
+            if (! $isCash && $request->hasFile('payment_proof')) {
+                $paymentData['proof_path'] = $request->file('payment_proof')->store('payment_proofs', 'public');
+            }
+            $appointment->payment()->create($paymentData);
 
             return $appointment;
         });
@@ -289,12 +319,27 @@ class BookingController extends Controller
         $appointment->load(['user', 'service', 'personnel', 'payment']);
 
         // Same notification used by the mobile booking path, so a Website
-        // booking behaves identically to an app booking from here on.
+        // booking behaves identically to an app booking from here on — with
+        // copy that matches what the client actually owes and when.
+        if ($isCash) {
+            $notifyTitle = 'Booking confirmed';
+            $notifyBody = "Your booking for {$appointment->displayServiceName()} is confirmed. "
+                . 'Please pay ₱'.number_format($price, 2).' at the branch.';
+        } elseif ($fee !== null) {
+            $notifyTitle = 'Booking received';
+            $notifyBody = "We received your booking for {$appointment->displayServiceName()}. "
+                . 'Your reservation fee of ₱'.number_format($fee, 2).' is pending verification — '
+                . 'the ₱'.number_format($price - $fee, 2).' balance is payable at the branch.';
+        } else {
+            $notifyTitle = 'Booking received';
+            $notifyBody = "We received your booking for {$appointment->displayServiceName()}. "
+                . 'You will be notified once your payment is verified.';
+        }
+
         $notificationService->notify(
             $appointment->user,
-            'Booking received',
-            "We received your booking for {$appointment->displayServiceName()}. "
-                . 'You will be notified once your payment is verified.',
+            $notifyTitle,
+            $notifyBody,
             new BookingReceivedMail($appointment),
             ['appointment_id' => $appointment->id]
         );
@@ -512,7 +557,12 @@ class BookingController extends Controller
     {
         $validated = $request->validated();
 
-        $appointment = DB::transaction(function () use ($request, $validated) {
+        // Home Service has no reservation fee — the only new behaviour here
+        // is Cash: payable at the door, confirmed immediately, no proof.
+        $method = $validated['method'] ?? 'gcash';
+        $isCash = $method === 'cash';
+
+        $appointment = DB::transaction(function () use ($request, $validated, $method, $isCash) {
             $appointment = Appointment::create([
                 'user_id' => $request->user()->id,
                 'service_id' => $validated['service_id'],
@@ -520,15 +570,18 @@ class BookingController extends Controller
                 'appointment_date' => $validated['appointment_date'],
                 'start_time' => $validated['start_time'],
                 'notes' => $validated['notes'] ?? null,
-                'status' => AppointmentStatus::Unverified,
+                'status' => $isCash ? AppointmentStatus::Booked : AppointmentStatus::Unverified,
             ]);
 
-            $appointment->payment()->create([
+            $paymentData = [
                 'amount' => $appointment->service->price,
-                'method' => $validated['method'] ?? 'gcash',
-                'proof_path' => $request->file('payment_proof')->store('payment_proofs', 'public'),
+                'method' => $method,
                 'status' => PaymentStatus::Pending,
-            ]);
+            ];
+            if (! $isCash && $request->hasFile('payment_proof')) {
+                $paymentData['proof_path'] = $request->file('payment_proof')->store('payment_proofs', 'public');
+            }
+            $appointment->payment()->create($paymentData);
 
             // Snapshot only — never a live reference. Editing the Client's
             // saved client_addresses row later must never change this.
@@ -548,9 +601,12 @@ class BookingController extends Controller
 
         $notificationService->notify(
             $appointment->user,
-            'Booking received',
-            "We received your Home Service booking for {$appointment->service->name}. "
-                . 'You will be notified once your payment is verified.',
+            $isCash ? 'Booking confirmed' : 'Booking received',
+            $isCash
+                ? "Your Home Service booking for {$appointment->service->name} is confirmed. "
+                    . 'Please pay ₱'.number_format((float) $appointment->service->price, 2).' at the branch.'
+                : "We received your Home Service booking for {$appointment->service->name}. "
+                    . 'You will be notified once your payment is verified.',
             new BookingReceivedMail($appointment),
             ['appointment_id' => $appointment->id]
         );
@@ -902,7 +958,6 @@ class BookingController extends Controller
 
         return $slots;
     }
-
     private function personnelLabel(?string $personnel): string
     {
         if ($personnel === 'any' || $personnel === null) {
@@ -910,6 +965,38 @@ class BookingController extends Controller
         }
 
         return User::find($personnel)?->name ?? 'Selected personnel';
+    }
+
+    /**
+     * Guest count carried in the wizard query string (Details → Review →
+     * Payment). Null until the client picks one; store() validates it
+     * authoritatively via StoreWebBranchBookingRequest.
+     */
+    private function queryGuests(Request $request): ?int
+    {
+        $guests = $request->query('guests');
+
+        return $guests === null || $guests === '' ? null : (int) $guests;
+    }
+
+    /**
+     * Server-side price breakdown for the Review / Payment steps: the booked
+     * price, the reservation fee due now (null when no fee applies), and the
+     * balance payable at the branch. Display only — store() recomputes all
+     * of this from scratch.
+     *
+     * @return array{price: float, fee: float|null, balance: float|null}
+     */
+    private function feeQuote(Service $service, ?ServiceVariant $variant, ?int $guests): array
+    {
+        $price = (float) ($variant?->price ?? $service->price);
+        $fee = ReservationFee::for($service, $variant?->label, $guests);
+
+        return [
+            'price' => $price,
+            'fee' => $fee,
+            'balance' => $fee !== null ? max(0, round($price - $fee, 2)) : null,
+        ];
     }
 
     private function minDate(): string

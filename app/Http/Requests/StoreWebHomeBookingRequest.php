@@ -62,8 +62,11 @@ class StoreWebHomeBookingRequest extends FormRequest
             'appointment_date' => 'required|date|after_or_equal:today',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
-            'payment_proof' => 'required|image|max:5120',
-            'method' => ['sometimes', Rule::in(['gcash', 'bank_transfer', 'card'])],
+            // No reservation fee on Home Service — the only change here is
+            // Cash: payable at the door, so no proof upload. Every other
+            // method still uploads proof for the full service price.
+            'payment_proof' => 'nullable|required_unless:method,cash|image|max:5120',
+            'method' => ['sometimes', Rule::in(array_keys(config('payment.methods', [])))],
 
             // Service address — required every time; the Client may have
             // edited it away from their saved default (see the address step).

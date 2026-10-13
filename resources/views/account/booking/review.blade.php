@@ -31,8 +31,18 @@
                     </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Price</span>
-                        <span class="nx-review-value">₱{{ number_format($variant?->price ?? $service->price, 2) }}</span>
+                        <span class="nx-review-value">₱{{ number_format($price, 2) }}</span>
                     </div>
+                    @if($fee !== null)
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Reservation fee (due now)</span>
+                            <span class="nx-review-value">₱{{ number_format($fee, 2) }}</span>
+                        </div>
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Balance (pay at the branch)</span>
+                            <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
+                        </div>
+                    @endif
                     <div class="nx-review-row">
                         <span class="nx-review-label">Duration</span>
                         <span class="nx-review-value">{{ $service->duration_minutes }} mins</span>
@@ -62,13 +72,23 @@
 
                     <div class="alert alert-warning mt-4 mb-0">
                         <i class="bi bi-info-circle me-1"></i>
-                        A reservation fee proof of payment is required next. Your slot is only reserved
-                        after our team verifies your payment — this booking is not confirmed yet.
+                        @if($fee !== null)
+                            Only the ₱{{ number_format($fee, 2) }} reservation fee is due online now — the
+                            ₱{{ number_format($balance, 2) }} balance is paid at the branch. Prefer to pay
+                            everything at the spa? Choose <strong>Cash</strong> on the next step — no upload needed.
+                            Your slot is only reserved after our team verifies an online payment; a Cash booking is
+                            confirmed immediately.
+                        @else
+                            You can pay online now (proof of payment required — your slot is only reserved
+                            after our team verifies it), or choose <strong>Cash</strong> on the next step to pay
+                            the full amount at the branch with no upload. Either way this booking is not
+                            confirmed yet.
+                        @endif
                     </div>
 
                     <form method="GET" action="{{ route('account.booking.branch.payment') }}" class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes])
-                        <a href="{{ route('account.booking.branch.details', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel])) }}" class="nx-btn nx-btn-outline">
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'guests' => $guests])
+                        <a href="{{ route('account.booking.branch.details', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'guests' => $guests])) }}" class="nx-btn nx-btn-outline">
                             <i class="bi bi-arrow-left me-1"></i>Back
                         </a>
                         <button type="submit" class="nx-btn nx-btn-primary">
