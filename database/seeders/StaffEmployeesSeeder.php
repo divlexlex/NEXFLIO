@@ -30,11 +30,20 @@ class StaffEmployeesSeeder extends Seeder
             $middle = null;
 
             $fullName = trim($first.' '.$last);
-            $username = strtolower(str_replace(' ', '.', $last.'.'.$first));
-            if (User::withTrashed()->where('username', $username)->exists()) {
+            // Base identity is derived BEFORE any suffix and owns the email:
+            // re-running the seeder must find the same row by that email.
+            $baseUsername = strtolower(str_replace(' ', '.', $last.'.'.$first));
+            $email = $baseUsername.'@nexflio.test';
+
+            // A numeric suffix is appended ONLY when a DIFFERENT user
+            // (different email) already holds the base username. The staff
+            // member's own account from a previous run matches by email and
+            // therefore never triggers a suffix — the row below updates it
+            // in place instead of spawning a duplicate.
+            $username = $baseUsername;
+            if (User::withTrashed()->where('username', $baseUsername)->where('email', '!=', $email)->exists()) {
                 $username .= ($index + 1);
             }
-            $email = $username.'@nexflio.test';
 
             $user = User::query()->updateOrCreate(
                 ['email' => $email],
@@ -45,7 +54,7 @@ class StaffEmployeesSeeder extends Seeder
                     'middle_name'       => $middle,
                     'username'          => $username,
                     'role_id'           => User::ROLE_STAFF,
-                    'password'          => Hash::make($username.'00000'),
+                    'password'          => Hash::make(strtolower(preg_replace('/[^a-zA-Z]/', '', $last)) . '00000'),
                     'email_verified_at' => now(),
                 ]
             );
