@@ -59,7 +59,7 @@ class StoreWebHomeBookingRequest extends FormRequest
                 'nullable',
                 Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
             ],
-            'appointment_date' => 'required|date|after_or_equal:today',
+            'appointment_date' => 'required|date|after_or_equal:tomorrow',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
             // No reservation fee on Home Service — the only change here is

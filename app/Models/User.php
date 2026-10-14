@@ -91,6 +91,11 @@ class User extends Authenticatable
         return $this->hasMany(StaffSchedule::class);
     }
 
+    public function staffShiftAssignments()
+    {
+        return $this->hasMany(StaffShiftAssignment::class);
+    }
+
     public function commissions()
     {
         return $this->hasMany(Commission::class);

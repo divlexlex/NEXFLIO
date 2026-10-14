@@ -182,6 +182,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
     Route::get('/availability', [AvailabilityController::class, 'index'])->name('availability');
     Route::post('/availability/business-hours', [AvailabilityController::class, 'updateBusinessHours'])->name('availability.business-hours');
     Route::post('/availability/staff-schedule', [AvailabilityController::class, 'updateStaffSchedule'])->name('availability.staff-schedule');
+    Route::post('/availability/weekly-roster', [AvailabilityController::class, 'updateWeeklyRoster'])->name('availability.weekly-roster');
     Route::post('/availability/service-hours', [AvailabilityController::class, 'updateServiceHours'])->name('availability.service-hours');
     Route::post('/availability/blocked-slots', [AvailabilityController::class, 'storeBlockedSlot'])->name('availability.blocked-slots.store');
     Route::delete('/availability/blocked-slots/{id}', [AvailabilityController::class, 'destroyBlockedSlot'])->name('availability.blocked-slots.destroy');

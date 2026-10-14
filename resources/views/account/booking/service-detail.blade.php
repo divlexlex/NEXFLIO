@@ -53,7 +53,11 @@
                             <div class="row g-2 mb-4">
                                 @foreach($service->variants as $option)
                                     <div class="col-sm-4">
-                                        <label class="nx-select-card d-flex flex-column gap-1 {{ $loop->first ? 'is-selected' : '' }}">
+                                        {{-- No hardcoded is-selected here: the stylesheet highlights
+                                             the chosen card via .nx-select-card:has(input:checked),
+                                             and the first radio stays checked so a tier is
+                                             preselected (and highlighted) on load. --}}
+                                        <label class="nx-select-card d-flex flex-column gap-1">
                                             <input type="radio" name="variant" value="{{ $option->id }}" {{ $loop->first ? 'checked' : '' }}>
                                             <span class="fw-semibold">{{ $option->label }}</span>
                                             <small class="nx-text-secondary">₱{{ number_format($option->price, 2) }}@if($option->guestLabel()) &middot; {{ $option->guestLabel() }}@endif</small>

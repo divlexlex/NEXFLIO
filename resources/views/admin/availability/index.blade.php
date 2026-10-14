@@ -20,7 +20,7 @@
     </li>
     <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-staff" type="button">
-            <i class="bi bi-people me-1"></i>Personnel Schedules
+            <i class="bi bi-people me-1"></i>Weekly Roster
         </button>
     </li>
     <li class="nav-item">
@@ -84,33 +84,98 @@
         </div>
     </div>
 
-    {{-- ── TAB 2: PERSONNEL SCHEDULES ───────────────────────────────── --}}
+    {{-- ── TAB 2: WEEKLY ROSTER ───────────────────────────────────── --}}
     <div class="tab-pane fade" id="tab-staff">
-        <div class="card p-3">
-            <p class="text-muted small mb-3">Set each staff member's available days and hours. If no schedule is set, they follow business hours.</p>
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Select Staff Member</label>
-                <select id="staffSelect" class="form-select w-auto" onchange="loadStaffSchedule()">
-                    <option value="">— Choose staff —</option>
-                    @foreach($staff as $s)
-                        <option value="{{ $s->id }}">{{ $s->fullName() }} ({{ $s->staffProfile->position ?? 'Staff' }})</option>
-                    @endforeach
-                </select>
-            </div>
-            <div id="staffScheduleForm" style="display:none;">
-                <form method="POST" action="{{ route('admin.availability.staff-schedule') }}">
-                    @csrf
-                    <input type="hidden" name="user_id" id="scheduleUserId">
-                    <div class="table-responsive">
-                        <table class="table align-middle">
-                            <thead>
-                                <tr><th>Day</th><th>Available</th><th>Start</th><th>End</th></tr>
-                            </thead>
-                            <tbody id="scheduleBody"></tbody>
-                        </table>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.availability', ['week' => $rosterPrevWeek]) }}#tab-staff">‹ Prev</a>
+            <strong>{{ $rosterWeekLabel }}</strong>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.availability', ['week' => $rosterNextWeek]) }}#tab-staff">Next ›</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.availability') }}#tab-staff">This week</a>
+            <a class="btn btn-sm btn-outline-secondary ms-auto" href="{{ route('admin.availability', ['week' => $rosterWeekStart, 'copy_from' => $rosterPrevWeek]) }}#tab-staff">Copy previous week</a>
+        </div>
+        <form method="POST" action="{{ route('admin.availability.weekly-roster') }}">
+            @csrf
+            <input type="hidden" name="week_start" value="{{ $rosterWeekStart }}">
+            @if($errors->has('am_staff') || $errors->has('pm_staff'))
+                <div class="alert alert-danger py-2 small">
+                    {{ $errors->first('am_staff') }} {{ $errors->first('pm_staff') }}
+                </div>
+            @endif
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <div class="card p-3 h-100">
+                        <h6 class="mb-2">AM — Morning shift</h6>
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <input type="time" name="am_start" value="{{ old('am_start', $rosterAmStart) }}" class="form-control form-control-sm w-auto" required>
+                            <span class="text-muted small">to</span>
+                            <input type="time" name="am_end" value="{{ old('am_end', $rosterAmEnd) }}" class="form-control form-control-sm w-auto" required>
+                        </div>
+                        @error('am_start')<div class="text-danger small">{{ $message }}</div>@enderror
+                        @error('am_end')<div class="text-danger small">{{ $message }}</div>@enderror
+                        <div class="d-flex flex-wrap gap-2" data-chips="am"></div>
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-add-btn="am">+ Add staff</button>
+                        </div>
+                        <div class="d-none" aria-hidden="true">
+                            @foreach($staff as $s)
+                                <input class="roster-am" type="checkbox" name="am_staff[]" value="{{ $s->id }}" tabindex="-1"
+                                    data-staff-id="{{ $s->id }}" data-staff-name="{{ $s->fullName() }}" data-staff-position="{{ $s->staffProfile->position ?? 'Staff' }}"
+                                    {{ in_array($s->id, old('am_staff', $rosterAmStaff)) ? 'checked' : '' }}>
+                            @endforeach
+                        </div>
                     </div>
-                    <button class="btn btn-spa mt-2">Save Schedule</button>
-                </form>
+                </div>
+                <div class="col-12 col-md-6">
+                    <div class="card p-3 h-100">
+                        <h6 class="mb-2">PM — Afternoon shift</h6>
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <input type="time" name="pm_start" value="{{ old('pm_start', $rosterPmStart) }}" class="form-control form-control-sm w-auto" required>
+                            <span class="text-muted small">to</span>
+                            <input type="time" name="pm_end" value="{{ old('pm_end', $rosterPmEnd) }}" class="form-control form-control-sm w-auto" required>
+                        </div>
+                        @error('pm_start')<div class="text-danger small">{{ $message }}</div>@enderror
+                        @error('pm_end')<div class="text-danger small">{{ $message }}</div>@enderror
+                        <div class="d-flex flex-wrap gap-2" data-chips="pm"></div>
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-add-btn="pm">+ Add staff</button>
+                        </div>
+                        <div class="d-none" aria-hidden="true">
+                            @foreach($staff as $s)
+                                <input class="roster-pm" type="checkbox" name="pm_staff[]" value="{{ $s->id }}" tabindex="-1"
+                                    data-staff-id="{{ $s->id }}" data-staff-name="{{ $s->fullName() }}" data-staff-position="{{ $s->staffProfile->position ?? 'Staff' }}"
+                                    {{ in_array($s->id, old('pm_staff', $rosterPmStaff)) ? 'checked' : '' }}>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card p-3 mt-3">
+                <div class="small text-muted mb-1">Not assigned — not bookable this week</div>
+                <div id="rosterUnassigned" class="small"></div>
+            </div>
+            <button class="btn btn-spa mt-3">Save Roster</button>
+        </form>
+        {{-- Reusable "Add staff" floating box (modal) for the AM/PM cards --}}
+        <div id="rosterModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1050; align-items:center; justify-content:center; padding:1rem;">
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="rosterModalTitle" style="width:100%; max-width:430px; max-height:85vh; display:flex; flex-direction:column; border-radius:.75rem;">
+                <div class="p-3 border-bottom">
+                    <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div>
+                            <h6 id="rosterModalTitle" class="mb-0">Add staff</h6>
+                            <div class="text-muted small">{{ $rosterWeekLabel }}</div>
+                        </div>
+                        <button type="button" class="btn-close" data-modal-close aria-label="Close"></button>
+                    </div>
+                    <input id="rosterModalSearch" type="search" class="form-control form-control-sm mt-2" placeholder="Search by name..." autocomplete="off">
+                </div>
+                <div id="rosterModalList" class="p-2" style="overflow-y:auto;"></div>
+                <div class="p-3 border-top d-flex align-items-center justify-content-between gap-2">
+                    <span id="rosterModalCount" class="small text-muted"></span>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-modal-close>Cancel</button>
+                        <button type="button" class="btn btn-sm btn-spa" data-modal-close>Done</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -235,47 +300,277 @@
 </div>
 @endsection
 
+@push('head')
+<style>
+    #rosterModalOverlay .roster-avatar {
+        width: 32px; height: 32px; flex: 0 0 32px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border-radius: 50%; background: #e9ecef; color: #495057;
+        font-size: .75rem; font-weight: 600;
+    }
+</style>
+@endpush
+
 @push('scripts')
 <script>
-    const staffSchedules = @json($schedules);
+    (function () {
+        const unassignedEl = document.getElementById('rosterUnassigned');
+        if (!unassignedEl) return;
 
-    function loadStaffSchedule() {
-        const userId = document.getElementById('staffSelect').value;
-        const form = document.getElementById('staffScheduleForm');
-        const tbody = document.getElementById('scheduleBody');
-        document.getElementById('scheduleUserId').value = userId;
-
-        if (!userId) { form.style.display = 'none'; return; }
-        form.style.display = 'block';
-
-        const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-        tbody.innerHTML = '';
-
-        days.forEach((day, i) => {
-            const existing = staffSchedules.find(s => s.user_id == userId && s.day_of_week === i);
-            const checked = existing ? existing.is_available : true;
-            const start = existing ? (existing.start_time || '').substring(0,5) : '10:00';
-            const end = existing ? (existing.end_time || '').substring(0,5) : '21:00';
-
-            tbody.innerHTML += `
-                <tr>
-                    <td class="fw-semibold">${day}</td>
-                    <td>
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" name="schedule[${i}][is_available]" value="1"
-                                   ${checked ? 'checked' : ''}
-                                   onchange="toggleDay(this, ${i})">
-                        </div>
-                    </td>
-                    <td><input type="time" name="schedule[${i}][start_time]" value="${start}" class="form-control form-control-sm w-auto" ${!checked ? 'disabled' : ''}></td>
-                    <td><input type="time" name="schedule[${i}][end_time]" value="${end}" class="form-control form-control-sm w-auto" ${!checked ? 'disabled' : ''}></td>
-                </tr>`;
+        // Single source of truth: the hidden am_staff[] / pm_staff[] checkboxes.
+        // Chips and the modal render from them; the submitted form data is identical.
+        const directory = {};
+        const order = [];
+        document.querySelectorAll('.roster-am').forEach((box) => {
+            directory[box.dataset.staffId] = {
+                name: box.dataset.staffName,
+                position: box.dataset.staffPosition || 'Staff',
+            };
+            order.push(box.dataset.staffId);
         });
-    }
 
-    function toggleDay(cb, dayIndex) {
-        const row = cb.closest('tr');
-        row.querySelectorAll('input[type=time]').forEach(el => el.disabled = !cb.checked);
-    }
+        const overlay = document.getElementById('rosterModalOverlay');
+        const modalTitle = document.getElementById('rosterModalTitle');
+        const modalSearch = document.getElementById('rosterModalSearch');
+        const modalList = document.getElementById('rosterModalList');
+        const modalCount = document.getElementById('rosterModalCount');
+        let modalShift = 'am';
+
+        const shiftLabel = (shift) => (shift === 'am' ? 'AM · Morning shift' : 'PM · Afternoon shift');
+        const shiftShort = (shift) => (shift === 'am' ? 'AM' : 'PM');
+
+        const box = (shift, id) => document.querySelector(
+            (shift === 'am' ? '.roster-am' : '.roster-pm') + '[data-staff-id="' + id + '"]'
+        );
+        const isChecked = (shift, id) => {
+            const b = box(shift, id);
+            return !!(b && b.checked);
+        };
+        const unassignedIds = () => order.filter(
+            (id) => !isChecked('am', id) && !isChecked('pm', id)
+        );
+        const shiftIds = (shift) => order.filter((id) => isChecked(shift, id));
+
+        function initials(name) {
+            const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+            return ((parts[0] ? parts[0][0] : '') + (parts[1] ? parts[1][0] : '')).toUpperCase() || '•';
+        }
+
+        function makeChip(shift, id) {
+            const info = directory[id];
+            const chip = document.createElement('span');
+            chip.className = 'd-inline-flex align-items-center gap-1 border rounded px-2 py-1 small bg-light';
+
+            const wrap = document.createElement('span');
+            const name = document.createElement('span');
+            name.className = 'fw-semibold';
+            name.textContent = info.name;
+            const pos = document.createElement('span');
+            pos.className = 'd-block text-muted';
+            pos.style.fontSize = '.75rem';
+            pos.textContent = info.position;
+            wrap.appendChild(name);
+            wrap.appendChild(pos);
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'btn-close ms-1';
+            remove.style.fontSize = '.6rem';
+            remove.setAttribute('aria-label', 'Remove ' + info.name);
+            remove.setAttribute('data-remove', shift);
+            remove.dataset.staffId = id;
+
+            chip.appendChild(wrap);
+            chip.appendChild(remove);
+            return chip;
+        }
+
+        function renderChips(shift) {
+            const area = document.querySelector('[data-chips="' + shift + '"]');
+            if (!area) return;
+            area.innerHTML = '';
+            document.querySelectorAll((shift === 'am' ? '.roster-am' : '.roster-pm')).forEach((b) => {
+                if (b.checked) area.appendChild(makeChip(shift, b.dataset.staffId));
+            });
+            if (!area.children.length) {
+                const empty = document.createElement('span');
+                empty.className = 'text-muted small';
+                empty.textContent = 'No staff assigned.';
+                area.appendChild(empty);
+            }
+        }
+
+        function renderUnassigned() {
+            const names = unassignedIds().map((id) => directory[id].name);
+            unassignedEl.textContent = names.length ? names.join(', ') : 'Everyone is assigned.';
+        }
+
+        function renderAddButtons() {
+            const noneLeft = unassignedIds().length === 0;
+            document.querySelectorAll('[data-add-btn]').forEach((btn) => {
+                btn.disabled = noneLeft;
+                btn.classList.toggle('d-none', noneLeft);
+            });
+        }
+
+        function syncAll() {
+            renderChips('am');
+            renderChips('pm');
+            renderUnassigned();
+            renderAddButtons();
+        }
+
+        // ── Modal ────────────────────────────────────────────────
+        function renderModalCount() {
+            const n = shiftIds(modalShift).length;
+            modalCount.textContent = n + ' staff in ' + shiftShort(modalShift) + ' shift';
+        }
+
+        function makeRow(id) {
+            const info = directory[id];
+            const other = modalShift === 'am' ? 'pm' : 'am';
+
+            const row = document.createElement('div');
+            row.className = 'd-flex align-items-center gap-2 px-2 py-2 border-bottom';
+
+            const avatar = document.createElement('span');
+            avatar.className = 'roster-avatar';
+            avatar.textContent = initials(info.name);
+
+            const text = document.createElement('span');
+            text.className = 'flex-grow-1';
+            const name = document.createElement('span');
+            name.className = 'fw-semibold d-block';
+            name.textContent = info.name;
+            const pos = document.createElement('span');
+            pos.className = 'text-muted small d-block';
+            pos.textContent = info.position;
+            text.appendChild(name);
+            text.appendChild(pos);
+
+            const action = document.createElement('span');
+            if (isChecked(modalShift, id)) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-sm btn-outline-success';
+                btn.setAttribute('data-mremove', modalShift);
+                btn.dataset.staffId = id;
+                btn.textContent = 'Added ✓';
+                action.appendChild(btn);
+            } else if (isChecked(other, id)) {
+                const label = document.createElement('button');
+                label.type = 'button';
+                label.className = 'btn btn-sm btn-outline-secondary';
+                label.disabled = true;
+                label.textContent = 'In ' + shiftShort(other) + ' shift';
+                action.appendChild(label);
+            } else {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-sm btn-spa';
+                btn.setAttribute('data-madd', modalShift);
+                btn.dataset.staffId = id;
+                btn.textContent = '+ Add';
+                action.appendChild(btn);
+            }
+
+            row.appendChild(avatar);
+            row.appendChild(text);
+            row.appendChild(action);
+            return row;
+        }
+
+        function renderModalList() {
+            const q = (modalSearch.value || '').trim().toLowerCase();
+            modalList.innerHTML = '';
+            const ids = order.filter((id) => directory[id].name.toLowerCase().includes(q));
+            if (!ids.length) {
+                const empty = document.createElement('div');
+                empty.className = 'text-muted small px-2 py-3 text-center';
+                empty.textContent = 'No staff match your search.';
+                modalList.appendChild(empty);
+            } else {
+                ids.forEach((id) => modalList.appendChild(makeRow(id)));
+            }
+            renderModalCount();
+        }
+
+        function openModal(shift) {
+            modalShift = shift;
+            modalTitle.textContent = 'Add staff — ' + shiftLabel(shift);
+            modalSearch.value = '';
+            renderModalList();
+            overlay.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            modalSearch.focus();
+        }
+
+        function closeModal() {
+            overlay.style.display = 'none';
+            document.body.style.overflow = '';
+            syncAll();
+        }
+
+        function isOpen() {
+            return overlay.style.display === 'flex';
+        }
+
+        modalSearch.addEventListener('input', renderModalList);
+
+        modalList.addEventListener('click', (e) => {
+            const add = e.target.closest('[data-madd]');
+            if (add) {
+                const shift = add.getAttribute('data-madd');
+                const id = add.dataset.staffId;
+                const target = box(shift, id);
+                const other = box(shift === 'am' ? 'pm' : 'am', id);
+                if (target) target.checked = true;
+                if (other) other.checked = false;
+                renderModalList();
+                return;
+            }
+            const remove = e.target.closest('[data-mremove]');
+            if (remove) {
+                const b = box(remove.getAttribute('data-mremove'), remove.dataset.staffId);
+                if (b) b.checked = false;
+                renderModalList();
+            }
+        });
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay || e.target.closest('[data-modal-close]')) closeModal();
+        });
+
+        document.addEventListener('click', (e) => {
+            const remove = e.target.closest('[data-remove]');
+            if (remove) {
+                const b = box(remove.getAttribute('data-remove'), remove.dataset.staffId);
+                if (b) b.checked = false;
+                syncAll();
+                return;
+            }
+
+            const add = e.target.closest('[data-add-btn]');
+            if (add) {
+                if (add.disabled) return;
+                openModal(add.getAttribute('data-add-btn'));
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isOpen()) closeModal();
+        });
+
+        syncAll();
+
+        // Keep the roster tab active when arriving with ?week / ?copy_from.
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('week') || params.has('copy_from')) {
+            const trigger = document.querySelector('[data-bs-target="#tab-staff"]');
+            if (trigger && window.bootstrap && bootstrap.Tab) {
+                bootstrap.Tab.getOrCreateInstance(trigger).show();
+            }
+        }
+    })();
 </script>
 @endpush

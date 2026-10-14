@@ -65,7 +65,7 @@ class StoreWebBranchBookingRequest extends FormRequest
                 'nullable',
                 Rule::exists('service_variants', 'id')->where('service_id', $this->input('service_id')),
             ],
-            'appointment_date' => 'required|date|after_or_equal:today',
+            'appointment_date' => 'required|date|after_or_equal:tomorrow',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
             // Guest count for a reservation-fee booking without package

@@ -16,6 +16,7 @@ use App\Models\LeaveRequest;
 use App\Models\Service;
 use App\Models\ServiceVariant;
 use App\Models\StaffSchedule;
+use App\Models\StaffShiftAssignment;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Support\ReservationFee;
@@ -705,7 +706,7 @@ class BookingController extends Controller
 
         try {
             $request->validate([
-                'date' => 'required|date|after_or_equal:today',
+                'date' => 'required|date|after_or_equal:tomorrow',
                 'time' => 'required|date_format:H:i',
                 'personnel' => 'required',
             ], [], [
@@ -793,7 +794,10 @@ class BookingController extends Controller
     /**
      * Mirrors API\AppointmentController@personnel exactly (active staff
      * profile, not on break, no approved leave covering the date) — the
-     * bookable staff pool the mobile app already uses.
+     * bookable staff pool the mobile app already uses. In a roster week
+     * (see App\Models\StaffShiftAssignment) only rostered staff are
+     * eligible; otherwise the legacy staff_schedules fallback applies
+     * exactly as before.
      */
     private function eligiblePersonnel(string $date, ?Service $service = null)
     {
@@ -807,7 +811,10 @@ class BookingController extends Controller
             default => null, // Lashes & Brows, Aesthetics, Head Spa, Home Service → show all
         } : null;
 
-        return User::where('role_id', User::ROLE_STAFF)
+        $weekStart = StaffShiftAssignment::weekStartOf($date);
+        $rosterWeek = StaffShiftAssignment::weekHasRoster($weekStart);
+
+        $query = User::where('role_id', User::ROLE_STAFF)
             ->whereHas('staffProfile', function ($query) use ($positionFilter) {
                 $query->where('employment_status', 'active')
                     ->where('is_on_break', false);
@@ -819,8 +826,12 @@ class BookingController extends Controller
                 $leaves->where('status', LeaveRequest::STATUS_APPROVED)
                     ->whereDate('start_date', '<=', $date)
                     ->whereDate('end_date', '>=', $date);
-            })
-            ->where(function ($q) use ($dayOfWeek) {
+            });
+
+        if ($rosterWeek) {
+            $query->whereIn('users.id', StaffShiftAssignment::forWeek($weekStart)->pluck('user_id'));
+        } else {
+            $query->where(function ($q) use ($dayOfWeek) {
                 $q->whereDoesntHave('staffSchedules', function ($sq) use ($dayOfWeek) {
                     $sq->where('day_of_week', $dayOfWeek);
                 })
@@ -828,7 +839,10 @@ class BookingController extends Controller
                     $sq->where('day_of_week', $dayOfWeek)
                         ->where('is_available', true);
                 });
-            })
+            });
+        }
+
+        return $query
             ->select('id', 'name')
             ->orderBy('name')
             ->get();
@@ -879,9 +893,32 @@ class BookingController extends Controller
 
         $candidateIds = $personnelParam === 'any' ? $eligibleIds : collect([(int) $personnelParam]);
 
-        // Check staff schedules for per-personnel time overrides
+        // Per-personnel time windows. In a roster week the window is the
+        // person's shift assignment; otherwise the legacy StaffSchedule
+        // override applies exactly as before. The "any" case respects the
+        // same windows (a slot needs at least one eligible person in-window).
+        $rosterWeek = StaffShiftAssignment::weekHasRoster(StaffShiftAssignment::weekStartOf($date));
         $personnelSchedules = [];
         foreach ($candidateIds as $pid) {
+            if ($rosterWeek) {
+                $assignment = StaffShiftAssignment::assignmentFor((int) $pid, $date);
+                if ($assignment) {
+                    $personnelSchedules[$pid] = [
+                        'start' => $this->minutesOf($assignment->start_time),
+                        'end' => $this->minutesOf($assignment->end_time),
+                    ];
+                } else {
+                    // No assignment that week — same as explicitly
+                    // unavailable under the old override.
+                    $candidateIds = $candidateIds->reject(fn ($id) => $id == $pid);
+                    if ($personnelParam !== 'any') {
+                        return [];
+                    }
+                }
+                continue;
+            }
+
+            // Check staff schedules for per-personnel time overrides
             $sched = StaffSchedule::where('user_id', $pid)->where('day_of_week', $dayOfWeek)->first();
             if ($sched && $sched->is_available) {
                 $sStart = (int) Carbon::parse($sched->start_time)->hour * 60 + (int) Carbon::parse($sched->start_time)->minute;
@@ -1013,25 +1050,17 @@ class BookingController extends Controller
         ];
     }
 
+    /**
+     * Earliest client-bookable date: tomorrow, or the next open day after
+     * tomorrow if tomorrow is closed. Same-day online booking is not
+     * offered (walk-ins at the counter still book same-day — see
+     * AppointmentController@storeWalkIn, untouched by this rule).
+     */
     private function minDate(): string
     {
-        $now = now();
-        $dayOfWeek = (int) $now->dayOfWeek;
-        $bhours = BusinessHours::where('day_of_week', $dayOfWeek)->first();
+        $tomorrow = now()->addDay();
 
-        // If store is closed today, earliest is next open day
-        if (! $bhours || ! $bhours->is_open) {
-            return $this->nextOpenDate($now);
-        }
-
-        $closeMinute = (int) Carbon::parse($bhours->close_at)->hour * 60 + (int) Carbon::parse($bhours->close_at)->minute;
-        if ($closeMinute >= 24 * 60) {
-            $closeMinute -= 24 * 60; // wrap overnight
-        }
-
-        return $now->hour * 60 + $now->minute >= $closeMinute
-            ? $this->nextOpenDate($now)
-            : $now->toDateString();
+        return $this->nextOpenDate($tomorrow->copy()->subDay());
     }
 
     private function nextOpenDate(Carbon $from): string
@@ -1059,5 +1088,13 @@ class BookingController extends Controller
         }
 
         return $date;
+    }
+
+    /** 'H:i' or 'H:i:s' clock time as minutes from midnight for slot math. */
+    private function minutesOf(string $time): int
+    {
+        $parsed = Carbon::parse($time);
+
+        return $parsed->hour * 60 + $parsed->minute;
     }
 }
