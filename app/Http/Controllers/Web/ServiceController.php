@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\HandlesImageUpload;
 use App\Http\Controllers\Controller;
 use App\Models\Service;
 use App\Models\ServiceVariant;
+use App\Support\ServiceCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -15,10 +16,29 @@ class ServiceController extends Controller
 {
     use HandlesImageUpload;
 
-    public function index()
+    public function index(Request $request)
     {
+        $filters = [
+            'q' => trim((string) $request->query('q', '')),
+            'category' => trim((string) $request->query('category', '')),
+            'status' => trim((string) $request->query('status', '')),
+        ];
+
+        $services = Service::with('variants')
+            ->when($filters['q'] !== '', fn ($query) => $query->where('name', 'like', '%'.$filters['q'].'%'))
+            ->when($filters['category'] !== '', fn ($query) => $query->where('category', $filters['category']))
+            ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
+            ->orderBy('category')
+            ->orderBy('name')
+            ->get();
+
         return view('admin.services.index', [
-            'services' => Service::with('variants')->orderBy('category')->orderBy('name')->get(),
+            'services' => $services,
+            'filters' => $filters,
+            'hasFilters' => $filters['q'] !== '' || $filters['category'] !== '' || $filters['status'] !== '',
+            'categories' => ServiceCatalog::CATEGORY_ORDER,
+            'statuses' => Service::query()->distinct()->orderBy('status')->pluck('status')->all(),
+            'totalServices' => Service::count(),
         ]);
     }
 
@@ -42,7 +62,7 @@ class ServiceController extends Controller
     {
         $service = Service::findOrFail($id);
 
-        $validated = $this->validated($request);
+        $validated = $this->validated($request, $service);
 
         $this->validateVariants($request);
         $this->assertVariantLabelsUnique($request, $service);
@@ -64,11 +84,20 @@ class ServiceController extends Controller
         return back()->with('success', 'Service removed.');
     }
 
-    private function validated(Request $request): array
+    private function validated(Request $request, ?Service $service = null): array
     {
+        // New services must use a canonical category; an update keeps its
+        // current (possibly legacy) category valid so the edit form never
+        // silently rewrites it.
+        $allowedCategories = ServiceCatalog::CATEGORY_ORDER;
+
+        if ($service !== null && ! in_array($service->category, $allowedCategories, true)) {
+            $allowedCategories[] = $service->category;
+        }
+
         return $request->validate([
             'name' => 'required|string|max:255',
-            'category' => 'required|string|max:100',
+            'category' => ['required', Rule::in($allowedCategories)],
             'description' => 'nullable|string|max:2000',
             'price' => 'required|numeric|min:0',
             'duration_minutes' => 'required|integer|min:5',

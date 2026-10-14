@@ -22,7 +22,7 @@ class ServiceCatalog
      * category added only in the database) is appended after these, sorted
      * alphabetically, so the tabs never look arbitrary.
      */
-    private const CATEGORY_ORDER = [
+    public const CATEGORY_ORDER = [
         'Facial', 'Massage', 'Nails', 'Lashes & Brows', 'Aesthetics', 'Head Spa', 'Home Service',
     ];
 

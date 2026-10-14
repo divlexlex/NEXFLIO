@@ -12,6 +12,31 @@
 </div>
 
 <div class="card p-3">
+    <form method="GET" action="{{ route('admin.services') }}" id="services-filter-form" class="row g-2 align-items-end mb-3">
+        <div class="col-md-6">
+            <label class="form-label small mb-0" for="filter-q">Search</label>
+            <input type="search" id="filter-q" name="q" value="{{ $filters['q'] }}" class="form-control" placeholder="Search service name…" autocomplete="off">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-0" for="filter-category">Category</label>
+            <select id="filter-category" name="category" class="form-select">
+                <option value="">All Categories</option>
+                @foreach($categories as $category)
+                    <option value="{{ $category }}" {{ $filters['category'] === $category ? 'selected' : '' }}>{{ $category }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-0" for="filter-status">Status</label>
+            <select id="filter-status" name="status" class="form-select">
+                <option value="">All Status</option>
+                @foreach($statuses as $status)
+                    <option value="{{ $status }}" {{ $filters['status'] === $status ? 'selected' : '' }}>{{ ucfirst($status) }}</option>
+                @endforeach
+            </select>
+        </div>
+    </form>
+    <p class="text-muted small mb-2">Showing {{ $services->count() }} of {{ $totalServices }} services</p>
     <div class="table-responsive">
         <table class="table align-middle">
             <thead>
@@ -60,7 +85,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="text-center text-muted py-4">No services yet.</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted py-4">{{ $hasFilters ? 'No services match the filters.' : 'No services yet.' }}</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -85,11 +110,12 @@
                 <div class="row">
                     <div class="col mb-2">
                         <label class="form-label">Category</label>
-                        <input name="category" id="svc-category" class="form-control" list="categories" required>
-                        <datalist id="categories">
-                            <option value="Facial"><option value="Massage"><option value="Nails"><option value="Lashes & Brows"><option value="Aesthetics"><option value="Head Spa"><option value="Home Service">
-                        </datalist>
-                        <div class="form-text">Must match an existing tab exactly to group with it on the public Services page — any other spelling creates a new tab.</div>
+                        <select name="category" id="svc-category" class="form-select" required>
+                            @foreach($categories as $category)
+                                <option value="{{ $category }}">{{ $category }}</option>
+                            @endforeach
+                        </select>
+                        <div class="form-text">Choose the category this service belongs to.</div>
                     </div>
                     <div class="col mb-2">
                         <label class="form-label">Status</label>
@@ -202,7 +228,15 @@
                 methodHolder.innerHTML = '<input type="hidden" name="_method" value="PATCH">';
                 document.getElementById('service-modal-title').textContent = 'Edit Service';
                 document.getElementById('svc-name').value = btn.dataset.name;
-                document.getElementById('svc-category').value = btn.dataset.category;
+                const catSelect = document.getElementById('svc-category');
+                const currentCategory = btn.dataset.category || '';
+                catSelect.querySelectorAll('option[data-legacy]').forEach((o) => o.remove());
+                if (currentCategory && ![...catSelect.options].some((o) => o.value === currentCategory)) {
+                    const extra = new Option(currentCategory, currentCategory);
+                    extra.dataset.legacy = '1';
+                    catSelect.add(extra);
+                }
+                catSelect.value = currentCategory;
                 document.getElementById('svc-description').value = btn.dataset.description || '';
                 document.getElementById('svc-price').value = btn.dataset.price;
                 document.getElementById('svc-duration').value = btn.dataset.duration;
@@ -227,10 +261,38 @@
                 methodHolder.innerHTML = '';
                 document.getElementById('service-modal-title').textContent = 'New Service';
                 form.reset();
+                document.getElementById('svc-category').querySelectorAll('option[data-legacy]').forEach((o) => o.remove());
                 preview.style.display = 'none';
                 removeWrap.style.display = 'none';
             }
         });
+    })();
+</script>
+<script>
+    // Automatic Services filter bar: selects submit immediately, the search
+    // input submits ~500ms after the last keystroke. No buttons — resetting
+    // to All/empty re-submits and restores the full list.
+    (function () {
+        const form = document.getElementById('services-filter-form');
+        if (!form) return;
+        const search = document.getElementById('filter-q');
+        let timer = null;
+
+        form.querySelectorAll('#filter-category, #filter-status').forEach((sel) => {
+            sel.addEventListener('change', () => form.submit());
+        });
+
+        search.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => form.submit(), 500);
+        });
+
+        // Keep the typing flow smooth across reloads: focus back into the
+        // search box with the caret at the end of the current text.
+        if (search.value) {
+            search.focus();
+            try { search.setSelectionRange(search.value.length, search.value.length); } catch (e) { /* older browsers */ }
+        }
     })();
 </script>
 @endpush
