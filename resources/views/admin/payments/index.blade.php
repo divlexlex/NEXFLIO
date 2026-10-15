@@ -112,6 +112,10 @@
                             No proof image (cash / walk-in)
                         </div>
                     @endif
+                    {{-- Cash rows carry no online payment to verify — confirmation
+                         happens from the Appointments side, so no Verify /
+                         Reject buttons here (the row still shows above). --}}
+                    @if($pendingPayment->method !== 'cash')
                     <div class="d-flex gap-2 mt-auto">
                         <form method="POST" action="{{ route('admin.payments.verify', $pendingPayment->id) }}" class="flex-fill">
                             @csrf @method('PATCH')
@@ -126,6 +130,7 @@
                             <i class="bi bi-x-lg me-1"></i>Reject
                         </button>
                     </div>
+                    @endif
                 @endif
 
                 {{-- Branch settlement: a Booked / In-Service appointment that
@@ -156,6 +161,55 @@
                             </form>
                         @else
                             <div class="small text-muted"><i class="bi bi-check-circle me-1"></i>Paid in full</div>
+                        @endif
+                    </div>
+                @endif
+
+                {{-- Check-out: settle the balance AND complete the visit in one
+                     step. Booked/In-Service owing: collection form prefilled
+                     with the full balance. Booked/In-Service settled: plain
+                     Check out button. Completed owing: collection form
+                     (status stays). Completed settled: badge. Nothing for
+                     Cancelled / No-Show / Unverified. The Record branch
+                     payment form above stays for partial payments without
+                     completing. --}}
+                @if(in_array($appointment->status->value, ['booked', 'in-service', 'completed'], true))
+                    <div class="mt-3 pt-3 border-top">
+                        @if($balanceDue > 0)
+                            <p class="small text-muted mb-1">
+                                Total ₱{{ number_format((float) ($appointment->booked_price ?? $appointment->service?->price ?? 0), 2) }}
+                                · Paid online ₱{{ number_format($appointment->paidOnline(), 2) }}
+                                · Paid at branch ₱{{ number_format($appointment->paidAtBranch(), 2) }}
+                                · Balance due ₱{{ number_format($balanceDue, 2) }}
+                            </p>
+                            <form method="POST" action="{{ route('admin.appointments.checkout', $appointment->id) }}">
+                                @csrf
+                                <label class="form-label small mb-1" for="checkout-amount-{{ $appointment->id }}">Check out</label>
+                                <div class="d-flex gap-2">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">₱</span>
+                                        <input type="number" name="amount" id="checkout-amount-{{ $appointment->id }}" class="form-control"
+                                               value="{{ number_format($balanceDue, 2, '.', '') }}" min="0.01" step="0.01"
+                                               max="{{ number_format($balanceDue, 2, '.', '') }}" required>
+                                    </div>
+                                    <select name="method" class="form-select form-select-sm" style="max-width: 110px;">
+                                        @foreach(config('payment.methods', []) as $value => $label)
+                                            <option value="{{ $value }}" @selected($value === 'cash')>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <button class="btn btn-sm btn-success w-100 mt-2">Confirm check-out</button>
+                            </form>
+                        @elseif($appointment->status->value === 'completed')
+                            <span class="badge text-bg-success">Settled · Paid in full</span>
+                        @else
+                            <form method="POST" action="{{ route('admin.appointments.checkout', $appointment->id) }}">
+                                @csrf
+                                <button class="btn btn-sm btn-success w-100">Check out</button>
+                            </form>
+                        @endif
+                        @if($appointment->status->value === 'completed')
+                            <a href="{{ route('admin.appointments.receipt', $appointment->id) }}" class="btn btn-sm btn-outline-secondary w-100 mt-2">View receipt</a>
                         @endif
                     </div>
                 @endif

@@ -34,8 +34,18 @@
                     </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Price</span>
-                        <span class="nx-review-value">₱{{ number_format($service->price, 2) }}</span>
+                        <span class="nx-review-value">₱{{ number_format($price, 2) }}</span>
                     </div>
+                    @if($fee !== null)
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Reservation fee (due now)</span>
+                            <span class="nx-review-value">₱{{ number_format($fee, 2) }}</span>
+                        </div>
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Balance (pay at the branch)</span>
+                            <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
+                        </div>
+                    @endif
                     <div class="nx-review-row">
                         <span class="nx-review-label">Duration</span>
                         <span class="nx-review-value">{{ $service->duration_minutes }} mins</span>
@@ -69,13 +79,24 @@
 
                     <div class="alert alert-warning mt-4 mb-0">
                         <i class="bi bi-info-circle me-1"></i>
-                        A reservation fee proof of payment is required next. Your slot is only reserved
-                        after our team verifies your payment — this booking is not confirmed yet.
+                        @if($fee !== null)
+                            Only the ₱{{ number_format($fee, 2) }} reservation fee is due online now — the
+                            current balance is paid at the branch. Please send proof of payment to confirm
+                            your reservation. Reservation fees are deducted from the total cost of services.
+                            @if(! $isPackage)
+                                Prefer to pay everything on appointment day? Choose <strong>Cash</strong> on the next step
+                                — no upload needed.
+                            @endif
+                            Thank you and we look forward to pamper you!
+                        @else
+                            A reservation fee proof of payment is required next. Your slot is only reserved
+                            after our team verifies your payment — this booking is not confirmed yet.
+                        @endif
                     </div>
 
                     <form method="GET" action="{{ route('account.booking.home.payment') }}" class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'address' => $address])
-                        <a href="{{ route('account.booking.home.details', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel], $address)) }}" class="nx-btn nx-btn-outline">
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'guests' => $guests, 'address' => $address])
+                        <a href="{{ route('account.booking.home.details', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'guests' => $guests], $address)) }}" class="nx-btn nx-btn-outline">
                             <i class="bi bi-arrow-left me-1"></i>Back
                         </a>
                         <button type="submit" class="nx-btn nx-btn-primary">

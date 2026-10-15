@@ -65,6 +65,7 @@ class ClientBookingWindowTest extends TestCase
             'appointment_date' => now()->toDateString(),
             'start_time' => '10:00',
             'method' => 'gcash',
+            'guests' => 1,
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ])->assertSessionHasErrors('appointment_date');
 
@@ -87,6 +88,7 @@ class ClientBookingWindowTest extends TestCase
             'appointment_date' => now()->addDay()->toDateString(),
             'start_time' => '10:00',
             'method' => 'gcash',
+            'guests' => 1,
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ])->assertRedirect();
 

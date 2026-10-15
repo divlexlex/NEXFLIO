@@ -197,6 +197,7 @@ class HomeServiceBookingTest extends TestCase
             'start_time' => '13:00',
             'notes' => 'Gate code 1234.',
             'method' => 'gcash',
+            'guests' => 1,
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
             'source_client_address_id' => $addressA->id,
             'street_address' => $addressA->street_address,
@@ -216,7 +217,7 @@ class HomeServiceBookingTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
-        $this->assertSame('900.00', (string) $appointment->payment->amount);
+        $this->assertSame('300.00', (string) $appointment->payment->amount);
         $this->assertSame(PaymentStatus::Pending, $appointment->payment->status);
         $this->assertNotNull($appointment->payment->proof_path);
 

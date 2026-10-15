@@ -66,11 +66,75 @@
                         </a>
                     </li>
                 @endforeach
-                <li class="nav-item">
-                    <button type="button" id="themeToggle" class="btn btn-link text-decoration-none p-2" title="Toggle dark mode" aria-label="Toggle dark mode" style="color: var(--nx-text-primary);">
-                        <i class="bi bi-moon-stars"></i>
-                    </button>
-                </li>
+                @if(!$isClient)
+                    {{-- Standalone toggle for guests and authenticated
+                         non-clients (no account dropdown there). Clients get
+                         the toggle inside their account dropdown instead, so
+                         exactly one #themeToggle exists in every state. --}}
+                    <li class="nav-item">
+                        <button type="button" id="themeToggle" class="btn btn-link text-decoration-none p-2" title="Toggle dark mode" aria-label="Toggle dark mode" style="color: var(--nx-text-primary);">
+                            <i class="bi bi-moon-stars"></i>
+                        </button>
+                    </li>
+                @endif
+                @if(auth()->check() && auth()->user()->isClient())
+                    {{-- Notifications bell (Design C): latest 6 + unread badge,
+                         supplied by the partials.nav view composer in
+                         AppServiceProvider as $navNotifications /
+                         $navUnreadCount. --}}
+                    <li class="nav-item dropdown">
+                        <button type="button" id="notificationBell" class="btn btn-link text-decoration-none p-2 position-relative" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications" aria-label="Notifications" style="color: var(--nx-text-primary);">
+                            <i class="bi bi-bell"></i>
+                            @if($navUnreadCount > 0)
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 10px;">{{ $navUnreadCount }}</span>
+                            @endif
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end nx-account-menu nx-notif-menu" style="min-width: 330px;">
+                            <li class="d-flex justify-content-between align-items-center px-3 py-2">
+                                <span class="small fw-semibold">Notifications</span>
+                                @if($navUnreadCount > 0)
+                                    <form method="POST" action="{{ route('account.notifications.read-all') }}">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="btn btn-link btn-sm text-decoration-none p-0" style="color: var(--nx-primary);">
+                                            Mark all read
+                                        </button>
+                                    </form>
+                                @endif
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            @if($navNotifications->isEmpty())
+                                <li><p class="small nx-text-secondary mb-0 px-3 py-2">You're all caught up — no notifications yet.</p></li>
+                            @else
+                                <div class="nx-notif-scroll">
+                                    @foreach($navNotifications as $notification)
+                                        <li class="nx-notif-item px-3 py-2">
+                                            <div class="nx-notification {{ $notification->read_at ? 'is-read' : '' }}">
+                                                <span class="nx-notification-dot"></span>
+                                                <div class="flex-grow-1">
+                                                    <p class="small fw-semibold mb-0 nx-notification-title">{{ $notification->title }}</p>
+                                                    <p class="small nx-text-secondary mb-1">{{ $notification->body }}</p>
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <span class="small nx-text-secondary" style="font-size: 12px;">{{ $notification->created_at->diffForHumans() }}</span>
+                                                        @unless($notification->read_at)
+                                                            <form method="POST" action="{{ route('account.notifications.read', $notification->id) }}">
+                                                                @csrf
+                                                                @method('PATCH')
+                                                                <button type="submit" class="btn btn-link btn-sm text-decoration-none p-0" style="font-size: 12px; color: var(--nx-primary);">
+                                                                    Mark read
+                                                                </button>
+                                                            </form>
+                                                        @endunless
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </li>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </ul>
+                    </li>
+                @endif
                 @auth
                     @if(auth()->user()->isManagerOrAbove())
                         {{-- Management stays in their existing, unredesigned dashboard —
@@ -97,6 +161,11 @@
                                     <a class="dropdown-item {{ request()->routeIs('account.profile') ? 'active' : '' }}" href="{{ route('account.profile') }}">
                                         <i class="bi bi-person me-2"></i>Profile
                                     </a>
+                                </li>
+                                <li>
+                                    <button type="button" class="dropdown-item" id="themeToggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+                                        <i class="bi bi-moon-stars me-2"></i>Dark mode
+                                    </button>
                                 </li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li>

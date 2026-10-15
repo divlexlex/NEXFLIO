@@ -35,12 +35,17 @@
                     <form method="GET" action="{{ route('account.booking.branch.review') }}">
                         @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel])
 
-                        @if($needsGuests)
-                            {{-- Reservation-fee services without package tiers
-                                 price the fee off the guest count (1→Single,
-                                 2→Couple, 3+→Barkada — see
-                                 config/booking.php), so the count is required
-                                 here and validated again server-side in
+                        @php($flatFee = \App\Support\ReservationFee::flatFeeFor($service))
+                        @if($flatFee !== null)
+                            <p class="small nx-text-secondary mt-2 mb-3">
+                                The reservation fee for this service is a flat ₱{{ number_format($flatFee, 0) }} down payment — deducted from your total, balance paid at the branch.
+                            </p>
+                        @elseif($needsGuests)
+                            {{-- Services without package tiers price the fee
+                                 off the guest count (1→Single, 2→Couple,
+                                 3+→Barkada — see config/booking.php), so the
+                                 count is required here and validated again
+                                 server-side in
                                  StoreWebBranchBookingRequest. --}}
                             <label for="guests" class="form-label">Number of guests <span class="text-danger">*</span></label>
                             <input type="number" name="guests" id="guests" value="{{ old('guests', $guests ?? 1) }}"

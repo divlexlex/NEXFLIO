@@ -978,6 +978,45 @@ a.nx-calendar-cell:hover { background: var(--nx-bg-surface-muted); color: inheri
 .nx-notification.is-read .nx-notification-dot { background: transparent; }
 .nx-notification.is-read .nx-notification-title { font-weight: 500; color: var(--nx-text-secondary); }
 
+/* ---- Navbar notifications bell: focus ring, open animation, scroll list ------------------------ */
+
+/* Bell toggle: no default blue outline/box-shadow — a subtle gold ring on
+   keyboard focus only, so accessibility is preserved without the blue. */
+#notificationBell:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(198, 161, 91, .45);
+    border-radius: var(--nx-radius-sm);
+}
+
+/* Brand text selection site-wide: gold on espresso instead of default blue. */
+::selection { background: #C6A15B; color: #241610; }
+
+/* Soft open for the notifications dropdown: fade + slight rise on .show. */
+.nx-notif-menu.show { animation: nx-notif-in 180ms ease; }
+@keyframes nx-notif-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .nx-notif-menu.show { animation: none; }
+}
+
+/* Scroll container: about 4 items visible, the rest (up to the latest 6)
+   reached by scrolling. Header stays fixed outside of it. */
+.nx-notif-scroll {
+    max-height: 320px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--nx-accent) transparent;
+}
+.nx-notif-scroll::-webkit-scrollbar { width: 6px; }
+.nx-notif-scroll::-webkit-scrollbar-track { background: transparent; }
+.nx-notif-scroll::-webkit-scrollbar-thumb { background: var(--nx-accent); border-radius: 999px; }
+
+/* Tidy item blocks: subtle theme-aware hover, dividers via .nx-notification. */
+.nx-notif-menu .nx-notif-item { border-radius: var(--nx-radius-sm); }
+.nx-notif-menu .nx-notif-item:hover { background: var(--nx-bg-surface-muted); }
+
 /* ---- Client Dashboard: profile summary card ------------------------------------------------------ */
 
 .nx-avatar-circle {

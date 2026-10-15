@@ -4,8 +4,8 @@
      hidden fields on their own) before writing anything. No payment
      gateway — manual proof upload + Management verification for online
      methods, same as the existing mobile booking flow. Cash needs no proof:
-     the booking is confirmed at once and the full amount is payable at the
-     branch. When a reservation fee applies, only the fee is due online now
+     the booking is submitted as a request the branch confirms, and the full
+     amount is payable at the spa. When a reservation fee applies, only the fee is due online now
      and the balance settles at the branch. --}}
 @extends('layouts.public')
 
@@ -33,15 +33,6 @@
                         @include('partials.booking.progress-compact', ['step' => 5])
                     </div>
 
-                    @if($fee === null)
-                        <p class="nx-text-secondary mb-4" id="pay-lead-online">
-                            Send the full amount via GCash, Maya, GoTyme, bank transfer or card, then upload a
-                            screenshot or photo of the receipt below. Please send proof of payment to confirm
-                            your reservation. Reservation fees are deducted from the total cost of services.
-                            Our team verifies payments manually — you'll be notified as soon as your booking is
-                            confirmed. Thank you and we look forward to pamper you!
-                        </p>
-                    @endif
                     <p class="nx-text-secondary mb-4 d-none" id="pay-lead-cash">
                         No payment needed now — your booking is confirmed immediately and you pay
                         <strong>₱{{ number_format($price, 2) }} in full at the branch</strong>.
@@ -125,8 +116,8 @@
                         </div>
                         <div class="alert alert-info d-none" id="pay-cash-note">
                             <i class="bi bi-cash-coin me-1"></i>
-                            Paying in cash — nothing to upload. Your booking is confirmed right away and the
-                            amount is payable at the spa.
+                            Paying in cash — nothing to upload. This submits a booking request: the branch will
+                            confirm your booking, and the full amount is payable at the spa.
                         </div>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2 mt-4">

@@ -255,7 +255,9 @@ class Appointment extends Model
         $method = $method?->method ?? $this->payment?->method;
 
         if ($method === 'cash') {
-            return 'Cash — pay at the branch';
+            return $this->status === AppointmentStatus::Unverified
+                ? 'Awaiting confirmation — full amount payable at the spa'
+                : 'Cash — pay at the branch';
         }
 
         return 'Awaiting payment verification';

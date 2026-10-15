@@ -37,10 +37,6 @@
 @endphp
 <section class="nx-section" style="background: var(--nx-bg-page); padding-top: 40px;">
     <div class="container">
-        @if(session('success'))
-            <div class="alert alert-success" role="alert">{{ session('success') }}</div>
-        @endif
-
         @if(!$profile || !$defaultAddress)
             <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
                 <i class="bi bi-info-circle"></i>

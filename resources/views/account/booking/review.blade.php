@@ -81,12 +81,6 @@
                                 — no upload needed.
                             @endif
                             Thank you and we look forward to pamper you!
-                        @else
-                            You can pay online now (proof of payment required — your slot is only reserved
-                            after our team verifies it), or choose <strong>Cash</strong> on the next step to pay
-                            the full amount at the branch with no upload. Please send proof of payment to confirm
-                            your reservation. Reservation fees are deducted from the total cost of services.
-                            Either way this booking is not confirmed yet. Thank you and we look forward to pamper you!
                         @endif
                     </div>
 

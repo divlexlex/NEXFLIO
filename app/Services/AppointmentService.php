@@ -89,9 +89,16 @@ class AppointmentService
                 // topup row, which must count from here on (verifiedPaid()
                 // sums Verified rows, driving the post-verify state).
                 // Already-verified rows (settlements, partial receipts) and
-                // rejected rows are never touched.
+                // rejected rows are never touched. Cash rows are never
+                // verified either: cash is collected at the spa, so
+                // confirming a Cash booking leaves its row pending (still
+                // owed) instead of marking money as collected.
                 foreach ($appointment->payments as $due) {
                     if ($due->status !== PaymentStatus::Pending) {
+                        continue;
+                    }
+
+                    if ($due->method === 'cash') {
                         continue;
                     }
 

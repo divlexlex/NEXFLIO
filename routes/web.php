@@ -22,6 +22,7 @@ use App\Http\Controllers\Web\PageController;
 use App\Http\Controllers\Web\PasswordResetController;
 use App\Http\Controllers\Web\PaymentController;
 use App\Http\Controllers\Web\PromoController;
+use App\Http\Controllers\Web\ReceiptController;
 use App\Http\Controllers\Web\ReportController;
 use App\Http\Controllers\Web\ReviewController;
 use App\Http\Controllers\Web\ServiceController;
@@ -88,6 +89,7 @@ Route::prefix('account')->name('account.')->middleware(['auth', 'role:4'])->grou
     Route::get('/bookings/{appointment}/topup', [ClientAccountController::class, 'showTopupForm'])->name('bookings.topup');
     Route::post('/bookings/{appointment}/topup', [ClientAccountController::class, 'storeTopup'])->name('bookings.topup.store');
     Route::post('/bookings/{appointment}/review', [ReviewController::class, 'store'])->name('bookings.review.store');
+    Route::get('/bookings/{appointment}/receipt', [ReceiptController::class, 'client'])->name('bookings.receipt');
 
     Route::get('/profile', [ClientAccountController::class, 'profile'])->name('profile');
     Route::patch('/profile', [ClientAccountController::class, 'updateProfile'])->name('profile.update');
@@ -164,6 +166,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
     // balance. Manager/Admin only (group middleware); the controller refuses
     // zero-balance and Cancelled/No-Show bookings.
     Route::post('/appointments/{id}/branch-payment', [AppointmentController::class, 'recordBranchPayment'])->name('appointments.branch-payment');
+    Route::post('/appointments/{id}/checkout', [AppointmentController::class, 'checkout'])->name('appointments.checkout');
+    Route::get('/appointments/{appointment}/receipt', [ReceiptController::class, 'admin'])->name('appointments.receipt');
 
     // Client-raised cancellation / reschedule request queue.
     Route::get('/appointment-requests', [AppointmentRequestController::class, 'index'])->name('appointment-requests');

@@ -3,14 +3,17 @@
 namespace Tests\Feature;
 
 use App\Enums\AppointmentStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Appointment;
 use App\Models\LeaveRequest;
+use App\Models\Payment;
 use App\Models\Service;
 use App\Models\StaffProfile;
 use App\Models\StaffShiftAssignment;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -148,32 +151,28 @@ class AdminMasterScheduleTest extends TestCase
         $this->assertStringNotContainsString($noShow->referenceCode(), $html);
     }
 
-    public function test_detail_panel_shows_reference_code_for_selected_day(): void
+    public function test_no_cell_selection_links_panel_or_highlight(): void
     {
         $weekStart = StaffShiftAssignment::weekStartOf(now()->addDays(14)->toDateString());
         $date = Carbon::parse($weekStart)->addDays(3)->toDateString();
 
         $appointment = $this->makeAppointment($this->staff, $date);
 
-        // Without a selection the hint shows instead.
-        $plain = $this->actingAs($this->manager)
+        $html = $this->actingAs($this->manager)
             ->get(route('admin.master-schedule', ['week' => $weekStart]))
             ->assertOk()
             ->getContent();
-        $this->assertStringContainsString("Select a cell to see that day's appointments.", $plain);
-        $this->assertStringNotContainsString($appointment->referenceCode(), $plain);
 
-        $html = $this->actingAs($this->manager)
-            ->get(route('admin.master-schedule', [
-                'week' => $weekStart,
-                'staff' => $this->staff->id,
-                'date' => $date,
-            ]))
-            ->assertOk()
-            ->getContent();
-
+        // No cell-selection links (no date-selection params anywhere).
+        $this->assertStringNotContainsString('date=', $html);
+        // No selected-cell highlight.
+        $this->assertStringNotContainsString('table-warning', $html);
+        // No detail panel markup or hint copy.
+        $this->assertStringNotContainsString("Select a cell to see that day's appointments.", $html);
+        $this->assertStringNotContainsString('No appointments that day.', $html);
+        // The hover card still renders this appointment's details.
+        $this->assertStringContainsString('nx-ms-hovercard', $html);
         $this->assertStringContainsString($appointment->referenceCode(), $html);
-        $this->assertStringContainsString($this->staff->fullName(), $html);
     }
 
     public function test_approved_leave_shows_on_leave_chip(): void
@@ -196,5 +195,80 @@ class AdminMasterScheduleTest extends TestCase
             ->getContent();
 
         $this->assertStringContainsString('On leave', $html);
+    }
+
+    public function test_hover_card_shows_details_money_and_no_interactive_elements(): void
+    {
+        $weekStart = StaffShiftAssignment::weekStartOf(now()->addDays(14)->toDateString());
+        $saturday = Carbon::parse($weekStart)->addDays(6)->toDateString();
+
+        $appointment = Appointment::create([
+            'user_id' => $this->client->id,
+            'service_id' => $this->service->id,
+            'variant_label' => 'Couple',
+            'booked_price' => 3699,
+            'personnel_id' => $this->staff->id,
+            'appointment_date' => $saturday,
+            'start_time' => '14:00:00',
+            'status' => AppointmentStatus::Completed,
+        ]);
+        Payment::create([
+            'appointment_id' => $appointment->id,
+            'kind' => 'payment',
+            'amount' => 500,
+            'method' => 'gcash',
+            'status' => PaymentStatus::Verified,
+            'verified_by' => $this->manager->id,
+            'verified_at' => now(),
+        ]);
+
+        $html = $this->actingAs($this->manager)
+            ->get(route('admin.master-schedule', ['week' => $weekStart]))
+            ->assertOk()
+            ->getContent();
+
+        // Saturday column flips the card to the left.
+        $this->assertStringContainsString('nx-ms-hovercard-flip', $html);
+
+        $card = Str::between($html, '<div class="nx-ms-hovercard', 'Balance');
+        $this->assertStringContainsString($appointment->referenceCode(), $card);
+        $this->assertStringContainsString($this->service->name.' (Couple)', $card);
+        $this->assertStringContainsString($this->client->name, $card);
+        $this->assertStringContainsString($this->staff->fullName(), $card);
+        $this->assertStringContainsString('Completed', $card);
+        $this->assertStringContainsString('₱3,699.00', $card);
+        $this->assertStringContainsString('₱500.00', $card);
+        $this->assertStringContainsString('₱3,199.00', $html);
+
+        // View-only: no links, buttons, or forms inside the card.
+        $this->assertStringNotContainsString('<a', $card);
+        $this->assertStringNotContainsString('<button', $card);
+        $this->assertStringNotContainsString('<form', $card);
+    }
+
+    public function test_flip_modifier_only_on_friday_and_saturday_columns(): void
+    {
+        $weekStart = StaffShiftAssignment::weekStartOf(now()->addDays(14)->toDateString());
+
+        foreach ([1, 5, 6] as $offset) {
+            Appointment::create([
+                'user_id' => $this->client->id,
+                'service_id' => $this->service->id,
+                'booked_price' => 500,
+                'personnel_id' => $this->staff->id,
+                'appointment_date' => Carbon::parse($weekStart)->addDays($offset)->toDateString(),
+                'start_time' => '10:00:00',
+                'status' => AppointmentStatus::Booked,
+            ]);
+        }
+
+        $html = $this->actingAs($this->manager)
+            ->get(route('admin.master-schedule', ['week' => $weekStart]))
+            ->assertOk()
+            ->getContent();
+
+        // Monday plain, Friday + Saturday flipped (the CSS rule itself also
+        // mentions the class name, so count the markup attribute form).
+        $this->assertSame(2, substr_count($html, 'nx-ms-hovercard-flip"'));
     }
 }

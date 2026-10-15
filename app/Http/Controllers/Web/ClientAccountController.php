@@ -92,18 +92,6 @@ class ClientAccountController extends Controller
             ];
         }
 
-        // ===== Notifications — most recent first, unread ones surfaced via
-        // $unreadNotificationCount (see partials/nav for a bell icon, or this
-        // dashboard panel, whichever the Client sees first).
-        $notifications = Notification::where('user_id', $user->id)
-            ->latest()
-            ->take(6)
-            ->get();
-
-        $unreadNotificationCount = Notification::where('user_id', $user->id)
-            ->whereNull('read_at')
-            ->count();
-
         // ===== Suggested for You — active services the Client hasn't booked
         // before, so this actually reads as a suggestion rather than just
         // "everything we sell" (the Guest Home's Recommended-for-You mix).
@@ -144,8 +132,6 @@ class ClientAccountController extends Controller
             'appointmentsByDate' => $appointmentsByDate,
             'prevMonth' => $calendarMonth->copy()->subMonth()->format('Y-m'),
             'nextMonth' => $calendarMonth->copy()->addMonth()->format('Y-m'),
-            'notifications' => $notifications,
-            'unreadNotificationCount' => $unreadNotificationCount,
             'suggestions' => $suggestions,
             // "Special for You" — same live Promos the Guest Home's Special
             // Offers section shows (App\Models\Promo::scopeLive), reused via

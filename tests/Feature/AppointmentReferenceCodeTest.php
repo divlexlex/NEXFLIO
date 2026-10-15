@@ -58,6 +58,7 @@ class AppointmentReferenceCodeTest extends TestCase
             'appointment_date' => now()->addDay()->toDateString(),
             'start_time' => '10:00',
             'method' => 'gcash',
+            'guests' => 1,
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ], $overrides);
     }
@@ -125,8 +126,9 @@ class AppointmentReferenceCodeTest extends TestCase
         $this->assertSame($code, $event['extendedProps']['reference_code']);
     }
 
-    // Cash booking: ID present, still Booked at once with pay-at-branch state.
-    public function test_cash_booking_shows_id_and_keeps_branch_payment_state(): void
+    // Cash booking: ID present, Unverified request state (awaiting
+    // confirmation), payable-at-spa copy on the success page.
+    public function test_cash_booking_shows_id_and_awaits_confirmation(): void
     {
         $response = $this->actingAs($this->client)->post(
             route('account.booking.branch.store'),
@@ -137,12 +139,13 @@ class AppointmentReferenceCodeTest extends TestCase
         $appointment = Appointment::latest('id')->firstOrFail();
         $code = $this->expectedCode($appointment);
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->status);
-        $this->assertSame('Cash — pay at the branch', $appointment->paymentState());
+        $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
+        $this->assertSame('Awaiting confirmation — full amount payable at the spa', $appointment->paymentState());
 
         $this->actingAs($this->client)->get($response->headers->get('Location'))
             ->assertOk()
-            ->assertSee('Booking Confirmed')
+            ->assertSee('Booking Request Submitted')
+            ->assertDontSee('Booking Confirmed')
             ->assertSee($code)
             ->assertSee('Payable at the branch');
 

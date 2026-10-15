@@ -32,9 +32,6 @@
 
 <section class="nx-section" style="background: var(--nx-bg-page); padding-top: 48px;">
     <div class="container">
-        @if(session('success'))
-            <div class="alert alert-success">{{ session('success') }}</div>
-        @endif
         @if($errors->any())
             <div class="alert alert-danger">
                 @foreach($errors->all() as $error)<div>{{ $error }}</div>@endforeach
@@ -218,6 +215,9 @@
                                                     <i class="bi bi-star me-1"></i>Rate your visit
                                                 </button>
                                             @endif
+                                            <div class="mt-2">
+                                                <a href="{{ route('account.bookings.receipt', $appointment->id) }}" class="small">View receipt</a>
+                                            </div>
                                         </div>
 
                                         {{-- REVIEW MODAL (one per Completed card) --}}

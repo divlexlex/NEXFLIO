@@ -5,36 +5,53 @@ namespace App\Support;
 use App\Models\Service;
 
 /**
- * Reservation fee (down payment) for fee-category services — the single
- * server-side calculation shared by every booking wizard step and by
- * store()/homeStore(). A browser-supplied amount is never trusted: the fee is
- * always re-derived here from the real Service row, the chosen package tier
- * label and the guest count.
+ * Reservation fee (down payment) for EVERY service — the single server-side
+ * calculation shared by every booking wizard step and by store()/homeStore().
+ * A browser-supplied amount is never trusted: the fee is always re-derived
+ * here from the real Service row, the chosen package tier label and the
+ * guest count. No category is exempt.
  *
- * See config/booking.php for the category list and tier amounts.
+ * See config/booking.php for the tier amounts.
  */
 class ReservationFee
 {
-    /** Is this service's category a fee category at all? */
+    /** Every service takes a reservation fee — no category is exempt. */
     public static function appliesTo(Service $service): bool
     {
-        return in_array(
-            $service->category,
-            (array) config('booking.reservation_fee.categories', []),
-            true
-        );
+        return true;
     }
 
     /**
-     * The reservation fee due now, or null when no fee applies (not a fee
-     * category, or the accommodation can't be determined yet). Never exceeds
-     * the booked price: a tier amount at or above the price simply means the
-     * whole booking is paid online (no balance).
+     * Flat fee for specially-priced services, matched by exact service
+     * name (config booking.reservation_fee.flat_fees). Returns the amount,
+     * or null when the service has no flat fee.
+     */
+    public static function flatFeeFor(Service $service): ?float
+    {
+        $flatFees = (array) config('booking.reservation_fee.flat_fees', []);
+
+        return array_key_exists($service->name, $flatFees)
+            ? (float) $flatFees[$service->name]
+            : null;
+    }
+
+    /**
+     * The reservation fee due now, or null when the accommodation can't be
+     * determined yet. Flat-fee services pay min(flat amount, booked price)
+     * regardless of variant or guests; everything else resolves through
+     * the tier table. Never exceeds the booked price: a tier amount at or
+     * above the price simply means the whole booking is paid online (no
+     * balance).
      */
     public static function for(Service $service, ?string $variantLabel = null, ?int $guests = null): ?float
     {
         if (! static::appliesTo($service)) {
             return null;
+        }
+
+        $flat = static::flatFeeFor($service);
+        if ($flat !== null) {
+            return min($flat, static::priceFor($service, $variantLabel));
         }
 
         $tier = static::tier($variantLabel, $guests);

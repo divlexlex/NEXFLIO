@@ -196,9 +196,12 @@ class AppointmentController extends Controller
 
             // Money decisions happen in Payments: an Unverified booking
             // whose primary payment is still pending is locked here — no
-            // Confirm / Reject actions, just a hint to use Payments.
+            // Confirm / Reject actions, just a hint to use Payments. Cash
+            // bookings carry no online payment to verify, so they stay
+            // actionable here (confirm/cancel from the drawer).
             $verificationLocked = $appointment->status === AppointmentStatus::Unverified
-                && $payment?->status === PaymentStatus::Pending;
+                && $payment?->status === PaymentStatus::Pending
+                && $payment?->method !== 'cash';
 
             return [
                 'id' => $appointment->id,
@@ -345,11 +348,14 @@ class AppointmentController extends Controller
         ]);
 
         // Money decisions happen in Payments, not here: an Unverified
-        // booking with a still-pending payment can only leave verification
-        // through the Payments verify/reject routes (the API keeps its own
-        // path — this guard is web-only by scope).
+        // booking with a still-pending ONLINE payment can only leave
+        // verification through the Payments verify/reject routes (the API
+        // keeps its own path — this guard is web-only by scope). A Cash
+        // booking has no online payment to verify, so it stays confirmable
+        // and cancellable here.
         if ($appointment->status === AppointmentStatus::Unverified
             && $appointment->payment?->status === PaymentStatus::Pending
+            && $appointment->payment?->method !== 'cash'
             && in_array($validated['status'], [
                 AppointmentStatus::Booked->value,
                 AppointmentStatus::Cancelled->value,
@@ -411,6 +417,69 @@ class AppointmentController extends Controller
         ]);
 
         return back()->with('success', 'Branch payment of ₱'.number_format((float) $validated['amount'], 2).' recorded.');
+    }
+
+    /**
+     * Check-out: settle the appointment's balance and complete the visit in
+     * one step. The money half is identical to recordBranchPayment (an
+     * immediately-Verified kind='branch' row); the status half reuses
+     * AppointmentService::transition — the same path as a normal completion,
+     * so commission accrual and notifications are indistinguishable
+     * (Booked steps through In-Service first, since Booked cannot move
+     * directly to Completed). Partial amounts are allowed: the visit still
+     * completes and the remainder stays collectible.
+     *
+     * Refused for Cancelled / No-Show (like settlement) and for Unverified
+     * (a pending online payment must go through the Payments queue first —
+     * check-out never bypasses verification).
+     */
+    public function checkout(Request $request, AppointmentService $appointmentService, $id)
+    {
+        $appointment = Appointment::with(['service', 'personnel', 'payments', 'user'])->findOrFail($id);
+
+        if (in_array($appointment->status, [AppointmentStatus::Cancelled, AppointmentStatus::NoShow, AppointmentStatus::Unverified], true)) {
+            return back()->withErrors(['checkout' => 'Only Booked, In-Service, or Completed appointments can be checked out.']);
+        }
+
+        $balance = $appointment->balanceDue();
+
+        $validated = $request->validate([
+            'amount' => $balance > 0
+                ? ['required', 'numeric', 'min:0.01', "max:{$balance}"]
+                : ['nullable', 'numeric', 'min:0.01', "max:{$balance}"],
+            'method' => ['sometimes', Rule::in(array_keys(config('payment.methods', [])))],
+        ]);
+
+        try {
+            DB::transaction(function () use ($request, $appointmentService, $appointment, $balance, $validated) {
+                if ($balance > 0) {
+                    $appointment->payments()->create([
+                        'kind' => 'branch',
+                        'amount' => $validated['amount'],
+                        'method' => $validated['method'] ?? 'cash',
+                        'status' => PaymentStatus::Verified,
+                        'verified_by' => $request->user()->id,
+                        'verified_at' => now(),
+                    ]);
+                }
+
+                if ($appointment->status === AppointmentStatus::Booked) {
+                    $appointmentService->transition($appointment, AppointmentStatus::InService, $request->user());
+                }
+
+                if ($appointment->status === AppointmentStatus::InService) {
+                    $appointmentService->transition($appointment, AppointmentStatus::Completed, $request->user());
+                }
+            });
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (AuthorizationException $e) {
+            return back()->withErrors(['checkout' => $e->getMessage()]);
+        }
+
+        return back()->with('success', $balance > 0
+            ? 'Checked out — ₱'.number_format((float) $validated['amount'], 2).' collected.'
+            : 'Checked out — appointment completed.');
     }
 
     /**

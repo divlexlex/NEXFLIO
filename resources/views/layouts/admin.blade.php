@@ -237,7 +237,14 @@
         /* ------- sidebar: brand + nav only. The nav list takes the
            remaining height and scrolls VERTICALLY only — never
            horizontally (badges stay inline, links can't force overflow). */
-        .sidebar > .nav { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; min-height: 0; }
+        .sidebar > .nav {
+            flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; min-height: 0;
+            flex-wrap: nowrap; overscroll-behavior: contain;
+            scrollbar-width: thin; scrollbar-color: rgba(201, 162, 75, .55) transparent;
+        }
+        .sidebar > .nav::-webkit-scrollbar { width: 6px; }
+        .sidebar > .nav::-webkit-scrollbar-track { background: transparent; }
+        .sidebar > .nav::-webkit-scrollbar-thumb { background: rgba(201, 162, 75, .45); border-radius: 3px; }
         .sidebar > a { color: var(--nex-sidebar-text) !important; }
         .sidebar .nav-item { min-width: 0; }
         .sidebar .nav-link { color: var(--nex-sidebar-muted); border-radius: .5rem; transition: background .15s, color .15s; min-width: 0; }
@@ -529,12 +536,7 @@
                 setInterval(tick, 1000);
             })();
         </script>
-        @if(session('success'))
-            <div class="alert alert-success alert-dismissible fade show">
-                {{ session('success') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        @endif
+        @include('partials.flash-alerts')
         @if($errors->any())
             <div class="alert alert-danger alert-dismissible fade show">
                 <ul class="mb-0">

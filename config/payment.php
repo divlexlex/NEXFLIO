@@ -23,8 +23,7 @@ return [
         'gcash' => 'GCash',
         'maya' => 'Maya',
         'gotyme' => 'GoTyme',
-        'bank_transfer' => 'Bank Transfer',
-        'card' => 'Card',
+        'bank_transfer' => 'Other Bank Transfer',
         'cash' => 'Cash',
     ],
 

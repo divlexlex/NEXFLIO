@@ -92,7 +92,11 @@
                             <td>{{ $appointment->displayServiceName() }}</td>
                             <td>{{ $appointment->personnel?->name ?? '—' }}</td>
                             <td>{{ $appointment->status->label() }}</td>
-                            <td>{{ $appointment->referenceCode() }}</td>
+                            <td>{{ $appointment->referenceCode() }}
+                                @if($appointment->status === \App\Enums\AppointmentStatus::Completed)
+                                    <a href="{{ route('admin.appointments.receipt', $appointment->id) }}" class="d-block small">View receipt</a>
+                                @endif
+                            </td>
                             <td>{{ $appointment->price !== null ? '₱'.number_format($appointment->price, 2) : '—' }}</td>
                         </tr>
                     @endforeach

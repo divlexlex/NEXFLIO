@@ -38,9 +38,10 @@
             <div class="col-lg-7">
                 <div class="nx-booking-panel">
                     <p class="nx-text-secondary mb-4" id="pay-lead-online">
-                        Send your payment via GCash, Maya, GoTyme, bank transfer or card, then upload a screenshot or
+                        Send the reservation fee of ₱{{ number_format($fee ?? 0, 2) }} via GCash, Maya, GoTyme, bank transfer or card, then upload a screenshot or
                         photo of the receipt below. Our team verifies payments manually — you'll be
-                        notified as soon as your payment is confirmed.
+                        notified as soon as your payment is confirmed. The remaining balance is settled
+                        after your appointment.
                     </p>
                     <p class="nx-text-secondary mb-4 d-none" id="pay-lead-cash">
                         No payment needed now — your booking is confirmed immediately and the amount is
@@ -54,14 +55,38 @@
                         <input type="hidden" name="start_time" value="{{ $time }}">
                         <input type="hidden" name="personnel_id" value="{{ $personnel }}">
                         @if($notes)<input type="hidden" name="notes" value="{{ $notes }}">@endif
+                        @if($guests)<input type="hidden" name="guests" value="{{ $guests }}">@endif
                         @include('partials.booking.carry-fields', ['address' => $address])
+
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Service</span>
+                            <span class="nx-review-value">{{ $service->name }}</span>
+                        </div>
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Price</span>
+                            <span class="nx-review-value">₱{{ number_format($price, 2) }}</span>
+                        </div>
+                        @if($fee !== null)
+                            <div class="nx-review-row">
+                                <span class="nx-review-label">Reservation fee (due now)</span>
+                                <span class="nx-review-value">₱{{ number_format($fee, 2) }}</span>
+                            </div>
+                            <div class="nx-review-row mb-4">
+                                <span class="nx-review-label">Balance (pay at the branch)</span>
+                                <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
+                            </div>
+                        @endif
 
                         <label class="form-label" for="pay-method">Payment method</label>
                         <select name="method" id="pay-method" class="form-select mb-4" style="max-width: 260px;">
                             @foreach(config('payment.methods', []) as $value => $label)
+                                @continue($isPackage && $value === 'cash')
                                 <option value="{{ $value }}" @selected(old('method') === $value || (old('method') === null && $value === 'gcash'))>{{ $label }}</option>
                             @endforeach
                         </select>
+                        @if($isPackage)
+                            <p class="small nx-text-secondary mb-4">Package bookings require the reservation fee to be paid online with proof of payment — Cash is not available for packages. The remaining balance is paid at the branch on your appointment day.</p>
+                        @endif
 
                         <div id="pay-proof-block">
                             <label class="form-label">Proof of payment</label>
@@ -100,12 +125,12 @@
                         </div>
                         <div class="alert alert-info d-none" id="pay-cash-note">
                             <i class="bi bi-cash-coin me-1"></i>
-                            Paying in cash — nothing to upload. Your booking is confirmed right away and the
-                            amount is payable at the branch.
+                            Paying in cash — nothing to upload. This submits a booking request: the branch will
+                            confirm your booking, and the full amount is payable at the spa.
                         </div>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                            <a href="{{ route('account.booking.home.review', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes], $address)) }}" class="nx-btn nx-btn-outline">
+                            <a href="{{ route('account.booking.home.review', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'guests' => $guests], $address)) }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

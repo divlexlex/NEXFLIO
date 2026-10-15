@@ -1,13 +1,14 @@
 {{-- Branch Booking (Phase 3A) and Home Service Booking (Phase 3B) — final
      Submitted step, shared by both flows (BookingController@success serves
      both account.booking.branch.success and account.booking.home.success).
-     Online bookings land here with status Unverified
-     (App\Enums\AppointmentStatus) — NOT confirmed; that only happens after
-     Management verifies the payment (existing Admin verification workflow —
-     App\Services\AppointmentService::transition). Cash bookings are confirmed
-     at once (Booked) with the full amount payable at the branch. Bookings
-     that only paid the reservation fee online show the remaining branch
-     balance. The address block below renders only when
+      Online bookings land here with status Unverified
+      (App\Enums\AppointmentStatus) — NOT confirmed; that only happens after
+      Management verifies the payment (existing Admin verification workflow —
+      App\Services\AppointmentService::transition). Cash bookings also land
+      here Unverified now — a submitted request the branch confirms, with the
+      full amount payable at the spa (see BookingController@store). Bookings
+      that only paid the reservation fee online show the remaining branch
+      balance. The address block below renders only when
      $appointment->address exists (Home Service only) — see
      App\Models\AppointmentAddress. --}}
 @extends('layouts.public')
@@ -15,7 +16,8 @@
 @section('title', 'Booking Request Submitted')
 
 @section('content')
-@php($isCash = $appointment->status->value === 'booked')
+@php($isCash = $appointment->payment?->method === 'cash')
+@php($isConfirmed = $appointment->status->value === 'booked')
 @php($paidNow = (float) ($appointment->payment?->amount ?? 0))
 @php($total = (float) ($appointment->price ?? 0))
 @php($hasBalance = ! $isCash && $paidNow < $total)
@@ -24,10 +26,10 @@
         <div class="row justify-content-center">
             <div class="col-12 col-md-9 col-lg-6 text-center">
                 <div class="nx-booking-success-icon">
-                    <i class="bi {{ $isCash ? 'bi-check-circle' : 'bi-hourglass-split' }}"></i>
+                    <i class="bi {{ $isConfirmed ? 'bi-check-circle' : 'bi-hourglass-split' }}"></i>
                 </div>
                 <h1 class="mb-2" style="font-size: 30px;">
-                    {{ $isCash ? 'Booking Confirmed' : 'Booking Request Submitted' }}
+                    {{ $isConfirmed ? 'Booking Confirmed' : 'Booking Request Submitted' }}
                 </h1>
 
                 {{-- Client-facing Appointment ID — the code the client quotes

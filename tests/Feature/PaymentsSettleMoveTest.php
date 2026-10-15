@@ -154,8 +154,9 @@ class PaymentsSettleMoveTest extends TestCase
             ->assertSee('Paid in full');
     }
 
-    // (d) Cash booking: drawer operations intact, settle recordable on the
-    // All-tab card (cash primaries list nowhere else).
+    // (d) Cash booking: created Unverified (a request), confirmable from the
+    // drawer, then settle recordable on the All-tab card (cash primaries
+    // list nowhere else).
     public function test_cash_booking_settles_from_all_tab(): void
     {
         $this->actingAs($this->client)->post(route('account.booking.branch.store'), [
@@ -164,10 +165,28 @@ class PaymentsSettleMoveTest extends TestCase
             'appointment_date' => now()->addDay()->toDateString(),
             'start_time' => '10:00',
             'method' => 'cash',
+            'guests' => 1,
         ])->assertRedirect();
 
         $appointment = Appointment::latest('id')->firstOrFail();
-        $this->assertSame(AppointmentStatus::Booked, $appointment->status);
+        $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
+
+        // Cash carries no online payment to verify: drawer stays actionable.
+        $event = $this->feedEvent($appointment->id);
+        $this->assertFalse($event['extendedProps']['verificationLocked']);
+        $this->assertSame(['booked', 'cancelled'], array_column($event['extendedProps']['actions'], 'to'));
+
+        $this->actingAs($this->manager)
+            ->get(route('admin.payments', ['status' => 'pending']))
+            ->assertOk()
+            ->assertDontSee('Manicure');
+
+        // Manager confirms the Cash request from the Appointments side.
+        $this->actingAs($this->manager)->patch(
+            route('admin.appointments.status', $appointment->id),
+            ['status' => AppointmentStatus::Booked->value]
+        )->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
 
         $event = $this->feedEvent($appointment->id);
         $this->assertFalse($event['extendedProps']['verificationLocked']);
@@ -231,6 +250,7 @@ class PaymentsSettleMoveTest extends TestCase
             'appointment_date' => now()->addDay()->toDateString(),
             'start_time' => '11:00',
             'method' => 'gcash',
+            'guests' => 1,
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ])->assertRedirect();
         $settled = Appointment::latest('id')->firstOrFail();

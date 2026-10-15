@@ -26,6 +26,17 @@
 <body class="nx-body">
 @include('partials.nav')
 
+{{-- Flash banners render here on every public page (the partial itself only
+     outputs alerts when a flash exists; the spacing wrapper below only
+     renders with them). --}}
+@if(session('success') || session('error'))
+    <div class="container pt-3 pb-0">
+@endif
+@include('partials.flash-alerts')
+@if(session('success') || session('error'))
+    </div>
+@endif
+
 @yield('content')
 
 {{-- BOOK APPOINTMENT MODAL — Guest prompt to sign in and continue booking on

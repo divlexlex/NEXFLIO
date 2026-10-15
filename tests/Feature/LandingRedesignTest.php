@@ -6,6 +6,7 @@ use App\Models\Promo;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class LandingRedesignTest extends TestCase
@@ -29,7 +30,7 @@ class LandingRedesignTest extends TestCase
         $response->assertSee('All Services');
     }
 
-    public function test_client_dashboard_shows_four_quick_actions_and_special_for_you(): void
+    public function test_client_dashboard_has_single_book_button_and_special_for_you(): void
     {
         $client = User::where('email', 'client@nexflio.test')->firstOrFail();
         $service = Service::first();
@@ -39,10 +40,21 @@ class LandingRedesignTest extends TestCase
 
         $response = $this->actingAs($client)->get('/account');
         $response->assertOk();
-        $response->assertSee('Book Appointment');
-        $response->assertSee('Browse Services');
-        $response->assertSee('My Bookings');
-        $response->assertSee('My Offers');
+        $html = $response->getContent();
+
+        // Quick-action tiles are gone (Design A).
+        $this->assertStringNotContainsString('nx-quick-action', $html);
+        $this->assertStringNotContainsString('Browse Services', $html);
+        $this->assertStringNotContainsString('My Bookings', $html);
+        $this->assertStringNotContainsString('My Offers', $html);
+
+        // Exactly one header "Book an Appointment" button reusing the old
+        // tile's destination + service-picker modal trigger verbatim.
+        $header = Str::between($html, '<header class="nx-hero">', '</header>');
+        $this->assertSame(1, substr_count($header, 'Book an Appointment'));
+        $this->assertStringContainsString('href="'.route('account.booking.start').'"', $header);
+        $this->assertStringContainsString('data-bs-target="#bookServiceModal"', $header);
+
         $response->assertSee('Special for You');
         $response->assertSee('Dashboard Promo Check');
     }

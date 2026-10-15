@@ -42,6 +42,12 @@ class ReservationFeeCashTest extends TestCase
 
     private Service $manicure;
 
+    private Service $pedicure;
+
+    private Service $facial;
+
+    private Service $royalFacial;
+
     private Service $homeMassage;
 
     protected function setUp(): void
@@ -77,6 +83,21 @@ class ReservationFeeCashTest extends TestCase
             'price' => 179, 'duration_minutes' => 45, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
 
+        $this->pedicure = Service::create([
+            'name' => 'Pedicure Spa (test)', 'category' => 'Nails', 'description' => 'Test',
+            'price' => 450, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
+        ]);
+
+        $this->facial = Service::create([
+            'name' => 'Signature Facial (test)', 'category' => 'Facial', 'description' => 'Test',
+            'price' => 800, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
+        ]);
+
+        $this->royalFacial = Service::create([
+            'name' => 'Royal Treatment (test)', 'category' => 'Facial', 'description' => 'Test',
+            'price' => 2500, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'branch',
+        ]);
+
         $this->homeMassage = Service::create([
             'name' => 'Home Massage (test)', 'category' => 'Massage', 'description' => 'Test',
             'price' => 900, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'home',
@@ -91,6 +112,7 @@ class ReservationFeeCashTest extends TestCase
             'appointment_date' => now()->addDay()->toDateString(),
             'start_time' => '10:00',
             'method' => 'gcash',
+            'guests' => 1,
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ], $overrides);
     }
@@ -163,9 +185,11 @@ class ReservationFeeCashTest extends TestCase
         Storage::fake('public');
 
         // Missing guests -> rejected.
+        $missingGuests = $this->branchPayload(['service_id' => $this->massage->id]);
+        unset($missingGuests['guests']);
         $this->actingAs($this->client)->post(
             route('account.booking.branch.store'),
-            $this->branchPayload(['service_id' => $this->massage->id])
+            $missingGuests
         )->assertSessionHasErrors('guests');
 
         // 2 guests -> Couple tier (500), saved on the appointment.
@@ -203,8 +227,9 @@ class ReservationFeeCashTest extends TestCase
         )->assertSessionHasErrors('branch_payment');
     }
 
-    // (b) Manicure Cash: no proof, Booked at once, pay-at-branch state.
-    public function test_cash_booking_confirmed_at_once_without_proof(): void
+    // (b) Manicure Cash: no proof, created Unverified (a request awaiting
+    // branch confirmation), full amount owed at the spa.
+    public function test_cash_booking_is_a_request_without_proof(): void
     {
         $response = $this->actingAs($this->client)->post(
             route('account.booking.branch.store'),
@@ -214,17 +239,134 @@ class ReservationFeeCashTest extends TestCase
         $response->assertRedirect();
         $appointment = Appointment::latest('id')->firstOrFail();
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->status);
+        $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
         $this->assertEquals(179, (float) $appointment->payment->amount);
         $this->assertSame('cash', $appointment->payment->method);
         $this->assertNull($appointment->payment->proof_path);
         $this->assertSame(PaymentStatus::Pending, $appointment->payment->status);
-        $this->assertSame('Cash — pay at the branch', $appointment->paymentState());
+        $this->assertSame('Awaiting confirmation — full amount payable at the spa', $appointment->paymentState());
 
         $this->actingAs($this->client)->get($response->headers->get('Location'))
             ->assertOk()
-            ->assertSee('Booking Confirmed')
+            ->assertSee('Booking Request Submitted')
+            ->assertDontSee('Booking Confirmed')
             ->assertSee('Payable at the branch');
+    }
+
+    // A manager confirms the Cash request from the Appointments side, and
+    // can cancel it there too. The cash row itself stays pending (never
+    // "verified" online) in both cases.
+    public function test_cash_booking_confirmed_and_cancelled_via_drawer_actions(): void
+    {
+        $this->actingAs($this->client)->post(
+            route('account.booking.branch.store'),
+            $this->branchPayload(['method' => 'cash', 'payment_proof' => null])
+        );
+        $appointment = Appointment::latest('id')->firstOrFail();
+
+        // Confirm: Unverified -> Booked through the normal appointment action.
+        $this->actingAs($this->manager)->patch(
+            route('admin.appointments.status', $appointment->id),
+            ['status' => AppointmentStatus::Booked->value]
+        )->assertRedirect()->assertSessionHasNoErrors();
+
+        $appointment->refresh()->load('payments');
+        $this->assertSame(AppointmentStatus::Booked, $appointment->status);
+        $this->assertSame(PaymentStatus::Pending, $appointment->payment->status);
+        $this->assertSame('Cash — pay at the branch', $appointment->paymentState());
+
+        // Cancel a fresh Cash request the same way (drawer asks for a reason).
+        $this->actingAs($this->client)->post(
+            route('account.booking.branch.store'),
+            $this->branchPayload(['method' => 'cash', 'payment_proof' => null, 'start_time' => '11:00'])
+        );
+        $cancelled = Appointment::latest('id')->firstOrFail();
+
+        $this->actingAs($this->manager)->patch(
+            route('admin.appointments.status', $cancelled->id),
+            ['status' => AppointmentStatus::Cancelled->value, 'rejection_reason' => 'Client changed mind by phone.']
+        )->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame(AppointmentStatus::Cancelled, $cancelled->refresh()->status);
+    }
+
+    // An Unverified ONLINE booking still cannot be confirmed from the
+    // drawer — only via Payments verification.
+    public function test_online_unverified_still_locked_out_of_drawer_confirm(): void
+    {
+        $this->actingAs($this->client)->post(
+            route('account.booking.branch.store'),
+            $this->branchPayload(['service_id' => $this->massage->id, 'guests' => 2])
+        );
+        $appointment = Appointment::latest('id')->firstOrFail();
+
+        $this->actingAs($this->manager)->patch(
+            route('admin.appointments.status', $appointment->id),
+            ['status' => AppointmentStatus::Booked->value]
+        )->assertSessionHasErrors('status');
+
+        $this->assertSame(AppointmentStatus::Unverified, $appointment->refresh()->status);
+    }
+
+    public function test_wizard_method_list_has_no_card_and_renamed_bank(): void
+    {
+        $client = $this->actingAs($this->client);
+        $tomorrow = now()->addDay()->toDateString();
+        $base = ['service' => $this->massage->id, 'date' => $tomorrow, 'time' => '10:00', 'personnel' => 'any', 'guests' => 2];
+        $address = ['street_address' => '123 Test St', 'barangay' => 'B1', 'city_municipality' => 'TC', 'province' => 'TP'];
+
+        foreach ([
+            $client->get(route('account.booking.branch.payment', $base)),
+            $client->get(route('account.booking.home.payment', array_merge($base, ['service' => $this->homeMassage->id], $address))),
+        ] as $response) {
+            $response->assertOk();
+            $html = $response->getContent();
+            $this->assertStringNotContainsString('value="card"', $html);
+            $this->assertStringContainsString('>Other Bank Transfer<', $html);
+            $this->assertStringNotContainsString('>Bank Transfer<', $html);
+        }
+    }
+
+    public function test_cash_info_box_shows_request_wording(): void
+    {
+        $client = $this->actingAs($this->client);
+        $tomorrow = now()->addDay()->toDateString();
+        $base = ['service' => $this->massage->id, 'date' => $tomorrow, 'time' => '10:00', 'personnel' => 'any', 'guests' => 2];
+        $address = ['street_address' => '123 Test St', 'barangay' => 'B1', 'city_municipality' => 'TC', 'province' => 'TP'];
+
+        foreach ([
+            $client->get(route('account.booking.branch.payment', $base)),
+            $client->get(route('account.booking.home.payment', array_merge($base, ['service' => $this->homeMassage->id], $address))),
+        ] as $response) {
+            $response->assertOk();
+            $html = $response->getContent();
+            $this->assertStringContainsString('This submits a booking request', $html);
+            $this->assertStringNotContainsString('confirmed right away', $html);
+        }
+    }
+
+    public function test_home_package_cash_booking_is_rejected(): void
+    {
+        Storage::fake('public');
+
+        $both = Service::create([
+            'name' => 'Both Package (test)', 'category' => 'Head Spa', 'description' => 'Test',
+            'price' => 1899, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'both',
+        ]);
+        $both->variants()->create(['label' => 'Solo', 'price' => 1899, 'guests' => 1, 'sort' => 1]);
+
+        $this->actingAs($this->client)->post(
+            route('account.booking.home.store'),
+            array_merge(
+                $this->branchPayload([
+                    'service_id' => $both->id,
+                    'variant_id' => $both->variants()->firstOrFail()->id,
+                    'method' => 'cash',
+                    'payment_proof' => null,
+                ]),
+                ['street_address' => '123 Test St', 'barangay' => 'B1', 'city_municipality' => 'TC', 'province' => 'TP']
+            )
+        )->assertSessionHasErrors('method');
     }
 
     // Packages must pay the reservation fee online — Cash is rejected
@@ -254,8 +396,9 @@ class ReservationFeeCashTest extends TestCase
         $this->assertSame(0, Appointment::count());
     }
 
-    // (c) Manicure GCash: unchanged behaviour — full price, verify -> paid in full.
-    public function test_noncash_nonfee_booking_behaviour_unchanged(): void
+    // (c) Manicure GCash: Single tier (300) capped at the 179 price — the
+    // whole booking is paid online, verify -> paid in full.
+    public function test_nails_online_booking_charges_fee_capped_at_price(): void
     {
         Storage::fake('public');
 
@@ -267,12 +410,61 @@ class ReservationFeeCashTest extends TestCase
         $appointment = Appointment::latest('id')->firstOrFail();
         $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
         $this->assertEquals(179, (float) $appointment->payment->amount);
-        $this->assertNull($appointment->guests);
+        $this->assertSame(1, (int) $appointment->guests);
 
         $this->actingAs($this->manager)->patch(route('admin.payments.verify', $appointment->payment->id));
         $appointment->refresh();
         $this->assertSame(AppointmentStatus::Booked, $appointment->status);
         $this->assertSame('Paid in full', $appointment->paymentState());
+    }
+
+    // Nails above the Single tier: 1 guest pays 300, not the full 450.
+    public function test_nails_online_booking_charges_single_tier_fee(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->client)->post(
+            route('account.booking.branch.store'),
+            $this->branchPayload(['service_id' => $this->pedicure->id, 'guests' => 1])
+        )->assertRedirect();
+
+        $appointment = Appointment::latest('id')->firstOrFail();
+        $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
+        $this->assertEquals(300, (float) $appointment->payment->amount);
+        $this->assertEquals(450, (float) $appointment->booked_price);
+        $this->assertSame(1, (int) $appointment->guests);
+    }
+
+    // Facial with 2 guests: Couple tier 500, balance 300 left.
+    public function test_facial_two_guests_charges_couple_tier_fee(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->client)->post(
+            route('account.booking.branch.store'),
+            $this->branchPayload(['service_id' => $this->facial->id, 'guests' => 2])
+        )->assertRedirect();
+
+        $appointment = Appointment::latest('id')->firstOrFail();
+        $this->assertEquals(500, (float) $appointment->payment->amount);
+        $this->assertEquals(800, (float) $appointment->booked_price);
+        $this->assertSame(2, (int) $appointment->guests);
+    }
+
+    // 3+ guests: Barkada tier 2000 (price 2500 caps nothing here).
+    public function test_three_plus_guests_charges_barkada_tier_fee(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->client)->post(
+            route('account.booking.branch.store'),
+            $this->branchPayload(['service_id' => $this->royalFacial->id, 'guests' => 4])
+        )->assertRedirect();
+
+        $appointment = Appointment::latest('id')->firstOrFail();
+        $this->assertEquals(2000, (float) $appointment->payment->amount);
+        $this->assertEquals(2500, (float) $appointment->booked_price);
+        $this->assertSame(4, (int) $appointment->guests);
     }
 
     public function test_payment_method_must_be_known(): void
@@ -310,7 +502,7 @@ class ReservationFeeCashTest extends TestCase
 
         $this->actingAs($this->manager)->patch(
             route('admin.appointments.status', $appointment->id),
-            ['status' => 'cancelled']
+            ['status' => 'cancelled', 'rejection_reason' => 'Client asked to cancel by phone.']
         )->assertRedirect();
         $this->assertSame(AppointmentStatus::Cancelled, $appointment->refresh()->status);
 
@@ -344,7 +536,7 @@ class ReservationFeeCashTest extends TestCase
         $this->assertSame(PaymentStatus::Verified, $appointment->refresh()->payment->status);
     }
 
-    public function test_home_cash_booking_confirmed_without_proof(): void
+    public function test_home_cash_booking_is_a_request_without_proof(): void
     {
         $address = [
             'street_address' => '123 Test St', 'barangay' => 'Barangay 1',
@@ -360,7 +552,7 @@ class ReservationFeeCashTest extends TestCase
         )->assertRedirect();
 
         $appointment = Appointment::latest('id')->firstOrFail();
-        $this->assertSame(AppointmentStatus::Booked, $appointment->status);
+        $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
         $this->assertSame('cash', $appointment->payment->method);
         $this->assertNotNull($appointment->address);
     }
@@ -381,21 +573,151 @@ class ReservationFeeCashTest extends TestCase
         )->assertSessionHasErrors('payment_proof');
     }
 
+    // Home online: Single tier 300 due now on the 900 service, not the full price.
+    public function test_home_online_booking_charges_tier_fee(): void
+    {
+        Storage::fake('public');
+
+        $address = [
+            'street_address' => '123 Test St', 'barangay' => 'Barangay 1',
+            'city_municipality' => 'Test City', 'province' => 'Test Province',
+        ];
+
+        $this->actingAs($this->client)->post(
+            route('account.booking.home.store'),
+            array_merge(
+                $this->branchPayload(['service_id' => $this->homeMassage->id, 'guests' => 1]),
+                $address
+            )
+        )->assertRedirect();
+
+        $appointment = Appointment::latest('id')->firstOrFail();
+        $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
+        $this->assertEquals(300, (float) $appointment->payment->amount);
+        $this->assertEquals(900, (float) $appointment->booked_price);
+        $this->assertSame(1, (int) $appointment->guests);
+        $this->assertNotNull($appointment->address);
+    }
+
+    public function test_home_guests_required_for_variant_less_service(): void
+    {
+        $address = [
+            'street_address' => '123 Test St', 'barangay' => 'Barangay 1',
+            'city_municipality' => 'Test City', 'province' => 'Test Province',
+        ];
+
+        $payload = array_merge(
+            $this->branchPayload(['service_id' => $this->homeMassage->id]),
+            $address
+        );
+        unset($payload['guests']);
+
+        $this->actingAs($this->client)->post(
+            route('account.booking.home.store'),
+            $payload
+        )->assertSessionHasErrors('guests');
+    }
+
+    // Kiddie Japanese Head Spa: flat 300 fee, no guests involved.
+    public function test_kiddie_flat_fee_charges_300_without_guests(): void
+    {
+        Storage::fake('public');
+
+        $kiddie = Service::where('name', 'Kiddie Japanese Head Spa')->firstOrFail();
+
+        $payload = $this->branchPayload(['service_id' => $kiddie->id]);
+        unset($payload['guests']);
+
+        $this->actingAs($this->client)->post(
+            route('account.booking.branch.store'),
+            $payload
+        )->assertRedirect()->assertSessionHasNoErrors();
+
+        $appointment = Appointment::latest('id')->firstOrFail();
+        $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
+        $this->assertEquals(300, (float) $appointment->payment->amount);
+        $this->assertEquals(599, (float) $appointment->booked_price);
+        $this->assertNull($appointment->guests);
+    }
+
+    public function test_kiddie_details_hides_guests_and_shows_flat_note(): void
+    {
+        $client = $this->actingAs($this->client);
+        $tomorrow = now()->addDay()->toDateString();
+        $base = ['date' => $tomorrow, 'time' => '10:00', 'personnel' => 'any'];
+
+        $kiddie = Service::where('name', 'Kiddie Japanese Head Spa')->firstOrFail();
+
+        $client->get(route('account.booking.branch.details', array_merge($base, ['service' => $kiddie->id])))
+            ->assertOk()
+            ->assertDontSee('name="guests"', false)
+            ->assertSee('The reservation fee for this service is a flat ₱300 down payment');
+
+        // A regular Nails service still shows the guests field.
+        $client->get(route('account.booking.branch.details', array_merge($base, ['service' => $this->pedicure->id])))
+            ->assertOk()
+            ->assertSee('name="guests"', false);
+    }
+
+    public function test_nails_still_requires_guests_and_charges_tiers(): void
+    {
+        Storage::fake('public');
+
+        // Missing guests -> rejected for regular variant-less services.
+        $missingGuests = $this->branchPayload(['service_id' => $this->pedicure->id]);
+        unset($missingGuests['guests']);
+        $this->actingAs($this->client)->post(
+            route('account.booking.branch.store'),
+            $missingGuests
+        )->assertSessionHasErrors('guests');
+
+        // 1 guest -> Single tier 300 on the 450 pedicure.
+        $this->actingAs($this->client)->post(
+            route('account.booking.branch.store'),
+            $this->branchPayload(['service_id' => $this->pedicure->id, 'guests' => 1])
+        )->assertRedirect();
+
+        $appointment = Appointment::latest('id')->firstOrFail();
+        $this->assertEquals(300, (float) $appointment->payment->amount);
+        $this->assertSame(1, (int) $appointment->guests);
+    }
+
+    public function test_kiddie_cash_is_a_request(): void
+    {
+        $kiddie = Service::where('name', 'Kiddie Japanese Head Spa')->firstOrFail();
+
+        $payload = $this->branchPayload(['service_id' => $kiddie->id, 'method' => 'cash', 'payment_proof' => null]);
+        unset($payload['guests']);
+
+        $this->actingAs($this->client)->post(
+            route('account.booking.branch.store'),
+            $payload
+        )->assertRedirect();
+
+        $appointment = Appointment::latest('id')->firstOrFail();
+        $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
+        $this->assertEquals(599, (float) $appointment->payment->amount);
+        $this->assertSame('cash', $appointment->payment->method);
+        $this->assertNull($appointment->guests);
+    }
+
     public function test_wizard_shows_guests_and_fee_breakdown(): void
     {
         $client = $this->actingAs($this->client);
         $tomorrow = now()->addDay()->toDateString();
         $base = ['service' => $this->massage->id, 'date' => $tomorrow, 'time' => '10:00', 'personnel' => 'any'];
+        $address = ['street_address' => '123 Test St', 'barangay' => 'B1', 'city_municipality' => 'TC', 'province' => 'TP'];
 
-        // Details step: required guests selector for the variant-less fee service...
+        // Branch details step: required guests selector for every
+        // variant-less service — fee and non-fee categories alike...
         $client->get(route('account.booking.branch.details', $base))
             ->assertOk()
             ->assertSee('name="guests"', false);
 
-        // ...but not for a non-fee service.
-        $client->get(route('account.booking.branch.details', array_merge($base, ['service' => $this->manicure->id])))
+        // ...including Nails.
+        $client->get(route('account.booking.branch.details', array_merge($base, ['service' => $this->pedicure->id])))
             ->assertOk()
-            ->assertDontSee('name="guests"', false);
+            ->assertSee('name="guests"', false);
 
         // Review + payment: Price / fee / balance breakdown carried with guests.
         $withGuests = array_merge($base, ['guests' => 2]);
@@ -413,10 +735,25 @@ class ReservationFeeCashTest extends TestCase
             ->assertSee('name="guests"', false)
             ->assertSee('pay-proof-block');
 
-        // Home payment step: methods + hide-proof only, no fee breakdown.
-        $client->get(route('account.booking.home.payment', array_merge(
-            ['service' => $this->homeMassage->id, 'date' => $tomorrow, 'time' => '10:00', 'personnel' => 'any'],
-            ['street_address' => '123 Test St', 'barangay' => 'B1', 'city_municipality' => 'TC', 'province' => 'TP']
-        )))->assertOk()->assertSee('value="cash"', false);
+        // Home details step: guests selector for the variant-less service...
+        $client->get(route('account.booking.home.details', array_merge($base, ['service' => $this->homeMassage->id], $address)))
+            ->assertOk()
+            ->assertSee('name="guests"', false);
+
+        // Home review: Price / fee / balance breakdown with guests.
+        $homeGuests = array_merge($base, ['service' => $this->homeMassage->id, 'guests' => 1], $address);
+        $client->get(route('account.booking.home.review', $homeGuests))
+            ->assertOk()
+            ->assertSee('Reservation fee (due now)')
+            ->assertSee('Balance (pay at the branch)')
+            ->assertSee('₱300.00');
+
+        // Home payment step: methods + fee breakdown + carried guests.
+        $client->get(route('account.booking.home.payment', $homeGuests))
+            ->assertOk()
+            ->assertSee('value="cash"', false)
+            ->assertSee('Reservation fee (due now)')
+            ->assertSee('₱300.00')
+            ->assertSee('name="guests"', false);
     }
 }

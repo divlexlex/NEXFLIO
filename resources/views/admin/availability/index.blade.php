@@ -5,13 +5,6 @@
 @section('content')
 <h1 class="h3 mb-4">Availability Management</h1>
 
-@if(session('success'))
-    <div class="alert alert-success alert-dismissible fade show">
-        {{ session('success') }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-@endif
-
 <ul class="nav nav-tabs mb-4" role="tablist">
     <li class="nav-item">
         <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-hours" type="button">

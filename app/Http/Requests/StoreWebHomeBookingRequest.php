@@ -6,6 +6,7 @@ use App\Enums\AppointmentStatus;
 use App\Enums\ServiceLocationType;
 use App\Models\Appointment;
 use App\Models\User;
+use App\Support\ReservationFee;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -59,12 +60,19 @@ class StoreWebHomeBookingRequest extends FormRequest
                 'nullable',
                 Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
             ],
+            'variant_id' => [
+                'nullable',
+                Rule::exists('service_variants', 'id')->where('service_id', $this->input('service_id')),
+            ],
             'appointment_date' => 'required|date|after_or_equal:tomorrow',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
-            // No reservation fee on Home Service — the only change here is
-            // Cash: payable at the door, so no proof upload. Every other
-            // method still uploads proof for the full service price.
+            // Guest count for a booking without package variants (1->Single,
+            // 2->Couple, 3+->Barkada — see config/booking.php). Required in
+            // that case (see validateGuestCount() below); ignored otherwise.
+            'guests' => 'nullable|integer|min:1|max:30',
+            // Cash needs no proof (payable at the door); every other method
+            // still needs the manual proof upload for the reservation fee.
             'payment_proof' => 'nullable|required_unless:method,cash|image|max:5120',
             'method' => ['sometimes', Rule::in(array_keys(config('payment.methods', [])))],
 
@@ -87,12 +95,17 @@ class StoreWebHomeBookingRequest extends FormRequest
         return [
             'service_id.exists' => 'That service is not bookable as a Home Service.',
             'personnel_id.exists' => 'Selected personnel is not available.',
+            'variant_id.exists' => 'That package option is not available for this service.',
         ];
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
+            $this->validateVariantChoice($validator);
+            $this->validateGuestCount($validator);
+            $this->validatePackageCash($validator);
+
             if ($validator->errors()->isNotEmpty()) {
                 return;
             }
@@ -118,6 +131,68 @@ class StoreWebHomeBookingRequest extends FormRequest
                 );
             }
         });
+    }
+
+    /**
+     * A tiered service must carry a variant_id that belongs to it. The
+     * foreign/invalid case is already rejected by the exists rule (scoped to
+     * service_id); this only adds the friendlier "you must pick one" error.
+     */
+    private function validateVariantChoice(Validator $validator): void
+    {
+        $serviceId = $this->integer('service_id');
+        $service = $serviceId ? \App\Models\Service::with('variants')->find($serviceId) : null;
+
+        if (! $service || $service->variants->isEmpty()) {
+            return;
+        }
+
+        if ($this->input('variant_id') === null || $this->input('variant_id') === '') {
+            $validator->errors()->add('variant_id', 'Please choose a package option for this service.');
+        }
+    }
+
+    /**
+     * A service without variants prices its reservation fee off the guest
+     * count, so the count is required there — except flat-fee services,
+     * which ignore guests entirely. Variant bookings take the fee from the
+     * tier instead (guests ignored).
+     */
+    private function validateGuestCount(Validator $validator): void
+    {
+        $serviceId = $this->integer('service_id');
+        $service = $serviceId ? \App\Models\Service::with('variants')->find($serviceId) : null;
+
+        if (! $service || ! ReservationFee::appliesTo($service) || $service->variants->isNotEmpty()) {
+            return;
+        }
+
+        if (ReservationFee::flatFeeFor($service) !== null) {
+            return;
+        }
+
+        if ($this->input('guests') === null || $this->input('guests') === '') {
+            $validator->errors()->add('guests', 'Please tell us how many guests this booking is for.');
+        }
+    }
+
+    /**
+     * Package bookings (the booked service has variants) must pay the
+     * reservation fee online with proof — Cash is rejected server-side, so
+     * hiding the option in the view alone is never enough to bypass it.
+     */
+    private function validatePackageCash(Validator $validator): void
+    {
+        if ($this->input('method') !== 'cash') {
+            return;
+        }
+
+        $serviceId = $this->integer('service_id');
+        $service = $serviceId ? \App\Models\Service::with('variants')->find($serviceId) : null;
+
+        if ($service && $service->variants->isNotEmpty()) {
+            $validator->errors()->add('method', 'Cash is not available for package bookings.');
+        }
     }
 
 }
