@@ -8,7 +8,9 @@ use App\Http\Requests\StoreLeaveRequest;
 use App\Models\Attendance;
 use App\Models\Commission;
 use App\Models\LeaveRequest;
+use App\Models\StaffShiftAssignment;
 use App\Services\AppointmentService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -56,6 +58,152 @@ class StaffController extends Controller
                 ->get(),
             'leaves' => LeaveRequest::where('user_id', $user->id)->latest()->take(10)->get(),
         ]);
+    }
+
+    /**
+     * Personal schedule page — read-only FullCalendar of the logged-in
+     * staff member's own appointments and Weekly Roster shifts.
+     */
+    public function schedule(Request $request)
+    {
+        return view('staff.schedule', [
+            'staff' => $request->user()->loadMissing('staffProfile'),
+        ]);
+    }
+
+    /**
+     * FullCalendar JSON feed for the schedule page. Scoped to the logged-in
+     * staff member only — no user id is ever accepted from the request.
+     * Cancelled / No-Show appointments are excluded (unlike the admin feed,
+     * which keeps them visible greyed out).
+     */
+    public function scheduleEvents(Request $request)
+    {
+        $user = $request->user();
+
+        $rangeStart = $request->query('start')
+            ? Carbon::parse($request->query('start'))->startOfDay()
+            : now()->startOfMonth();
+        $rangeEnd = $request->query('end')
+            ? Carbon::parse($request->query('end'))->startOfDay()
+            : now()->copy()->endOfMonth()->addDay()->startOfDay();
+
+        $events = [];
+
+        // ── (a) Own assigned appointments in range ────────────────────
+        $appointments = $user->assignedAppointments()
+            ->with(['service:id,name,duration_minutes', 'user:id,name'])
+            ->whereDate('appointment_date', '>=', $rangeStart->toDateString())
+            ->whereDate('appointment_date', '<', $rangeEnd->toDateString())
+            ->whereNotIn('status', [AppointmentStatus::Cancelled, AppointmentStatus::NoShow])
+            ->orderBy('appointment_date')
+            ->orderBy('start_time')
+            ->get();
+
+        foreach ($appointments as $appointment) {
+            $date = $appointment->appointment_date->toDateString();
+            $start = Carbon::parse("{$date}T{$appointment->start_time}");
+            $duration = $appointment->service->duration_minutes ?? 60;
+            $end = $start->copy()->addMinutes($duration);
+
+            $statusKey = $appointment->status->value;
+            [$bg, $border, $fg] = match ($statusKey) {
+                'unverified' => ['#fcebd2', '#ecc78f', '#8a5a16'],
+                'booked' => ['#dcf0e2', '#a9d9bc', '#1f6b41'],
+                'in-service' => ['#deeafe', '#aec8f7', '#1b4fc0'],
+                'completed' => ['#eae1f6', '#cdb8ec', '#5e3a97'],
+                'cancelled' => ['#ececec', '#d9d9d9', '#7a7a7a'],
+                'no-show' => ['#f6e5e3', '#e4c0ba', '#93534a'],
+                default => ['#e9e2d8', '#d8ccbc', '#5b5148'],
+            };
+
+            $events[] = [
+                'id' => $appointment->id,
+                'title' => $appointment->referenceCode().' · '.($appointment->clientName() ?? 'Client').' · '.$appointment->displayServiceName(),
+                'start' => $start->toIso8601String(),
+                'end' => $end->toIso8601String(),
+                'backgroundColor' => $bg,
+                'borderColor' => $border,
+                'textColor' => $fg,
+                'classNames' => ['nx-evt', 'nx-evt-'.$statusKey],
+                'extendedProps' => [
+                    'kind' => 'appointment',
+                    'client' => $appointment->clientName() ?? 'Client',
+                    'reference_code' => $appointment->referenceCode(),
+                    'service' => $appointment->displayServiceName(),
+                    'status' => $statusKey,
+                    'statusLabel' => $appointment->status->label(),
+                    'dateLabel' => $appointment->appointment_date->format('M j, Y (D)'),
+                    'timeLabel' => $start->format('g:i A').' – '.$end->format('g:i A'),
+                ],
+            ];
+        }
+
+        // ── (b) Own Weekly Roster shifts: one background event per day ──
+        $weekStarts = [];
+        $cursor = Carbon::parse(StaffShiftAssignment::weekStartOf($rangeStart->toDateString()));
+        $lastWeek = StaffShiftAssignment::weekStartOf($rangeEnd->copy()->subDay()->toDateString());
+        while ($cursor->toDateString() <= $lastWeek) {
+            $weekStarts[] = $cursor->toDateString();
+            $cursor->addWeek();
+        }
+
+        $assignments = StaffShiftAssignment::where('user_id', $user->id)
+            ->whereIn('week_start', $weekStarts)
+            ->get()
+            ->keyBy(fn ($assignment) => Carbon::parse($assignment->week_start)->toDateString());
+
+        foreach ($weekStarts as $weekStart) {
+            $assignment = $assignments->get($weekStart);
+
+            if (! $assignment) {
+                continue;
+            }
+
+            $shiftLabel = $assignment->shift === 'am' ? 'AM shift' : 'PM shift';
+
+            for ($i = 0; $i < 7; $i++) {
+                $day = Carbon::parse($weekStart)->addDays($i)->toDateString();
+
+                if ($day < $rangeStart->toDateString() || $day >= $rangeEnd->toDateString()) {
+                    continue;
+                }
+
+                $events[] = [
+                    'id' => 'shift-'.$assignment->id.'-'.$day,
+                    'title' => $shiftLabel,
+                    'start' => $day.'T'.$assignment->start_time,
+                    'end' => $day.'T'.$assignment->end_time,
+                    'display' => 'background',
+                    'backgroundColor' => 'rgba(201, 162, 75, 0.20)',
+                    'extendedProps' => ['kind' => 'shift'],
+                ];
+            }
+        }
+
+        // ── (c) Own approved leave overlapping the range ──────────────
+        $leaves = LeaveRequest::where('user_id', $user->id)
+            ->where('status', LeaveRequest::STATUS_APPROVED)
+            ->whereDate('end_date', '>=', $rangeStart->toDateString())
+            ->whereDate('start_date', '<', $rangeEnd->toDateString())
+            ->get();
+
+        foreach ($leaves as $leave) {
+            $events[] = [
+                'id' => 'leave-'.$leave->id,
+                'title' => 'On leave',
+                'start' => $leave->start_date->toDateString(),
+                'end' => $leave->end_date->copy()->addDay()->toDateString(),
+                'allDay' => true,
+                'backgroundColor' => '#ececec',
+                'borderColor' => '#d9d9d9',
+                'textColor' => '#7a7a7a',
+                'classNames' => ['nx-evt', 'nx-evt-leave'],
+                'extendedProps' => ['kind' => 'leave'],
+            ];
+        }
+
+        return response()->json($events);
     }
 
     public function timeIn(Request $request)

@@ -19,6 +19,7 @@ class ClientProfile extends Model
         'gender',
         'birthdate',
         'mobile_number',
+        'preferences_notes',
     ];
 
     protected function casts(): array

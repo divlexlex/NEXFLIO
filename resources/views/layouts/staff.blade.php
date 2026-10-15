@@ -224,15 +224,28 @@
             position: fixed; top: 0; left: 0;
             display: flex; flex-direction: column;
         }
-        .sidebar > .nav { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+        .sidebar > .nav { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; min-height: 0; }
         .sidebar > a { color: var(--nex-sidebar-text) !important; }
-        .sidebar .nav-link { color: var(--nex-sidebar-muted); border-radius: .5rem; transition: background .15s, color .15s; }
+        .sidebar .nav-item { min-width: 0; }
+        .sidebar .nav-link { color: var(--nex-sidebar-muted); border-radius: .5rem; transition: background .15s, color .15s; min-width: 0; }
         .sidebar .nav-link:hover { color: var(--nex-sidebar-text); background: rgba(243, 231, 215, .08); }
         .sidebar .nav-link.active { color: var(--nex-sidebar-active-text); background: var(--nex-sidebar-active-bg); font-weight: 600; }
         .sidebar hr { border-color: var(--nex-sidebar-border); opacity: 1; }
         .sidebar .text-white-50 { color: var(--nex-sidebar-muted) !important; }
         .sidebar .btn-outline-light { color: var(--nex-sidebar-text); border-color: var(--nex-sidebar-border); }
         .sidebar .btn-outline-light:hover { background: var(--nex-sidebar-active-bg); border-color: var(--nex-sidebar-active-bg); color: var(--nex-sidebar-active-text); }
+
+        /* ------- top header bar (clock + account/theme/logout live here now) ------- */
+        .nx-topbar {
+            background: var(--nex-surface); color: var(--nex-text);
+            border: 1px solid var(--nex-border); border-radius: .75rem;
+        }
+        .nx-avatar {
+            width: 32px; height: 32px; flex: 0 0 32px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 50%; background: var(--nex-primary-bg); color: var(--nex-primary-text);
+            font-size: .8rem; font-weight: 700;
+        }
 
         .btn { font-weight: 600; }
         .btn-primary {
@@ -300,7 +313,7 @@
 
         @media (max-width: 991px) {
             .sidebar { position: static; width: 100%; height: auto; }
-            .sidebar > .nav { flex: 0 0 auto; overflow-y: visible; }
+            .sidebar > .nav { flex: 0 0 auto; overflow-y: visible; overflow-x: hidden; }
             .main-content { margin-left: 0; }
         }
     </style>
@@ -321,66 +334,112 @@
         </a>
         <ul class="nav flex-column gap-1">
             <li class="nav-item">
-                <a class="nav-link active" href="{{ route('staff.dashboard') }}">
+                <a class="nav-link {{ request()->routeIs('staff.dashboard') ? 'active' : '' }}" href="{{ route('staff.dashboard') }}">
                     <i class="bi bi-speedometer2 me-2"></i>Dashboard
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('staff.schedule') ? 'active' : '' }}" href="{{ route('staff.schedule') }}">
+                    <i class="bi bi-calendar3 me-2"></i>My Schedule
+                </a>
+            </li>
         </ul>
-        <hr class="border-secondary">
-        <div class="px-2 text-white-50 small mb-2">
-            {{ auth()->user()->name }}
-            <span class="d-block">{{ auth()->user()->staffProfile?->position ?? 'Staff' }}</span>
-        </div>
-        <button type="button" class="btn btn-sm btn-outline-light w-100 mb-2 mx-2" style="width:calc(100% - 1rem);"
-                data-bs-toggle="modal" data-bs-target="#changePasswordModal">
-            <i class="bi bi-key me-1"></i>Change Password
-        </button>
-        <button type="button" id="themeToggle" class="btn btn-sm btn-outline-light w-100 mb-2 mx-2" style="width:calc(100% - 1rem);">
-            <i class="bi bi-moon-stars me-1"></i><span id="themeToggleLabel">Dark mode</span>
-        </button>
-        <form method="POST" action="{{ route('logout') }}" class="px-2">
-            @csrf
-            <button class="btn btn-sm btn-outline-light w-100"><i class="bi bi-box-arrow-right me-1"></i>Log out</button>
-        </form>
     </aside>
 
-    {{-- CHANGE PASSWORD — every Staff account starts on an Admin-generated
-         temporary password (see EmployeeController::store()); this is how
-         they set their own. Lives in the layout (not the dashboard view)
-         so it's reachable from any future Staff page. --}}
-    <div class="modal fade" id="changePasswordModal" tabindex="-1">
-        <div class="modal-dialog">
-            <form method="POST" action="{{ route('staff.password.update') }}" class="modal-content">
-                @csrf
-                @method('PATCH')
-                <div class="modal-header">
-                    <h5 class="modal-title">Change Password</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-2">
-                        <label class="form-label">Current Password</label>
-                        <input type="password" name="current_password" class="form-control" required>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">New Password</label>
-                        <input type="password" name="password" class="form-control" minlength="8" required>
-                        <div class="form-text">At least 8 characters.</div>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Confirm New Password</label>
-                        <input type="password" name="password_confirmation" class="form-control" required>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button class="btn btn-spa">Update Password</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <main class="main-content flex-grow-1">
+        @php
+            $topbarUser = auth()->user();
+            $topbarInitials = strtoupper(implode('', array_map(
+                fn ($p) => mb_substr($p, 0, 1),
+                array_slice(preg_split('/\s+/', trim($topbarUser->name ?? '')), 0, 2)
+            ))) ?: '?';
+        @endphp
+        <header class="nx-topbar d-flex align-items-center justify-content-between gap-2 mb-3 px-3 py-2">
+            <span id="nxClock" class="small fw-semibold">{{ now()->format('l, F j, Y · g:i:s A') }}</span>
+            <div class="dropdown">
+                <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2 dropdown-toggle"
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="nx-avatar">{{ $topbarInitials }}</span>
+                    <span class="text-start">
+                        <span class="d-block fw-semibold">{{ $topbarUser->name }}</span>
+                        <span class="d-block small text-muted">{{ $topbarUser->staffProfile?->position ?? 'Staff' }}</span>
+                    </span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <h6 class="dropdown-header">{{ $topbarUser->name }}<span class="d-block fw-normal">{{ $topbarUser->email }}</span></h6>
+                    </li>
+                    <li>
+                        <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
+                            <i class="bi bi-key me-1"></i>Change Password
+                        </button>
+                    </li>
+                    <li>
+                        <button type="button" id="themeToggle" class="dropdown-item">
+                            <i class="bi bi-moon-stars me-1"></i><span id="themeToggleLabel">Dark mode</span>
+                        </button>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button class="dropdown-item"><i class="bi bi-box-arrow-right me-1"></i>Log out</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </header>
+        <script>
+            // Live topbar clock (12-hour, never 24-hour): server-rendered above,
+            // then ticking client-side every second.
+            (function () {
+                const el = document.getElementById('nxClock');
+                if (!el) return;
+                const tick = () => {
+                    const now = new Date();
+                    const date = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+                    el.textContent = date + ' · ' + time;
+                };
+                tick();
+                setInterval(tick, 1000);
+            })();
+        </script>
+        {{-- CHANGE PASSWORD — every Staff account starts on an Admin-generated
+             temporary password (see EmployeeController::store()); this is how
+             they set their own. Lives in the layout (not the dashboard view)
+             so it's reachable from any Staff page. --}}
+        <div class="modal fade" id="changePasswordModal" tabindex="-1">
+            <div class="modal-dialog">
+                <form method="POST" action="{{ route('staff.password.update') }}" class="modal-content">
+                    @csrf
+                    @method('PATCH')
+                    <div class="modal-header">
+                        <h5 class="modal-title">Change Password</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-2">
+                            <label class="form-label">Current Password</label>
+                            <input type="password" name="current_password" class="form-control" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">New Password</label>
+                            <input type="password" name="password" class="form-control" minlength="8" required>
+                            <div class="form-text">At least 8 characters.</div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Confirm New Password</label>
+                            <input type="password" name="password_confirmation" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button class="btn btn-spa">Update Password</button>
+                    </div>
+                </form>
+            </div>
+        </div>
         @if(session('success'))
             <div class="alert alert-success alert-dismissible fade show">
                 {{ session('success') }}

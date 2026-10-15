@@ -77,6 +77,12 @@ class Appointment extends Model
         return $this->hasMany(Payment::class)->orderBy('id');
     }
 
+    /** The client's 1–5 star rating of this visit, if they left one. */
+    public function review()
+    {
+        return $this->hasOne(Review::class);
+    }
+
     /** Sum of verified payment amounts — the only money that counts. */
     public function verifiedPaid(): float
     {

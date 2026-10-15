@@ -6,8 +6,10 @@ use App\Enums\AppointmentStatus;
 use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
+use App\Models\LeaveRequest;
 use App\Models\Notification;
 use App\Models\Service;
+use App\Models\StaffShiftAssignment;
 use App\Models\User;
 use App\Services\AppointmentService;
 use Carbon\Carbon;
@@ -36,6 +38,101 @@ class AppointmentController extends Controller
                 ->orderBy('name')
                 ->get(),
             'statuses' => AppointmentStatus::cases(),
+        ]);
+    }
+
+    /**
+     * Master Schedule — weekly monitoring grid for Owner/Manager: one row
+     * per active staff member with their Weekly Roster shift and per-day
+     * appointments. Read-only; weeks always run Sunday–Saturday.
+     */
+    public function masterSchedule(Request $request)
+    {
+        try {
+            $weekStart = StaffShiftAssignment::weekStartOf($request->query('week', now()->toDateString()));
+        } catch (\Throwable) {
+            $weekStart = StaffShiftAssignment::weekStartOf(now()->toDateString());
+        }
+
+        $sunday = Carbon::parse($weekStart);
+        $weekEnd = $sunday->copy()->addDays(6)->toDateString();
+
+        $weekDays = [];
+        for ($i = 0; $i < 7; $i++) {
+            $weekDays[] = $sunday->copy()->addDays($i)->toDateString();
+        }
+
+        $staff = User::where('role_id', User::ROLE_STAFF)
+            ->whereHas('staffProfile', fn ($query) => $query->where('employment_status', 'active'))
+            ->with('staffProfile')
+            ->orderBy('name')
+            ->get();
+
+        $assignments = StaffShiftAssignment::whereIn('user_id', $staff->pluck('id'))
+            ->where('week_start', $weekStart)
+            ->get()
+            ->keyBy('user_id');
+
+        $appointments = Appointment::with(['service:id,name,duration_minutes', 'user:id,name'])
+            ->whereIn('personnel_id', $staff->pluck('id'))
+            ->whereDate('appointment_date', '>=', $weekStart)
+            ->whereDate('appointment_date', '<=', $weekEnd)
+            ->whereNotIn('status', [AppointmentStatus::Cancelled, AppointmentStatus::NoShow])
+            ->orderBy('start_time')
+            ->get()
+            ->groupBy(fn ($appointment) => $appointment->personnel_id.'|'.$appointment->appointment_date->toDateString());
+
+        $leaveDays = [];
+        LeaveRequest::whereIn('user_id', $staff->pluck('id'))
+            ->where('status', LeaveRequest::STATUS_APPROVED)
+            ->whereDate('end_date', '>=', $weekStart)
+            ->whereDate('start_date', '<=', $weekEnd)
+            ->get()
+            ->each(function ($leave) use (&$leaveDays, $weekStart, $weekEnd) {
+                $day = max($leave->start_date->toDateString(), $weekStart);
+                $last = min($leave->end_date->toDateString(), $weekEnd);
+                while ($day <= $last) {
+                    $leaveDays[$leave->user_id][] = $day;
+                    $day = Carbon::parse($day)->addDay()->toDateString();
+                }
+            });
+
+        $rows = $staff->map(function ($member) use ($assignments, $appointments, $leaveDays, $weekDays) {
+            $days = [];
+            foreach ($weekDays as $day) {
+                $days[$day] = [
+                    'appointments' => $appointments->get($member->id.'|'.$day, collect())->values(),
+                    'on_leave' => in_array($day, $leaveDays[$member->id] ?? [], true),
+                ];
+            }
+
+            return ['staff' => $member, 'shift' => $assignments->get($member->id), 'days' => $days];
+        });
+
+        $selected = null;
+        if ($request->query('staff') && $request->query('date')) {
+            $member = $staff->firstWhere('id', (int) $request->query('staff'));
+            $date = $request->query('date');
+            if ($member && in_array($date, $weekDays, true)) {
+                $selected = [
+                    'staff' => $member,
+                    'date' => $date,
+                    'shift' => $assignments->get($member->id),
+                    'appointments' => $appointments->get($member->id.'|'.$date, collect())->values(),
+                    'on_leave' => in_array($date, $leaveDays[$member->id] ?? [], true),
+                ];
+            }
+        }
+
+        return view('admin.master-schedule', [
+            'weekStart' => $weekStart,
+            'weekEnd' => $weekEnd,
+            'prevWeek' => $sunday->copy()->subWeek()->toDateString(),
+            'nextWeek' => $sunday->copy()->addWeek()->toDateString(),
+            'weekDays' => $weekDays,
+            'weekLabel' => 'Week of '.$sunday->format('M j').' – '.$sunday->copy()->addDays(6)->format('M j, Y'),
+            'rows' => $rows,
+            'selected' => $selected,
         ]);
     }
 

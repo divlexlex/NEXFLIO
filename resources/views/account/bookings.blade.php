@@ -190,6 +190,79 @@
                                             </button>
                                         </div>
                                     @endif
+
+                                    {{-- Rating (Completed cards only — refund/continue buttons above are untouched) --}}
+                                    @if($appointment->status === \App\Enums\AppointmentStatus::Completed)
+                                        @php($review = $appointment->review)
+                                        <div class="mt-3 pt-3 border-top">
+                                            @if($review)
+                                                <p class="small fw-semibold mb-1">Your review</p>
+                                                <p class="small nx-text-secondary mb-1">
+                                                    Service
+                                                    <span class="nx-stars-display">{{ str_repeat('★', $review->service_rating) }}{{ str_repeat('☆', 5 - $review->service_rating) }}</span>
+                                                </p>
+                                                @if($review->personnel_rating)
+                                                    <p class="small nx-text-secondary mb-1">
+                                                        Personnel
+                                                        <span class="nx-stars-display">{{ str_repeat('★', $review->personnel_rating) }}{{ str_repeat('☆', 5 - $review->personnel_rating) }}</span>
+                                                    </p>
+                                                @endif
+                                                @if($review->comment)
+                                                    <p class="small nx-text-secondary mb-2 fst-italic">“{{ $review->comment }}”</p>
+                                                @endif
+                                                <button type="button" class="nx-btn nx-btn-outline btn-sm" data-bs-toggle="modal" data-bs-target="#reviewModal-{{ $appointment->id }}">
+                                                    <i class="bi bi-pencil me-1"></i>Edit review
+                                                </button>
+                                            @else
+                                                <button type="button" class="nx-btn nx-btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#reviewModal-{{ $appointment->id }}">
+                                                    <i class="bi bi-star me-1"></i>Rate your visit
+                                                </button>
+                                            @endif
+                                        </div>
+
+                                        {{-- REVIEW MODAL (one per Completed card) --}}
+                                        <div class="modal fade" id="reviewModal-{{ $appointment->id }}" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog modal-dialog-centered">
+                                                <form method="POST" action="{{ route('account.bookings.review.store', $appointment->id) }}" class="modal-content nx-body" style="border-radius: var(--nx-radius-lg); overflow: hidden;">
+                                                    @csrf
+                                                    <div class="modal-header" style="border-color: var(--nx-border);">
+                                                        <h2 class="h5 mb-0">How was your visit?</h2>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body p-4">
+                                                        <p class="small nx-text-secondary">{{ $appointment->displayServiceName() }} — {{ $appointment->appointment_date->format('F j, Y') }} · ID {{ $appointment->referenceCode() }}</p>
+
+                                                        <p class="small fw-semibold mb-1">The service</p>
+                                                        <div class="nx-stars mb-3">
+                                                            @for($s = 5; $s >= 1; $s--)
+                                                                <input type="radio" name="service_rating" id="svc-{{ $appointment->id }}-{{ $s }}" value="{{ $s }}"{{ $review && $review->service_rating == $s ? ' checked' : '' }} required>
+                                                                <label for="svc-{{ $appointment->id }}-{{ $s }}" title="{{ $s }} star{{ $s > 1 ? 's' : '' }}">★</label>
+                                                            @endfor
+                                                        </div>
+
+                                                        @if($appointment->personnel)
+                                                            <p class="small fw-semibold mb-1">Your personnel — {{ $appointment->personnel->name }}</p>
+                                                            <div class="nx-stars mb-3">
+                                                                @for($s = 5; $s >= 1; $s--)
+                                                                    <input type="radio" name="personnel_rating" id="per-{{ $appointment->id }}-{{ $s }}" value="{{ $s }}"{{ $review && $review->personnel_rating == $s ? ' checked' : '' }} required>
+                                                                    <label for="per-{{ $appointment->id }}-{{ $s }}" title="{{ $s }} star{{ $s > 1 ? 's' : '' }}">★</label>
+                                                                @endfor
+                                                            </div>
+                                                        @endif
+
+                                                        <div class="mb-2">
+                                                            <label class="form-label small">Comment <span class="nx-text-secondary">(optional)</span></label>
+                                                            <textarea name="comment" rows="3" maxlength="1000" class="form-control" placeholder="Anything you'd like the team to know?">{{ old('comment', $review?->comment) }}</textarea>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer" style="border-color: var(--nx-border);">
+                                                        <button type="button" class="nx-btn nx-btn-outline" data-bs-dismiss="modal">Cancel</button>
+                                                        <button class="nx-btn nx-btn-primary">Submit review</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    @endif
                                 </div>
                             @endforeach
                         </div>
@@ -199,6 +272,15 @@
         </div>
     </div>
 </section>
+
+<style>
+    .nx-stars { display: inline-flex; flex-direction: row-reverse; justify-content: flex-end; gap: .1rem; }
+    .nx-stars input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .nx-stars label { cursor: pointer; font-size: 1.75rem; line-height: 1; color: #d3c9bd; padding: .15rem; margin: 0; }
+    .nx-stars label:hover, .nx-stars label:hover ~ label, .nx-stars input:checked ~ label { color: #f0a020; }
+    .nx-stars input:focus-visible + label { outline: 2px solid var(--nx-accent, #B5895A); border-radius: .25rem; }
+    .nx-stars-display { color: #e89b0c; letter-spacing: .1rem; }
+</style>
 
 {{-- SHARED CHANGE-REQUEST MODAL --}}
 <div class="modal fade" id="changeRequestModal" tabindex="-1" aria-hidden="true">

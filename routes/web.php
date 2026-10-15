@@ -4,10 +4,12 @@ use App\Http\Controllers\Web\AppointmentController;
 use App\Http\Controllers\Web\AppointmentRequestController;
 use App\Http\Controllers\Web\AuditLogController;
 use App\Http\Controllers\Web\AuthController;
+use App\Http\Controllers\Web\AdminReviewsController;
 use App\Http\Controllers\Web\BillingController;
 use App\Http\Controllers\Web\BookingController;
 use App\Http\Controllers\Web\CatalogController;
 use App\Http\Controllers\Web\ClientAccountController;
+use App\Http\Controllers\Web\ClientDirectoryController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\EmailVerificationController;
 use App\Http\Controllers\Web\EmployeeController;
@@ -21,6 +23,7 @@ use App\Http\Controllers\Web\PasswordResetController;
 use App\Http\Controllers\Web\PaymentController;
 use App\Http\Controllers\Web\PromoController;
 use App\Http\Controllers\Web\ReportController;
+use App\Http\Controllers\Web\ReviewController;
 use App\Http\Controllers\Web\ServiceController;
 use App\Http\Controllers\Web\ServicesController;
 use App\Http\Controllers\Web\StaffController;
@@ -84,6 +87,7 @@ Route::prefix('account')->name('account.')->middleware(['auth', 'role:4'])->grou
     // owner-only and gated by Appointment::canContinueBooking().
     Route::get('/bookings/{appointment}/topup', [ClientAccountController::class, 'showTopupForm'])->name('bookings.topup');
     Route::post('/bookings/{appointment}/topup', [ClientAccountController::class, 'storeTopup'])->name('bookings.topup.store');
+    Route::post('/bookings/{appointment}/review', [ReviewController::class, 'store'])->name('bookings.review.store');
 
     Route::get('/profile', [ClientAccountController::class, 'profile'])->name('profile');
     Route::patch('/profile', [ClientAccountController::class, 'updateProfile'])->name('profile.update');
@@ -134,6 +138,8 @@ Route::prefix('account')->name('account.')->middleware(['auth', 'role:4'])->grou
 // requests.
 Route::prefix('staff')->name('staff.')->middleware(['auth', 'role:3'])->group(function () {
     Route::get('/dashboard', [StaffController::class, 'dashboard'])->name('dashboard');
+    Route::get('/schedule', [StaffController::class, 'schedule'])->name('schedule');
+    Route::get('/schedule/events', [StaffController::class, 'scheduleEvents'])->name('schedule.events');
     Route::post('/attendance/time-in', [StaffController::class, 'timeIn'])->name('attendance.time-in');
     Route::post('/attendance/time-out', [StaffController::class, 'timeOut'])->name('attendance.time-out');
     Route::post('/leaves', [StaffController::class, 'storeLeave'])->name('leaves.store');
@@ -149,6 +155,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
 
     Route::get('/appointments', [AppointmentController::class, 'index'])->name('appointments');
     Route::get('/appointments/feed', [AppointmentController::class, 'feed'])->name('appointments.feed');
+    Route::get('/master-schedule', [AppointmentController::class, 'masterSchedule'])->name('master-schedule');
     Route::post('/appointments/walk-in', [AppointmentController::class, 'storeWalkIn'])->name('appointments.walk-in');
     Route::patch('/appointments/{id}/override', [AppointmentController::class, 'override'])->name('appointments.override');
     Route::patch('/appointments/{id}/assign-personnel', [AppointmentController::class, 'assignPersonnel'])->name('appointments.assign-personnel');
@@ -178,6 +185,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
     Route::post('/employees', [EmployeeController::class, 'store'])->name('employees.store');
     Route::patch('/employees/{id}', [EmployeeController::class, 'update'])->name('employees.update');
     Route::delete('/employees/{id}', [EmployeeController::class, 'destroy'])->name('employees.destroy');
+
+    Route::get('/clients', [ClientDirectoryController::class, 'index'])->name('clients');
+    Route::get('/clients/{user}', [ClientDirectoryController::class, 'show'])->name('clients.show');
+    Route::patch('/clients/{user}/notes', [ClientDirectoryController::class, 'updateNotes'])->name('clients.notes');
+
+    Route::get('/reviews', [AdminReviewsController::class, 'index'])->name('reviews');
 
     Route::get('/availability', [AvailabilityController::class, 'index'])->name('availability');
     Route::post('/availability/business-hours', [AvailabilityController::class, 'updateBusinessHours'])->name('availability.business-hours');
