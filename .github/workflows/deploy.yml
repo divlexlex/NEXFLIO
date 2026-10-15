@@ -1,0 +1,59 @@
+name: Deploy to InfinityFree (FTP)
+
+on:
+  push:
+    branches: [frontend-redesign]
+  workflow_dispatch: {}
+
+concurrency:
+  group: infinityfree-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build landing assets (Vite)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+
+      - name: FTP — app code to NEXFLIO_deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./
+          server-dir: ./htdocs/NEXFLIO_deploy/
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/node_modules/**
+            nexflio_mobile/**
+            public/**
+            storage/**
+            tests/**
+            .env
+            .env.*
+            composer.phar
+
+      - name: FTP — public assets to htdocs root
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./public/
+          server-dir: ./htdocs/
+          dangerous-clean-slate: false
+          exclude: |
+            index.php
+            .htaccess
