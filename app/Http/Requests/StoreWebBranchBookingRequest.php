@@ -6,7 +6,6 @@ use App\Enums\AppointmentStatus;
 use App\Enums\ServiceLocationType;
 use App\Models\Appointment;
 use App\Models\User;
-use App\Support\ReservationFee;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -68,10 +67,6 @@ class StoreWebBranchBookingRequest extends FormRequest
             'appointment_date' => 'required|date|after_or_equal:tomorrow',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
-            // Guest count for a booking without package variants (1->Single,
-            // 2->Couple, 3+->Barkada — see config/booking.php). Required in
-            // that case (see validateGuestCount() below); ignored otherwise.
-            'guests' => 'nullable|integer|min:1|max:30',
             // Cash needs no proof (paid at the branch); every other method
             // still needs the manual proof upload. The `sometimes` default
             // stays gcash in BookingController@store, so a missing method
@@ -94,7 +89,6 @@ class StoreWebBranchBookingRequest extends FormRequest
     {
         $validator->after(function (Validator $validator) {
             $this->validateVariantChoice($validator);
-            $this->validateGuestCount($validator);
             $this->validatePackageCash($validator);
 
             if ($validator->errors()->isNotEmpty()) {
@@ -141,30 +135,6 @@ class StoreWebBranchBookingRequest extends FormRequest
 
         if ($this->input('variant_id') === null || $this->input('variant_id') === '') {
             $validator->errors()->add('variant_id', 'Please choose a package option for this service.');
-        }
-    }
-
-    /**
-     * A service without variants prices its reservation fee off the guest
-     * count, so the count is required there — except flat-fee services,
-     * which ignore guests entirely. Variant bookings take the fee from the
-     * tier instead (guests ignored).
-     */
-    private function validateGuestCount(Validator $validator): void
-    {
-        $serviceId = $this->integer('service_id');
-        $service = $serviceId ? \App\Models\Service::with('variants')->find($serviceId) : null;
-
-        if (! $service || ! ReservationFee::appliesTo($service) || $service->variants->isNotEmpty()) {
-            return;
-        }
-
-        if (ReservationFee::flatFeeFor($service) !== null) {
-            return;
-        }
-
-        if ($this->input('guests') === null || $this->input('guests') === '') {
-            $validator->errors()->add('guests', 'Please tell us how many guests this booking is for.');
         }
     }
 

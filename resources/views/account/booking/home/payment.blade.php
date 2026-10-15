@@ -55,7 +55,6 @@
                         <input type="hidden" name="start_time" value="{{ $time }}">
                         <input type="hidden" name="personnel_id" value="{{ $personnel }}">
                         @if($notes)<input type="hidden" name="notes" value="{{ $notes }}">@endif
-                        @if($guests)<input type="hidden" name="guests" value="{{ $guests }}">@endif
                         @include('partials.booking.carry-fields', ['address' => $address])
 
                         <div class="nx-review-row">
@@ -130,7 +129,7 @@
                         </div>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                            <a href="{{ route('account.booking.home.review', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'guests' => $guests], $address)) }}" class="nx-btn nx-btn-outline">
+                            <a href="{{ route('account.booking.home.review', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes], $address)) }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

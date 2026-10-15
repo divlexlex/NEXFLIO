@@ -65,7 +65,6 @@
                         <input type="hidden" name="start_time" value="{{ $time }}">
                         <input type="hidden" name="personnel_id" value="{{ $personnel }}">
                         @if($notes)<input type="hidden" name="notes" value="{{ $notes }}">@endif
-                        @if($guests)<input type="hidden" name="guests" value="{{ $guests }}">@endif
 
                         <label class="form-label" for="pay-method">Payment method</label>
                         <select name="method" id="pay-method" class="form-select mb-2" style="max-width: 260px;">
@@ -121,7 +120,7 @@
                         </div>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                            <a href="{{ route('account.booking.branch.review', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'guests' => $guests])) }}" class="nx-btn nx-btn-outline">
+                            <a href="{{ route('account.booking.branch.review', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes])) }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

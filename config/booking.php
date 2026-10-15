@@ -17,14 +17,12 @@ return [
     |                App\Support\ServiceCatalog::CATEGORY_ORDER), kept for
     |                reference. The fee itself applies to every service with
     |                no exemption — see ReservationFee::appliesTo().
-    | 'tiers'      — accommodation -> amount. Package variants map
-    |                Solo->Single, Couple->Couple, Barkada->Barkada; a
-    |                non-variant booking maps guests 1->Single, 2->Couple,
-    |                3+->Barkada. The fee is min(tier amount, booked price), so
-    |                it can never exceed the price.
-    | 'flat_fees'  — exact service name -> flat amount. A listed service
-    |                always pays min(flat amount, booked price) with no guest
-    |                count involved (checked first in ReservationFee::for()).
+    | 'tiers'      — accommodation -> amount for PACKAGE variants:
+    |                Solo->Single, Couple->Couple, Barkada->Barkada. The fee
+    |                is min(tier amount, booked price), so it can never
+    |                exceed the price. Variant-less bookings instead follow
+    |                the price rule in App\Support\ReservationFee (500+ pays
+    |                a flat 300, below 500 pays exactly half).
     |
     */
     'reservation_fee' => [
@@ -33,9 +31,6 @@ return [
             'Single' => 300,
             'Couple' => 500,
             'Barkada' => 2000,
-        ],
-        'flat_fees' => [
-            'Kiddie Japanese Head Spa' => 300,
         ],
     ],
 

@@ -243,7 +243,8 @@ class PaymentsSettleMoveTest extends TestCase
             ->patch(route('admin.payments.verify', $sam->payment->id))
             ->assertRedirect();
 
-        // Online Manicure, verified in full — the settled counterpart.
+        // Online Manicure: 179 price -> 89.50 fee; verify, then settle the
+        // remainder — the settled counterpart.
         $this->actingAs($this->client)->post(route('account.booking.branch.store'), [
             'service_id' => $this->manicure->id,
             'personnel_id' => 'any',
@@ -257,6 +258,10 @@ class PaymentsSettleMoveTest extends TestCase
         $this->actingAs($this->manager)
             ->patch(route('admin.payments.verify', $settled->payment->id))
             ->assertRedirect();
+        $this->actingAs($this->manager)->post(
+            route('admin.appointments.branch-payment', $settled->id),
+            ['amount' => 89.50, 'method' => 'cash']
+        )->assertRedirect()->assertSessionHasNoErrors();
 
         // SAM owes 3899 (verified fee, open balance); Manicure is settled.
         $this->actingAs($this->manager)

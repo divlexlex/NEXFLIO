@@ -8,66 +8,50 @@ use App\Models\Service;
  * Reservation fee (down payment) for EVERY service — the single server-side
  * calculation shared by every booking wizard step and by store()/homeStore().
  * A browser-supplied amount is never trusted: the fee is always re-derived
- * here from the real Service row, the chosen package tier label and the
- * guest count. No category is exempt.
+ * here from the real Service row and the chosen package tier label.
+ * No category is exempt.
+ *
+ * Resolution order: a chosen package variant decides first (Solo ₱300 /
+ * Couple ₱500 / Barkada ₱2,000 — see config/booking.php). Variant-less
+ * bookings use the price rule instead: booked price ₱500+ → flat ₱300,
+ * below ₱500 → exactly half the price (2 decimals).
  *
  * See config/booking.php for the tier amounts.
  */
 class ReservationFee
 {
-    /** Every service takes a reservation fee — no category is exempt. */
-    public static function appliesTo(Service $service): bool
-    {
-        return true;
-    }
-
     /**
-     * Flat fee for specially-priced services, matched by exact service
-     * name (config booking.reservation_fee.flat_fees). Returns the amount,
-     * or null when the service has no flat fee.
-     */
-    public static function flatFeeFor(Service $service): ?float
-    {
-        $flatFees = (array) config('booking.reservation_fee.flat_fees', []);
-
-        return array_key_exists($service->name, $flatFees)
-            ? (float) $flatFees[$service->name]
-            : null;
-    }
-
-    /**
-     * The reservation fee due now, or null when the accommodation can't be
-     * determined yet. Flat-fee services pay min(flat amount, booked price)
-     * regardless of variant or guests; everything else resolves through
-     * the tier table. Never exceeds the booked price: a tier amount at or
-     * above the price simply means the whole booking is paid online (no
-     * balance).
+     * The reservation fee due now, or null when it can't be determined yet
+     * (a package variant with an unmapped label). Variant-less bookings use
+     * the price rule and always resolve. Never exceeds the booked price as
+     * a safety net: a fee at or above the price simply means the whole
+     * booking is paid online (no balance).
      */
     public static function for(Service $service, ?string $variantLabel = null, ?int $guests = null): ?float
     {
-        if (! static::appliesTo($service)) {
-            return null;
+        $price = static::priceFor($service, $variantLabel);
+
+        if ($variantLabel !== null && $variantLabel !== '') {
+            $tier = static::tier($variantLabel, null);
+            $tiers = (array) config('booking.reservation_fee.tiers', []);
+
+            if ($tier === null || ! isset($tiers[$tier])) {
+                return null;
+            }
+
+            return min((float) $tiers[$tier], $price);
         }
 
-        $flat = static::flatFeeFor($service);
-        if ($flat !== null) {
-            return min($flat, static::priceFor($service, $variantLabel));
-        }
+        $fee = $price >= 500 ? 300.0 : round($price / 2, 2);
 
-        $tier = static::tier($variantLabel, $guests);
-        $tiers = (array) config('booking.reservation_fee.tiers', []);
-
-        if ($tier === null || ! isset($tiers[$tier])) {
-            return null;
-        }
-
-        return min((float) $tiers[$tier], static::priceFor($service, $variantLabel));
+        return min($fee, $price);
     }
 
     /**
-     * Accommodation tier name. A package variant decides it
-     * (Solo->Single, Couple->Couple, Barkada->Barkada); otherwise the guest
-     * count does (1->Single, 2->Couple, 3+->Barkada). Null when undetermined.
+     * Package tier name from the chosen variant label (Solo->Single,
+     * Couple->Couple, Barkada->Barkada). Null when unmapped. The $guests
+     * argument is retained for call-site compatibility but no longer
+     * affects the fee.
      */
     public static function tier(?string $variantLabel, ?int $guests): ?string
     {

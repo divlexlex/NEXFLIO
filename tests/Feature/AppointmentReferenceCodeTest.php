@@ -154,7 +154,7 @@ class AppointmentReferenceCodeTest extends TestCase
             ->assertSee($code);
     }
 
-    // Fee booking (Massage + guests): breakdown intact and the ID present.
+    // Fee booking (Massage): breakdown intact and the ID present.
     public function test_fee_booking_keeps_breakdown_and_shows_id(): void
     {
         Storage::fake('public');
@@ -166,7 +166,7 @@ class AppointmentReferenceCodeTest extends TestCase
         $response->assertRedirect();
 
         $appointment = Appointment::latest('id')->firstOrFail();
-        $this->assertEquals(500, (float) $appointment->payment->amount);
+        $this->assertEquals(300, (float) $appointment->payment->amount);
 
         $this->actingAs($this->client)->get($response->headers->get('Location'))
             ->assertOk()

@@ -85,8 +85,8 @@
                     </div>
 
                     <form method="GET" action="{{ route('account.booking.branch.payment') }}" class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'guests' => $guests])
-                        <a href="{{ route('account.booking.branch.details', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'guests' => $guests])) }}" class="nx-btn nx-btn-outline">
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes])
+                        <a href="{{ route('account.booking.branch.details', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel])) }}" class="nx-btn nx-btn-outline">
                             <i class="bi bi-arrow-left me-1"></i>Back
                         </a>
                         <button type="submit" class="nx-btn nx-btn-primary">

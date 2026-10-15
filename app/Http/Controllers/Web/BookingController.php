@@ -181,11 +181,6 @@ class BookingController extends Controller
             return $scheduleError;
         }
 
-        // Reservation-fee bookings without package variants price the fee off
-        // the guest count, so the Details step must ask for it (required).
-        // Variant bookings take the fee from the tier instead and never ask.
-        $needsGuests = ReservationFee::appliesTo($service) && $service->variants->isEmpty();
-
         return view('account.booking.details', [
             'service' => $service,
             'variant' => $variant,
@@ -195,8 +190,6 @@ class BookingController extends Controller
             'personnelLabel' => $this->personnelLabel($request->query('personnel')),
             'client' => Auth::user(),
             'notes' => $request->query('notes'),
-            'needsGuests' => $needsGuests,
-            'guests' => $request->query('guests'),
         ]);
     }
 
@@ -226,11 +219,10 @@ class BookingController extends Controller
             'personnelLabel' => $this->personnelLabel($request->query('personnel')),
             'notes' => $request->query('notes'),
             'client' => Auth::user(),
-            'guests' => $this->queryGuests($request),
             // Packages (services with variants) never offer Cash — the
             // reservation fee must be paid online with proof.
             'isPackage' => $service->variants->isNotEmpty(),
-            ...$this->feeQuote($service, $variant, $this->queryGuests($request)),
+            ...$this->feeQuote($service, $variant),
         ]);
     }
 
@@ -258,11 +250,10 @@ class BookingController extends Controller
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
             'notes' => $request->query('notes'),
-            'guests' => $this->queryGuests($request),
             // Packages (services with variants) never offer Cash — the
             // reservation fee must be paid online with proof.
             'isPackage' => $service->variants->isNotEmpty(),
-            ...$this->feeQuote($service, $variant, $this->queryGuests($request)),
+            ...$this->feeQuote($service, $variant),
         ]);
     }
 
@@ -284,19 +275,16 @@ class BookingController extends Controller
         // booked price is payable at the branch.
         $method = $validated['method'] ?? 'gcash';
         $isCash = $method === 'cash';
-        $guests = isset($validated['guests']) ? (int) $validated['guests'] : null;
-        $fee = ReservationFee::for($service, $variant?->label, $guests);
+        $fee = ReservationFee::for($service, $variant?->label);
 
-        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee, $guests) {
+        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee) {
             $appointment = Appointment::create([
                 'user_id' => $request->user()->id,
                 'service_id' => $validated['service_id'],
                 'variant_label' => $variant?->label,
                 'booked_price' => $price,
-                // Guest count only matters for a tiered fee booking without
-                // variants; flat-fee services ignore it (stored null) and
-                // anything else stays null.
-                'guests' => ($variant === null && ReservationFee::appliesTo($service) && ReservationFee::flatFeeFor($service) === null) ? $guests : null,
+                // Guest counts no longer drive the fee — always stored null.
+                'guests' => null,
                 'personnel_id' => $validated['personnel_id'],
                 'appointment_date' => $validated['appointment_date'],
                 'start_time' => $validated['start_time'],
@@ -501,10 +489,6 @@ class BookingController extends Controller
             'personnelLabel' => $this->personnelLabel($request->query('personnel')),
             'client' => Auth::user(),
             'notes' => $request->query('notes'),
-            // Variant-less services price the fee off the guest count, so
-            // the Details step must ask for it (required) — same as Branch.
-            'needsGuests' => $service->variants->isEmpty(),
-            'guests' => $request->query('guests'),
         ]);
     }
 
@@ -534,11 +518,10 @@ class BookingController extends Controller
             'personnelLabel' => $this->personnelLabel($request->query('personnel')),
             'notes' => $request->query('notes'),
             'client' => Auth::user(),
-            'guests' => $this->queryGuests($request),
             // Packages (services with variants) never offer Cash — the
             // reservation fee must be paid online with proof.
             'isPackage' => $service->variants->isNotEmpty(),
-            ...$this->feeQuote($service, null, $this->queryGuests($request)),
+            ...$this->feeQuote($service, null),
         ]);
     }
 
@@ -566,11 +549,10 @@ class BookingController extends Controller
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
             'notes' => $request->query('notes'),
-            'guests' => $this->queryGuests($request),
             // Packages (services with variants) never offer Cash — the
             // reservation fee must be paid online with proof.
             'isPackage' => $service->variants->isNotEmpty(),
-            ...$this->feeQuote($service, null, $this->queryGuests($request)),
+            ...$this->feeQuote($service, null),
         ]);
     }
 
@@ -586,9 +568,9 @@ class BookingController extends Controller
         $validated = $request->validated();
 
         // Same fee derivation as the Branch flow: the package tier (when the
-        // service has variants) or the guest count decides the reservation
-        // fee, capped at the booked price. Cash skips the fee entirely: the
-        // full booked price is payable at the door.
+        // service has variants), otherwise the price rule — capped at the
+        // booked price. Cash skips the fee entirely: the full booked price
+        // is payable at the door.
         $service = Service::with('variants')->findOrFail($validated['service_id']);
         $variant = isset($validated['variant_id'])
             ? $service->variants->firstWhere('id', (int) $validated['variant_id'])
@@ -597,16 +579,16 @@ class BookingController extends Controller
 
         $method = $validated['method'] ?? 'gcash';
         $isCash = $method === 'cash';
-        $guests = isset($validated['guests']) ? (int) $validated['guests'] : null;
-        $fee = ReservationFee::for($service, $variant?->label, $guests);
+        $fee = ReservationFee::for($service, $variant?->label);
 
-        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee, $guests) {
+        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee) {
             $appointment = Appointment::create([
                 'user_id' => $request->user()->id,
                 'service_id' => $validated['service_id'],
                 'variant_label' => $variant?->label,
                 'booked_price' => $price,
-                'guests' => $variant === null ? $guests : null,
+                // Guest counts no longer drive the fee — always stored null.
+                'guests' => null,
                 'personnel_id' => $validated['personnel_id'],
                 'appointment_date' => $validated['appointment_date'],
                 'start_time' => $validated['start_time'],
@@ -1061,18 +1043,6 @@ class BookingController extends Controller
     }
 
     /**
-     * Guest count carried in the wizard query string (Details → Review →
-     * Payment). Null until the client picks one; store() validates it
-     * authoritatively via StoreWebBranchBookingRequest.
-     */
-    private function queryGuests(Request $request): ?int
-    {
-        $guests = $request->query('guests');
-
-        return $guests === null || $guests === '' ? null : (int) $guests;
-    }
-
-    /**
      * Server-side price breakdown for the Review / Payment steps: the booked
      * price, the reservation fee due now (null when no fee applies), and the
      * balance payable at the branch. Display only — store() recomputes all
@@ -1080,10 +1050,10 @@ class BookingController extends Controller
      *
      * @return array{price: float, fee: float|null, balance: float|null}
      */
-    private function feeQuote(Service $service, ?ServiceVariant $variant, ?int $guests): array
+    private function feeQuote(Service $service, ?ServiceVariant $variant): array
     {
         $price = (float) ($variant?->price ?? $service->price);
-        $fee = ReservationFee::for($service, $variant?->label, $guests);
+        $fee = ReservationFee::for($service, $variant?->label);
 
         return [
             'price' => $price,
