@@ -24,7 +24,6 @@
     }
 
     .nx-inv-table > tbody > tr > * { border-color: rgba(201, 162, 75, .14); }
-    .nx-inv-table > tbody > tr:hover > * { background-color: rgba(201, 162, 75, .08); }
 
     .nx-inv-name { color: var(--nex-text); }
     html[data-bs-theme="dark"] .nx-inv-name { color: #F3E9D7; }
@@ -34,11 +33,6 @@
 
     .nx-inv-num { color: var(--nex-text); }
     html[data-bs-theme="dark"] .nx-inv-num { color: #F3E9D7; }
-
-    .nx-inv-table > tbody > tr.nx-low-stock > * {
-        background-color: var(--nex-warning-subtle-bg);
-        color: var(--nex-warning-subtle-text);
-    }
 
     /* Soft amber pill: transparent amber wash + amber text + thin amber
        border — never a solid yellow slab. */
@@ -158,7 +152,7 @@
             </thead>
             <tbody>
                 @forelse($items as $item)
-                    <tr class="{{ $item->quantity <= $item->reorder_point ? 'nx-low-stock' : '' }}">
+                    <tr>
                         <td>
                             <strong class="nx-inv-name">{{ $item->item_name }}</strong>
                             <div class="small nx-inv-price">₱{{ number_format($item->price_per_unit, 2) }} / {{ $item->unit }}</div>
@@ -195,7 +189,7 @@
                             <button class="btn btn-sm nx-inv-btn nx-inv-btn-edit"
                                     data-bs-toggle="modal" data-bs-target="#editItemModal"
                                     data-id="{{ $item->id }}" data-name="{{ $item->item_name }}"
-                                    data-category="{{ $item->category }}" data-unit="{{ $item->unit }}"
+                                    data-category="{{ collect($categories)->first(fn ($n) => mb_strtolower($n) === mb_strtolower((string) $item->category)) ?? $item->category }}" data-unit="{{ $item->unit }}"
                                     data-price="{{ $item->price_per_unit }}" data-reorder="{{ $item->reorder_point }}">
                                 <i class="bi bi-pencil"></i> Edit
                             </button>
@@ -475,7 +469,14 @@
         document.getElementById('editItemForm').action = "{{ url('admin/inventory') }}/" + btn.dataset.id;
         document.getElementById('edit-item-title').textContent = btn.dataset.name;
         document.getElementById('edit-item-name').value = btn.dataset.name;
-        document.getElementById('edit-item-category').value = btn.dataset.category || '';
+        // Match the item's category case-insensitively: legacy lowercase
+        // rows ('massage') must still land on their option ('Massage')
+        // instead of a blank select. No match leaves the placeholder, and
+        // the required rule + server validation refuse an empty save.
+        const catSelect = document.getElementById('edit-item-category');
+        const current = (btn.dataset.category || '').toLowerCase();
+        const match = Array.from(catSelect.options).find((o) => o.value.toLowerCase() === current);
+        catSelect.value = match ? match.value : '';
         document.getElementById('edit-item-unit').value = btn.dataset.unit || '';
         document.getElementById('edit-item-reorder').value = btn.dataset.reorder ?? '';
         document.getElementById('edit-item-price').value = btn.dataset.price ?? '';
@@ -493,17 +494,34 @@
             .map((id) => document.getElementById(id))
             .filter(Boolean);
         let target = null;
+        let restoreValue = '';
+        let justCreated = false;
 
         selects.forEach((select) => {
+            // Remember the pre-change value so cancelling out of the new
+            // category modal restores the item's original category.
+            select.addEventListener('focus', () => {
+                select.dataset.prev = select.value;
+            });
             select.addEventListener('change', () => {
                 if (select.value !== '__new__') return;
                 target = select;
+                restoreValue = select.dataset.prev || '';
+                justCreated = false;
                 select.value = '';
                 errorEl.textContent = '';
                 errorEl.classList.add('d-none');
                 form.reset();
                 new bootstrap.Modal(modal).show();
             });
+        });
+
+        modal.addEventListener('hidden.bs.modal', () => {
+            // Dismissed without creating: put the original selection back.
+            if (!justCreated && target) {
+                target.value = restoreValue;
+            }
+            target = null;
         });
 
         form.addEventListener('submit', (event) => {
@@ -540,6 +558,7 @@
                         select.insertBefore(option, plus);
                         if (select === target) select.value = category.name;
                     });
+                    justCreated = true;
                     bootstrap.Modal.getInstance(modal).hide();
                 })
                 .catch((error) => {

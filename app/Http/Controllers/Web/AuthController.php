@@ -68,6 +68,17 @@ class AuthController extends Controller
                 ->withErrors(['password' => 'Incorrect password. Please try again or use "Forgot password?" to reset it.']);
         }
 
+        // Non-active staff cannot sign in (checked after the password so
+        // the gate never reveals which half failed). Staff without a
+        // profile, and every non-staff account, are unaffected.
+        if ((int) $user->role_id === User::ROLE_STAFF
+            && $user->staffProfile !== null
+            && $user->staffProfile->employment_status !== 'active') {
+            return back()
+                ->withInput($request->only('email'))
+                ->withErrors(['email' => 'This employee account is no longer active. Please contact the owner or manager.']);
+        }
+
         Auth::login($user, $request->boolean('remember'));
 
         $user = Auth::user();

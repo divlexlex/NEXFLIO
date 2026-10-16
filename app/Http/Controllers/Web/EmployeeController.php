@@ -19,9 +19,50 @@ class EmployeeController extends Controller
     {
         $date = $request->query('date', now()->toDateString());
 
+        // Position options for the employee forms (id-ordered, so the
+        // classic positions come first) — see App\Models\Position.
+        $positions = Position::orderBy('id')->get(['id', 'name']);
+
+        // List filters (?q, ?position, ?status, combined with AND). The
+        // dropdowns persist per session like the other admin lists: a
+        // request WITH the param uses it (normalized) and stores it;
+        // WITHOUT it the stored choice applies, then show-all. Search is
+        // never persisted. The date picker is untouched by all of this.
+        $q = trim((string) $request->query('q', ''));
+
+        $position = $request->query('position', $request->session()->get('filters.employees.position', 'all'));
+        if ($position !== 'all' && ! $positions->contains('name', $position)) {
+            $position = 'all';
+        }
+        if ($request->query('position') !== null) {
+            $request->session()->put('filters.employees.position', $position);
+        }
+
+        $status = $request->query('status', $request->session()->get('filters.employees.status', 'all'));
+        if (! in_array($status, ['all', 'active', 'inactive', 'terminated'], true)) {
+            $status = 'all';
+        }
+        if ($request->query('status') !== null) {
+            $request->session()->put('filters.employees.status', $status);
+        }
+
+        $totalEmployees = User::where('role_id', User::ROLE_STAFF)->count();
+
         return view('admin.employees.index', [
             'employees' => User::where('role_id', User::ROLE_STAFF)
                 ->with('staffProfile')
+                ->when($q !== '', fn ($query) => $query->where(function ($query) use ($q) {
+                    $query->where('name', 'like', '%'.$q.'%')
+                        ->orWhere('username', 'like', '%'.$q.'%');
+                }))
+                ->when($position !== 'all', fn ($query) => $query->whereHas(
+                    'staffProfile',
+                    fn ($query) => $query->where('position', $position)
+                ))
+                ->when($status !== 'all', fn ($query) => $query->whereHas(
+                    'staffProfile',
+                    fn ($query) => $query->where('employment_status', $status)
+                ))
                 ->orderBy('last_name')
                 ->orderBy('first_name')
                 ->get(),
@@ -31,9 +72,12 @@ class EmployeeController extends Controller
                 ->get()
                 ->keyBy('user_id'),
             'attendanceDate' => $date,
-            // Position options for the employee forms (id-ordered, so the
-            // classic positions come first) — see App\Models\Position.
-            'positions' => Position::orderBy('id')->get(['id', 'name']),
+            'positions' => $positions,
+            'currentQ' => $q,
+            'currentPosition' => $position,
+            'currentStatus' => $status,
+            'totalEmployees' => $totalEmployees,
+            'filtersActive' => $q !== '' || $position !== 'all' || $status !== 'all',
         ]);
     }
 
@@ -89,7 +133,7 @@ class EmployeeController extends Controller
             'base_pay'          => 'required|numeric|min:0',
             'commission_rate'   => 'required|numeric|min:0|max:100',
             'position'          => ['required', Rule::exists('positions', 'name')],
-            'employment_status' => ['required', Rule::in(['active', 'inactive'])],
+            'employment_status' => ['required', Rule::in(['active', 'inactive', 'terminated'])],
         ]);
 
         $user->staffProfile

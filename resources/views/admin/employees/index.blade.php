@@ -50,6 +50,38 @@
                    onchange="this.form.submit()">
         </form>
     </div>
+    {{-- FILTER BAR (one GET form, auto-submit — same pattern as
+         Services/Change Requests: selects submit immediately, search
+         ~500ms after the last keystroke; no buttons). The date rides
+         along hidden so filtering never resets the Attendance column. --}}
+    <form method="GET" action="{{ route('admin.employees') }}" id="employees-filter-form" class="row g-2 align-items-end mb-2">
+        <input type="hidden" name="date" value="{{ $attendanceDate }}">
+        <div class="col-md-6">
+            <label class="form-label small mb-0" for="filter-q">Search</label>
+            <input type="search" id="filter-q" name="q" value="{{ $currentQ }}" class="form-control" placeholder="Search name or username…" autocomplete="off">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-0" for="filter-position">Position</label>
+            <select id="filter-position" name="position" class="form-select">
+                <option value="all" {{ $currentPosition === 'all' ? 'selected' : '' }}>All positions</option>
+                @foreach($positions as $position)
+                    <option value="{{ $position->name }}" {{ $currentPosition === $position->name ? 'selected' : '' }}>{{ $position->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-0" for="filter-status">Status</label>
+            <select id="filter-status" name="status" class="form-select">
+                <option value="all" {{ $currentStatus === 'all' ? 'selected' : '' }}>All statuses</option>
+                <option value="active" {{ $currentStatus === 'active' ? 'selected' : '' }}>Active</option>
+                <option value="inactive" {{ $currentStatus === 'inactive' ? 'selected' : '' }}>Inactive</option>
+                <option value="terminated" {{ $currentStatus === 'terminated' ? 'selected' : '' }}>Terminated</option>
+            </select>
+        </div>
+    </form>
+    @if($filtersActive)
+        <p class="text-muted small mb-2">Showing {{ $employees->count() }} of {{ $totalEmployees }} employees</p>
+    @endif
     <div class="table-responsive">
         <table class="table align-middle">
             <thead>
@@ -227,6 +259,7 @@
                     <select name="employment_status" id="edit-emp-status" class="form-select">
                         <option value="active">Active</option>
                         <option value="inactive">Inactive (removed from booking pool, record kept)</option>
+                        <option value="terminated">Terminated (employment ended — cannot sign in, record kept)</option>
                     </select>
                 </div>
             </div>
@@ -314,7 +347,36 @@
         document.getElementById('deleteEmployeeForm').action = "{{ url('admin/employees') }}/" + btn.dataset.id;
         document.getElementById('delete-emp-name').textContent = btn.dataset.name;
     });
+</script>
+<script>
+    // Automatic employees filter bar (same pattern as the Admin Services
+    // page): selects submit immediately, the search input submits ~500ms
+    // after the last keystroke. No buttons — resetting to All/empty
+    // re-submits and restores the full list.
+    (function () {
+        const form = document.getElementById('employees-filter-form');
+        if (!form) return;
+        const search = document.getElementById('filter-q');
+        let timer = null;
 
+        form.querySelectorAll('#filter-position, #filter-status').forEach((sel) => {
+            sel.addEventListener('change', () => form.submit());
+        });
+
+        search.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => form.submit(), 500);
+        });
+
+        // Keep the typing flow smooth across reloads: focus back into the
+        // search box with the caret at the end of the current text.
+        if (search.value) {
+            search.focus();
+            try { search.setSelectionRange(search.value.length, search.value.length); } catch (e) { /* older browsers */ }
+        }
+    })();
+</script>
+<script>
     // "+ New position…" (last option of both employee selects): open the
     // shared modal instead of submitting that value, then create via fetch
     // so the employee form keeps everything already typed. The new option

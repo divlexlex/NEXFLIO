@@ -48,15 +48,25 @@ class InventoryManagementTest extends TestCase
 
     public function test_inventory_table_colorway_classes(): void
     {
+        // The default Facial tab has no seeded rows — add a low-stock one
+        // so badges and empty-stock lines render.
+        Inventory::create($this->itemPayload([
+            'item_name' => 'Colorway Serum',
+            'category' => 'Facial',
+            'quantity' => 0,
+        ]));
+
         $html = $this->actingAs($this->manager)->get(route('admin.inventory'))->assertOk()->getContent();
 
-        // No hardcoded-cream Bootstrap row class …
+        // No hardcoded-cream Bootstrap row class, no row hover rule, and
+        // no full-row tint class on the items table …
         $this->assertStringNotContainsString('table-warning', $html);
+        $this->assertStringNotContainsString('.nx-inv-table > tbody > tr:hover', $html);
+        $this->assertStringNotContainsString('nx-low-stock', $html);
         // … the approved colorway classes instead. Seeded rows sit at 0
-        // on hand, so low-stock rows, badges, and empty-stock lines render.
+        // on hand, so Low badges and empty-stock lines render.
         foreach ([
             'nx-inv-table',
-            'nx-low-stock',
             'nx-inv-name',
             'nx-inv-price',
             'nx-inv-num',
@@ -74,6 +84,78 @@ class InventoryManagementTest extends TestCase
         foreach (['#C6A15B', '#F3E9D7', '#A68B6B', '#8F6236', '#C9A24B'] as $hex) {
             $this->assertStringContainsString($hex, $html);
         }
+        // The Low badge remains the low-stock indicator.
+        $this->assertStringContainsString('>Low</span>', $html);
+    }
+
+    public function test_edit_modal_preselects_item_category(): void
+    {
+        // Legacy lowercase row (the live-site case): the button still
+        // carries the canonical option value so the select is not blank.
+        // AAA-prefixed to land on page 1 of the seeded category.
+        $item = Inventory::create($this->itemPayload([
+            'item_name' => 'AAA Legacy Robe',
+            'category' => 'massage',
+            'quantity' => 0,
+        ]));
+
+        $html = $this->actingAs($this->manager)
+            ->get(route('admin.inventory', ['category' => 'Massage']))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('AAA Legacy Robe', $html);
+        $this->assertStringContainsString('data-category="Massage"', $html);
+        // Case-insensitive matcher backs the prefill for any other skew.
+        $this->assertStringContainsString('o.value.toLowerCase()', $html);
+    }
+
+    public function test_update_with_unchanged_category_preserves_it(): void
+    {
+        $item = Inventory::create($this->itemPayload([
+            'item_name' => 'Legacy Bath Robe',
+            'category' => 'massage',
+            'quantity' => 0,
+        ]));
+
+        // Submitted exactly as the prefilled form sends it.
+        $this->actingAs($this->manager)->patch(
+            route('admin.inventory.update', $item->id),
+            $this->itemPayload(['item_name' => 'Legacy Bath Robe', 'category' => 'Massage'])
+        )->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('Massage', $item->fresh()->category);
+
+        // Lowercase submissions canonicalize instead of duplicating case.
+        $this->actingAs($this->manager)->patch(
+            route('admin.inventory.update', $item->id),
+            $this->itemPayload(['item_name' => 'Legacy Bath Robe', 'category' => 'massage'])
+        )->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('Massage', $item->fresh()->category);
+    }
+
+    public function test_cancelled_category_modal_restores_original_selection(): void
+    {
+        $html = $this->actingAs($this->manager)->get(route('admin.inventory'))->assertOk()->getContent();
+
+        // The shared modal remembers the pre-change value and restores it
+        // when dismissed without creating a category.
+        $this->assertStringContainsString('dataset.prev', $html);
+        $this->assertStringContainsString("hidden.bs.modal", $html);
+    }
+
+    public function test_no_leaked_script_text_on_inventory_page(): void
+    {
+        $html = $this->actingAs($this->manager)->get(route('admin.inventory'))->assertOk()->getContent();
+
+        // Same leak class as the employees page once had: strip script
+        // blocks and no handler text may remain visible.
+        $textOnly = (string) preg_replace('#<script\b[^>]*>.*?</script>#s', '', $html);
+        $this->assertStringNotContainsString('modal instead of submitting that value', $textOnly);
+        $this->assertStringContainsString('id="newCategoryModal"', $html);
+        $this->assertStringContainsString("document.getElementById('newCategoryForm')", $html);
+        $this->assertSame(substr_count($html, '<script'), substr_count($html, '</script>'));
     }
 
     public function test_manager_can_edit_item_master_data_without_touching_stock(): void

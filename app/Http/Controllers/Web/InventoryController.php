@@ -35,12 +35,14 @@ class InventoryController extends Controller
         // Stock definitions mirror the page's "Low" badge rule
         // (quantity <= reorder_point): In = above the point, Low = at or
         // below it (0 included, exactly like the badge), Out = zero.
+        // Category matching is case-insensitive so legacy lowercase rows
+        // stay listed even where the normalizing seeder has not run.
         $itemsQuery = Inventory::with(['batches' => function ($query) {
             $query->where('quantity_remaining', '>', 0)
                 ->orderBy('received_at')
                 ->orderBy('id');
         }])
-            ->when($category !== null, fn ($query) => $query->where('category', $category))
+            ->when($category !== null, fn ($query) => $query->whereRaw('LOWER(category) = ?', [mb_strtolower($category)]))
             ->when($q !== '', fn ($query) => $query->where('item_name', 'like', '%'.$q.'%'))
             ->when($stock === 'in', fn ($query) => $query->whereColumn('quantity', '>', 'reorder_point'))
             ->when($stock === 'low', fn ($query) => $query->whereColumn('quantity', '<=', 'reorder_point'))
@@ -49,7 +51,7 @@ class InventoryController extends Controller
 
         $totalInCategory = $category === null
             ? 0
-            : Inventory::where('category', $category)->count();
+            : Inventory::whereRaw('LOWER(category) = ?', [mb_strtolower($category)])->count();
 
         return view('admin.inventory.index', [
             'category' => $category,
