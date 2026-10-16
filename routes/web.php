@@ -28,6 +28,7 @@ use App\Http\Controllers\Web\ReviewController;
 use App\Http\Controllers\Web\ServiceController;
 use App\Http\Controllers\Web\ServicesController;
 use App\Http\Controllers\Web\StaffController;
+use App\Http\Controllers\Web\UploadedFileController;
 use Illuminate\Support\Facades\Route;
 
 // ===== Public =====
@@ -50,6 +51,12 @@ Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/gallery', [PageController::class, 'gallery'])->name('gallery');
 Route::get('/faqs', [PageController::class, 'faqs'])->name('faqs');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
+
+// Uploaded files (payment proofs, service/promo images) served off the
+// 'public' disk — no public/storage symlink on the production host, so
+// display URLs point here instead of the symlinked storage path. Access
+// rules live in the controller (payment proofs are manager-only).
+Route::get('/files/{path}', [UploadedFileController::class, 'show'])->where('path', '.*')->name('files.show');
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');

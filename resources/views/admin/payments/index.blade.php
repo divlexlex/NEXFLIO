@@ -76,7 +76,7 @@
                             <div class="text-muted">by {{ $payment->verifier->name }} · {{ $payment->verified_at?->format('M j, g:i A') }}</div>
                         @endif
                         @if($payment->proof_path)
-                            <a href="{{ asset('storage/' . $payment->proof_path) }}" target="_blank" rel="noopener" class="small">View proof <i class="bi bi-box-arrow-up-right"></i></a>
+                            <a href="{{ route('files.show', ['path' => $payment->proof_path]) }}" target="_blank" rel="noopener" class="small">View proof <i class="bi bi-box-arrow-up-right"></i></a>
                         @endif
                         @if($payment->status->value === 'rejected')
                             @if($payment->rejection_reason)
@@ -102,8 +102,8 @@
 
                 @if($pendingPayment)
                     @if($pendingPayment->proof_path)
-                        <a href="{{ asset('storage/' . $pendingPayment->proof_path) }}" target="_blank" rel="noopener">
-                            <img src="{{ asset('storage/' . $pendingPayment->proof_path) }}"
+                        <a href="{{ route('files.show', ['path' => $pendingPayment->proof_path]) }}" target="_blank" rel="noopener">
+                            <img src="{{ route('files.show', ['path' => $pendingPayment->proof_path]) }}"
                                  alt="Proof of payment" class="img-fluid rounded mb-2"
                                  style="max-height: 180px; object-fit: cover; width: 100%;">
                         </a>

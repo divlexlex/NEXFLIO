@@ -16,7 +16,6 @@ use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -232,7 +231,7 @@ class AppointmentController extends Controller
                     'payment' => $payment ? [
                         'label' => $methodLabel.' · '.ucfirst($payment->status->value),
                         'amount' => (float) $payment->amount,
-                        'proofUrl' => $payment->proof_path ? Storage::url($payment->proof_path) : null,
+                        'proofUrl' => $payment->proof_path ? route('files.show', ['path' => $payment->proof_path]) : null,
                     ] : null,
                     // Payment state for the details drawer: what the client has
                     // paid / still owes. Settlement itself now lives on the
