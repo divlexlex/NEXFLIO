@@ -212,24 +212,19 @@ class PaymentsSettleMoveTest extends TestCase
         $this->assertSame('Paid in full', $appointment->refresh()->paymentState());
     }
 
-    // Tabs read All · Verified · Pending · Rejected; the page still opens
-    // on the verification queue (Pending) by default.
-    public function test_tabs_order_with_pending_default(): void
+    // Header holds ONE status dropdown (Pending default) plus the Amounts
+    // select — no nav-pill tabs.
+    public function test_header_dropdown_with_pending_default(): void
     {
         $html = $this->actingAs($this->manager)->get(route('admin.payments'))->assertOk()->getContent();
 
-        $all = strpos($html, '>All<');
-        $verified = strpos($html, '>Verified<');
-        $pending = strpos($html, '>Pending<');
-        $rejected = strpos($html, '>Rejected<');
-        $this->assertGreaterThan($all, $verified);
-        $this->assertGreaterThan($verified, $pending);
-        $this->assertGreaterThan($pending, $rejected);
-
-        $this->assertMatchesRegularExpression(
-            '/<a class="nav-link active"[^>]*status=pending/',
-            $html
-        );
+        $this->assertStringNotContainsString('<ul class="nav nav-pills', $html);
+        $this->assertStringContainsString('id="status-filter"', $html);
+        foreach (['pending', 'verified', 'rejected', 'all', 'refund', 'no_refund'] as $value) {
+            $this->assertStringContainsString('value="'.$value.'"', $html);
+        }
+        $this->assertMatchesRegularExpression('/<option value="pending"[^>]*selected/', $html);
+        $this->assertStringContainsString('id="balance-filter"', $html);
     }
 
     // Balance filter cooperates with tabs: due shows only balance > 0,
@@ -277,11 +272,14 @@ class PaymentsSettleMoveTest extends TestCase
             ->assertSee('Manicure')
             ->assertDontSee('Package SAM');
 
-        // Tab links keep the active balance filter.
-        $this->actingAs($this->manager)
+        // Both dropdowns reflect the active filters.
+        $html = $this->actingAs($this->manager)
             ->get(route('admin.payments', ['status' => 'verified', 'balance' => 'due']))
             ->assertOk()
             ->assertSee('Package SAM')
-            ->assertSee('balance=due', false);
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('/<option value="verified"[^>]*selected/', $html);
+        $this->assertMatchesRegularExpression('/<option value="due"[^>]*selected/', $html);
     }
 }

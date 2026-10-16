@@ -99,7 +99,7 @@
         <select name="status" class="form-select w-auto" onchange="this.form.submit()">
             <option value="">All statuses</option>
             @foreach($statuses as $status)
-                <option value="{{ $status->value }}" @selected(request('status') === $status->value)>
+                <option value="{{ $status->value }}" @selected(($currentStatus ?? '') === $status->value)>
                     {{ $status->label() }}
                 </option>
             @endforeach
@@ -201,6 +201,26 @@
             <a href="{{ route('admin.payments', ['status' => 'pending']) }}">Payments</a>.
         </div>
 
+        {{-- Pending cancellation: replaces the operation buttons (and the
+             status badge text) while a cancellation request awaits review.
+             Everything else in the drawer stays visible. --}}
+        <div class="alert alert-warning d-none mt-3 mb-0" id="dw-cancel-notice">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            <span class="fw-semibold">Cancellation requested — pending review in Change Requests.</span>
+            <span class="d-block small mt-1 d-none" id="dw-cancel-reason-wrap">Reason: <span id="dw-cancel-reason"></span></span>
+            <a href="{{ route('admin.appointment-requests') }}" class="btn btn-sm btn-warning mt-2">Review in Change Requests</a>
+        </div>
+
+        {{-- No-personnel warning: shown directly above the action buttons
+             when the appointment has no assigned staff but is still
+             actionable (Unverified/Booked/In-Service). Start service is
+             already unavailable without personnel — this is the visible
+             explanation. --}}
+        <div class="alert alert-warning d-none mt-3 mb-0" id="dw-staff-notice">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            <span class="fw-semibold">No personnel assigned — assign a staff member before this service can be started.</span>
+        </div>
+
         <div class="d-grid gap-2 mt-3" id="dw-actions"></div>
 
         {{-- One shared status form the action buttons submit --}}
@@ -209,6 +229,48 @@
             <input type="hidden" name="status" id="dw-status-target">
             <input type="hidden" name="rejection_reason" id="dw-reason">
         </form>
+    </div>
+</div>
+
+{{-- DRAWER CONFIRM MODALS: "Mark no-show" and "Cancel" open one of these
+     first; only Confirm submits the shared status form below to the
+     existing endpoint (same transition + payment side effects). Start
+     service / Assign Staff are never gated here. --}}
+<div class="modal fade" id="dwNoShowModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Mark as no-show?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0" id="dw-noshow-summary"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-spa" id="dw-noshow-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="dwCancelModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cancel this appointment?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="dw-cancel-summary"></p>
+                <label class="form-label" for="dw-cancel-reason-input">Reason <span class="text-muted">(optional)</span></label>
+                <textarea id="dw-cancel-reason-input" class="form-control" rows="2" placeholder="Why is this booking being cancelled?"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-spa" id="dw-cancel-confirm">Confirm</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -411,7 +473,8 @@
             document.getElementById('dw-date').textContent = p.dateLabel || '—';
             document.getElementById('dw-time').textContent = p.timeLabel || '';
             document.getElementById('dw-staff').textContent = p.personnel || 'No preferred personnel';
-            document.getElementById('dw-status').textContent = p.statusLabel || '—';
+            document.getElementById('dw-status').textContent =
+                p.pending_cancellation ? 'Pending — cancellation requested' : (p.statusLabel || '—');
 
             const payRow = document.getElementById('dw-payment-row');
             const proof = document.getElementById('dw-proof');
@@ -431,9 +494,30 @@
             // stays available so "no preference" bookings can be staffed.
             document.getElementById('dw-verify-hint').classList.toggle('d-none', !p.verificationLocked);
 
+            // Pending cancellation replaces the operation buttons with the
+            // notice panel above (status badge already swapped above).
+            const cancelNotice = document.getElementById('dw-cancel-notice');
+            cancelNotice.classList.toggle('d-none', !p.pending_cancellation);
+            const reasonWrap = document.getElementById('dw-cancel-reason-wrap');
+            if (p.pending_cancellation && p.cancellation_reason) {
+                document.getElementById('dw-cancel-reason').textContent = p.cancellation_reason;
+                reasonWrap.classList.remove('d-none');
+            } else {
+                reasonWrap.classList.add('d-none');
+            }
+
             const notesRow = document.getElementById('dw-notes-row');
             if (p.notes) { notesRow.classList.remove('d-none'); document.getElementById('dw-notes').textContent = p.notes; }
             else { notesRow.classList.add('d-none'); }
+
+            // No-personnel warning: only when nobody is assigned and the
+            // appointment is still actionable (not terminal).
+            document.getElementById('dw-staff-notice').classList.toggle('d-none', !(!p.personnelId && !p.isTerminal));
+
+            function confirmSummary() {
+                return (p.client || '—') + ' — ' + (p.service || '—') + ' — '
+                    + (p.dateLabel || '') + (p.timeLabel ? ' · ' + p.timeLabel : '');
+            }
 
             const form = document.getElementById('dw-statusForm');
             form.action = statusBase + '/' + event.id + '/status';
@@ -445,19 +529,32 @@
                 btn.type = 'button';
                 btn.className = 'btn btn-' + a.style;
                 btn.textContent = a.label;
-                btn.addEventListener('click', () => {
-                    if (a.reason) {
-                        const r = window.prompt('Reason for rejecting / cancelling this booking:');
-                        if (r === null) return;
-                        document.getElementById('dw-reason').value = r;
-                    }
-                    document.getElementById('dw-status-target').value = a.to;
-                    form.submit();
-                });
+                if (a.to === 'no-show') {
+                    // Confirmation modal first — a plain click submits nothing.
+                    btn.addEventListener('click', () => {
+                        document.getElementById('dw-noshow-summary').textContent = confirmSummary();
+                        document.getElementById('dw-status-target').value = a.to;
+                        new bootstrap.Modal(document.getElementById('dwNoShowModal')).show();
+                    });
+                } else if (a.to === 'cancelled') {
+                    // Confirmation modal first (with optional reason) — a
+                    // plain click submits nothing.
+                    btn.addEventListener('click', () => {
+                        document.getElementById('dw-cancel-summary').textContent = confirmSummary();
+                        document.getElementById('dw-cancel-reason-input').value = '';
+                        document.getElementById('dw-status-target').value = a.to;
+                        new bootstrap.Modal(document.getElementById('dwCancelModal')).show();
+                    });
+                } else {
+                    btn.addEventListener('click', () => {
+                        document.getElementById('dw-status-target').value = a.to;
+                        form.submit();
+                    });
+                }
                 actions.appendChild(btn);
                 hasAction = true;
             });
-            if (!p.isTerminal) {
+            if (!p.isTerminal && !p.pending_cancellation) {
                 const assignBtn = document.createElement('button');
                 assignBtn.type = 'button';
                 assignBtn.className = 'btn btn-outline-secondary';
@@ -470,7 +567,7 @@
                 actions.appendChild(assignBtn);
                 hasAction = true;
             }
-            if (!hasAction && !p.verificationLocked) {
+            if (!hasAction && !p.verificationLocked && !p.pending_cancellation) {
                 actions.innerHTML = '<p class="text-muted small mb-0">No actions available for a ' + esc(p.statusLabel).toLowerCase() + ' appointment.</p>';
             }
 
@@ -499,8 +596,18 @@
             dayModal.show();
         }
 
-        const overrideModal = document.getElementById('overrideModal');
-        overrideModal.addEventListener('show.bs.modal', (event) => {
+        // Drawer confirmation modals: only Confirm submits the shared
+        // status form (to the existing endpoint); Cancel dismisses.
+        document.getElementById('dw-noshow-confirm').addEventListener('click', () => {
+            document.getElementById('dw-reason').value = '';
+            document.getElementById('dw-statusForm').submit();
+        });
+        document.getElementById('dw-cancel-confirm').addEventListener('click', () => {
+            document.getElementById('dw-reason').value = document.getElementById('dw-cancel-reason-input').value;
+            document.getElementById('dw-statusForm').submit();
+        });
+
+        const overrideModal = document.getElementById('overrideModal');        overrideModal.addEventListener('show.bs.modal', (event) => {
             const btn = event.relatedTarget;
             document.getElementById('overrideForm').action = statusBase + '/' + btn.dataset.id + '/override';
             document.getElementById('ov-date').value = btn.dataset.date;

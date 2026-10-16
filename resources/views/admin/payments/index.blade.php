@@ -5,29 +5,27 @@
 @section('content')
 <h1 class="h3 mb-4">Payment Verification</h1>
 
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-<ul class="nav nav-pills mb-0">
-    @foreach(['all' => 'All', 'verified' => 'Verified', 'pending' => 'Pending', 'rejected' => 'Rejected'] as $key => $label)
-        <li class="nav-item">
-            <a class="nav-link {{ $currentStatus === $key ? 'active' : '' }}"
-               href="{{ route('admin.payments', array_filter(['status' => $key, 'balance' => $currentBalance !== 'all' ? $currentBalance : null])) }}">{{ $label }}</a>
-        </li>
-    @endforeach
-</ul>
-
-{{-- Balance filter — narrows the active tab's cards by the appointment's
-     derived balanceDue(), via query params so it survives reloads and tab
-     switches (see PaymentController@index). --}}
-<form method="GET" action="{{ route('admin.payments') }}" class="d-flex align-items-center gap-2 mb-0">
-    <input type="hidden" name="status" value="{{ $currentStatus }}">
-    <label class="form-label small text-muted mb-0" for="balance-filter">Amounts</label>
-    <select name="balance" id="balance-filter" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
-        @foreach(['all' => 'All amounts', 'due' => 'With balance due', 'paid' => 'Paid in full'] as $value => $label)
-            <option value="{{ $value }}" @selected($currentBalance === $value)>{{ $label }}</option>
-        @endforeach
-    </select>
+<form method="GET" action="{{ route('admin.payments') }}" class="d-flex align-items-end flex-wrap gap-2 mb-3">
+    <div>
+        <label class="form-label small text-muted mb-0" for="status-filter">Status</label>
+        <select name="status" id="status-filter" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+            @foreach(['pending' => 'Pending', 'verified' => 'Verified', 'rejected' => 'Rejected', 'all' => 'All', 'refund' => 'Refund', 'no_refund' => 'No refund'] as $value => $label)
+                <option value="{{ $value }}" @selected($currentStatus === $value)>{{ $label }}</option>
+            @endforeach
+        </select>
+    </div>
+    {{-- Balance filter — narrows the active tab's cards by the appointment's
+         derived balanceDue(), via query params so it survives reloads and tab
+         switches (see PaymentController@index). --}}
+    <div>
+        <label class="form-label small text-muted mb-0" for="balance-filter">Amounts</label>
+        <select name="balance" id="balance-filter" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+            @foreach(['all' => 'All amounts', 'due' => 'With balance due', 'paid' => 'Paid in full'] as $value => $label)
+                <option value="{{ $value }}" @selected($currentBalance === $value)>{{ $label }}</option>
+            @endforeach
+        </select>
+    </div>
 </form>
-</div>
 
 <div class="row g-3">
     @forelse($appointments as $appointment)
@@ -37,10 +35,18 @@
              Pending verification (Pending tab) / Booked (active, owing). --}}
         @php($badge = $balanceDue <= 0 ? ['Paid in full', 'success'] : ($appointment->status->value === 'cancelled' ? ['Cancelled', 'danger'] : (($currentStatus === 'pending' || $appointment->status->value === 'unverified') ? ['Pending verification', 'warning'] : ['Booked', 'primary'])))
         <div class="col-md-6 col-xl-4">
-            <div class="card p-3 h-100">
+            <div class="card p-3 h-100 d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <strong>{{ $appointment->clientName() ?? '—' }}</strong>
-                    <span class="badge text-bg-{{ $badge[1] }}">{{ $badge[0] }}</span>
+                    <span>
+                        @php($refundRemark = $appointment->cancellationRefundRemark())
+                        @if($refundRemark === 'refund')
+                            <span class="badge text-bg-primary me-1">Refund</span>
+                        @elseif($refundRemark === 'no_refund')
+                            <span class="badge text-bg-secondary me-1">No refund</span>
+                        @endif
+                        <span class="badge text-bg-{{ $badge[1] }}">{{ $badge[0] }}</span>
+                    </span>
                 </div>
                 <div class="small text-muted">
                     {{ $appointment->displayServiceName() }} ·
@@ -66,11 +72,14 @@
                                 @endif
                                 {{ strtoupper($payment->method) }} · ₱{{ number_format($payment->amount, 2) }}
                             </span>
-                            <span class="badge {{ match($payment->status->value) {
-                                'verified' => 'text-bg-success',
-                                'rejected' => 'text-bg-danger',
-                                default => 'text-bg-warning',
-                            } }}">{{ ucfirst($payment->status->value) }}</span>
+                            @if($payment->status->value === 'verified')
+                                <i class="bi bi-check-circle-fill" role="img" aria-label="Verified" title="Verified" style="color: var(--nex-success-text); font-size: 1.1rem;"></i>
+                            @else
+                                <span class="badge {{ match($payment->status->value) {
+                                    'rejected' => 'text-bg-danger',
+                                    default => 'text-bg-warning',
+                                } }}">{{ ucfirst($payment->status->value) }}</span>
+                            @endif
                         </div>
                         @if($payment->status->value === 'verified' && $payment->verifier)
                             <div class="text-muted">by {{ $payment->verifier->name }} · {{ $payment->verified_at?->format('M j, g:i A') }}</div>
@@ -85,17 +94,21 @@
                             @if($payment->rejectionCategoryLabel())
                                 <div class="text-muted mt-1">Category: {{ $payment->rejectionCategoryLabel() }}</div>
                             @endif
-                            @if($payment->refund_status === 'requested')
-                                <div class="mt-2">Refund requested: ₱{{ number_format((float) ($payment->amount_received ?? 0), 2) }}</div>
-                                <form method="POST" action="{{ route('admin.payments.refund-sent', $payment->id) }}" class="mt-2">
-                                    @csrf @method('PATCH')
-                                    <button class="btn btn-success btn-sm w-100">
-                                        <i class="bi bi-send me-1"></i>Mark refund sent
-                                    </button>
-                                </form>
-                            @elseif($payment->refund_status === 'sent')
-                                <div class="text-muted mt-1">Refund sent (₱{{ number_format((float) ($payment->amount_received ?? 0), 2) }}){{ $payment->refund_sent_at ? ' · '.$payment->refund_sent_at->format('M j, g:i A') : '' }}</div>
-                            @endif
+                        @endif
+                        {{-- Refund state covers BOTH flows: the rejection flow
+                             (amount_received set) and the cancellation-approval
+                             flow (verified money held) — refundDueAmount()
+                             prints the true amount for either. --}}
+                        @if($payment->refund_status === 'requested')
+                            <div class="mt-2">Refund requested: ₱{{ number_format($payment->refundDueAmount(), 2) }}</div>
+                            <form method="POST" action="{{ route('admin.payments.refund-sent', $payment->id) }}" class="mt-2">
+                                @csrf @method('PATCH')
+                                <button class="btn btn-success btn-sm w-100">
+                                    <i class="bi bi-send me-1"></i>Mark refund sent
+                                </button>
+                            </form>
+                        @elseif($payment->refund_status === 'sent')
+                            <div class="text-muted mt-1">Refund sent (₱{{ number_format($payment->refundDueAmount(), 2) }}){{ $payment->refund_sent_at ? ' · '.$payment->refund_sent_at->format('M j, g:i A') : '' }}</div>
                         @endif
                     </div>
                 @endforeach
@@ -137,11 +150,12 @@
                      still owes money gets ONE settle form here, prefilled
                      with the balance due. Fully settled ones show Paid in
                      full instead. Posts to the existing branch-payment
-                     route; its guards apply unchanged. --}}
+                     route; its guards apply unchanged. Check-out is sequenced
+                     after this: it renders only once the balance is 0. --}}
                 @if(in_array($appointment->status->value, ['booked', 'in-service'], true))
-                    <div class="mt-3 pt-3 border-top">
+                    <div class="mt-auto pt-3 border-top">
                         @if($balanceDue > 0)
-                            <form method="POST" action="{{ route('admin.appointments.branch-payment', $appointment->id) }}">
+                            <form method="POST" action="{{ route('admin.appointments.branch-payment', $appointment->id) }}" id="settle-form-{{ $appointment->id }}">
                                 @csrf
                                 <label class="form-label small mb-1" for="settle-amount-{{ $appointment->id }}">Record branch payment</label>
                                 <div class="d-flex gap-2">
@@ -157,24 +171,59 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                <button class="btn btn-sm btn-spa w-100 mt-2">Record Payment</button>
+                                <button type="button" class="btn btn-sm btn-spa w-100 mt-2"
+                                        data-bs-toggle="modal" data-bs-target="#settle-confirm-{{ $appointment->id }}">Record Payment</button>
                             </form>
+                            {{-- RECORD CONFIRMATION MODAL: summarizes the live
+                                 amount/method (populated on show) — only
+                                 Confirm submits the form above unchanged. --}}
+                            <div class="modal fade" id="settle-confirm-{{ $appointment->id }}" tabindex="-1"
+                                 data-settle-modal data-form="settle-form-{{ $appointment->id }}"
+                                 data-client="{{ $appointment->clientName() ?? '—' }}"
+                                 data-service="{{ $appointment->displayServiceName() }}">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Confirm branch payment</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p class="mb-0" data-settle-summary></p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" form="settle-form-{{ $appointment->id }}" class="btn btn-spa">Confirm</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         @else
                             <div class="small text-muted"><i class="bi bi-check-circle me-1"></i>Paid in full</div>
                         @endif
                     </div>
                 @endif
 
-                {{-- Check-out: settle the balance AND complete the visit in one
-                     step. Booked/In-Service owing: collection form prefilled
-                     with the full balance. Booked/In-Service settled: plain
-                     Check out button. Completed owing: collection form
-                     (status stays). Completed settled: badge. Nothing for
-                     Cancelled / No-Show / Unverified. The Record branch
-                     payment form above stays for partial payments without
-                     completing. --}}
-                @if(in_array($appointment->status->value, ['booked', 'in-service', 'completed'], true))
-                    <div class="mt-3 pt-3 border-top">
+                {{-- Check-out runs only after the balance is recorded: while
+                     anything is owed there is NO check-out section (record
+                     above first). Booked/In-Service at zero balance get the
+                     Confirm check-out button (no ₱0 row is created — see
+                     AppointmentController@checkout). Completed bookings keep
+                     their own settle-then-badge block below; nothing renders
+                     for Cancelled / No-Show / Unverified. --}}
+                @if(in_array($appointment->status->value, ['booked', 'in-service'], true) && $balanceDue <= 0)
+                    <div class="mt-auto pt-3 border-top">
+                        <form method="POST" action="{{ route('admin.appointments.checkout', $appointment->id) }}">
+                            @csrf
+                            <button class="btn btn-sm btn-success w-100">Confirm check-out</button>
+                        </form>
+                    </div>
+                @endif
+
+                {{-- Completed bookings: owing ones settle the remainder here
+                     (status stays Completed); settled ones show the badge.
+                     The Check out button above never appears for Completed. --}}
+                @if($appointment->status->value === 'completed')
+                    <div class="mt-auto pt-3 border-top">
                         @if($balanceDue > 0)
                             <p class="small text-muted mb-1">
                                 Total ₱{{ number_format((float) ($appointment->booked_price ?? $appointment->service?->price ?? 0), 2) }}
@@ -200,17 +249,10 @@
                                 </div>
                                 <button class="btn btn-sm btn-success w-100 mt-2">Confirm check-out</button>
                             </form>
-                        @elseif($appointment->status->value === 'completed')
-                            <span class="badge text-bg-success">Settled · Paid in full</span>
                         @else
-                            <form method="POST" action="{{ route('admin.appointments.checkout', $appointment->id) }}">
-                                @csrf
-                                <button class="btn btn-sm btn-success w-100">Check out</button>
-                            </form>
+                            <span class="badge text-bg-success">Settled · Paid in full</span>
                         @endif
-                        @if($appointment->status->value === 'completed')
-                            <a href="{{ route('admin.appointments.receipt', $appointment->id) }}" class="btn btn-sm btn-outline-secondary w-100 mt-2">View receipt</a>
-                        @endif
+                        <a href="{{ route('admin.appointments.receipt', $appointment->id) }}" class="btn btn-sm btn-outline-secondary w-100 mt-2">View receipt</a>
                     </div>
                 @endif
             </div>
@@ -264,6 +306,29 @@
 
 @push('scripts')
 <script>
+    // Record-confirmation summaries: each settle modal reads the LIVE
+    // amount + method from its own branch-payment form on show, so an
+    // edited figure is what the manager confirms.
+    (function () {
+        document.querySelectorAll('[data-settle-modal]').forEach(function (modal) {
+            modal.addEventListener('show.bs.modal', function () {
+                var form = document.getElementById(modal.dataset.form);
+                var summary = modal.querySelector('[data-settle-summary]');
+                if (!form || !summary) return;
+                var amount = form.querySelector('input[name="amount"]');
+                var method = form.querySelector('select[name="method"]');
+                var amountText = '₱' + Number(amount ? amount.value : 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+                var methodText = method && method.options[method.selectedIndex]
+                    ? method.options[method.selectedIndex].textContent.trim()
+                    : '';
+                summary.textContent = 'Record ' + amountText + ' via ' + methodText
+                    + ' for ' + (modal.dataset.client || '—')
+                    + ' — ' + (modal.dataset.service || '—') + '?';
+            });
+        });
+    })();
+</script>
+<script>
     (function () {
         var modal = document.getElementById('rejectModal');
         var form = document.getElementById('rejectForm');
@@ -281,7 +346,7 @@
             var selected = category.options[category.selectedIndex];
             var needsCustom = selected && selected.dataset.customReason === '1';
             var f = flags[category.value] || {};
-            var needsAmount = !!(f.refund_eligible || f.topup_eligible);
+            var needsAmount = !!f.topup_eligible;
 
             customWrap.classList.toggle('d-none', !needsCustom);
             customInput.required = !!needsCustom;

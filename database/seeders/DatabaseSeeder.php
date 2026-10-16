@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             RoleSeeder::class,
+            PositionSeeder::class,
             UserSeeder::class,
             ServiceSeeder::class,
             ServiceVariantSeeder::class,
@@ -23,6 +24,7 @@ class DatabaseSeeder extends Seeder
             InventorySeeder::class,
             MassageInventorySeeder::class,
             AestheticInventorySeeder::class,
+            InventoryCategorySeeder::class,
         ]);
     }
 }

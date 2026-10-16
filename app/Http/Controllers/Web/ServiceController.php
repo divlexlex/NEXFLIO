@@ -18,9 +18,17 @@ class ServiceController extends Controller
 
     public function index(Request $request)
     {
+        // The category dropdown persists per session (search `q` and the
+        // status dropdown never do): WITH the param uses + stores it,
+        // WITHOUT it the stored choice applies, then show-all.
+        $category = trim((string) $request->query('category', $request->session()->get('filters.services.category', '')));
+        if ($request->query('category') !== null) {
+            $request->session()->put('filters.services.category', $category);
+        }
+
         $filters = [
             'q' => trim((string) $request->query('q', '')),
-            'category' => trim((string) $request->query('category', '')),
+            'category' => $category,
             'status' => trim((string) $request->query('status', '')),
         ];
 

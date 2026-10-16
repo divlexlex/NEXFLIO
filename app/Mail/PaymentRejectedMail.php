@@ -43,8 +43,7 @@ class PaymentRejectedMail extends Mailable implements ShouldQueue
             $lines[] = "Reason: {$this->reason}";
         }
 
-        $lines[] = 'The booking has been cancelled. You are welcome to book again '
-            . 'with an updated proof of payment — we would love to see you.';
+        $lines[] = 'The booking has been cancelled. '.$this->nextStepLine();
 
         return new Content(view: 'mail.notification', with: [
             'title' => 'We could not verify your payment',
@@ -53,9 +52,24 @@ class PaymentRejectedMail extends Mailable implements ShouldQueue
     }
 
     /**
+     * The client's actual next step for this rejection category — never a
+     * refund promise (rejected-booking refunds no longer exist).
+     */
+    private function nextStepLine(): string
+    {
+        return match ($this->category) {
+            'insufficient_amount' => 'You can still complete your booking by topping up the remaining fee from My Bookings.',
+            'invalid_proof' => 'You can send a clearer photo or screenshot of your proof from My Bookings and we will review it again.',
+            default => 'This decision is final — you are welcome to make a fresh booking any time.',
+        };
+    }
+
+    /**
      * Display label for the structured rejection category (see
      * config/payment.php 'rejection_reasons'). Null when the rejection
-     * carries none (pre-category rejections, API cancels).
+     * carries none (pre-category rejections, API cancels). A stored key
+     * missing from config falls back to a prettified key so historical
+     * rows still read sensibly.
      */
     public function categoryLabel(): ?string
     {
@@ -63,6 +77,9 @@ class PaymentRejectedMail extends Mailable implements ShouldQueue
             return null;
         }
 
-        return config('payment.rejection_reasons.'.$this->category.'.label', $this->category);
+        return config(
+            'payment.rejection_reasons.'.$this->category.'.label',
+            ucfirst(str_replace('_', ' ', $this->category))
+        );
     }
 }

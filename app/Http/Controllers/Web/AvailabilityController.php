@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\BlockedSlot;
 use App\Models\BusinessHours;
+use App\Models\Position;
 use App\Models\Service;
 use App\Models\StaffSchedule;
 use App\Models\StaffShiftAssignment;
@@ -34,17 +35,15 @@ class AvailabilityController extends Controller
         // ── Weekly Roster week plumbing ──────────────────────────────
         // ?week accepts any date inside the desired week; it is normalized
         // to that week's Sunday. ?copy_from (a previous week's Sunday, or
-        // any date inside it) prefills checkboxes/times from that week while
-        // Save still writes to ?week's Sunday.
+        // any date inside it) prefills the roster rows from that week while
+        // Save still writes to ?week's Sunday. Rows are individual
+        // per-person shifts (user + their own start/end); the legacy shift
+        // column is ignored.
         $weekStart = $this->normalizeWeekParam($request->query('week'))
             ?? StaffShiftAssignment::weekStartOf(now()->toDateString());
 
         $copyFrom = $this->normalizeWeekParam($request->query('copy_from'));
         $sourceWeek = $copyFrom ?? $weekStart;
-
-        $sourceAssignments = StaffShiftAssignment::forWeek($sourceWeek)->get();
-        $amRows = $sourceAssignments->where('shift', 'am')->values();
-        $pmRows = $sourceAssignments->where('shift', 'pm')->values();
 
         $rosterWeekStart = $weekStart;
         $rosterWeekEnd = \Carbon\Carbon::parse($weekStart)->addDays(6)->toDateString();
@@ -52,22 +51,61 @@ class AvailabilityController extends Controller
         $rosterNextWeek = \Carbon\Carbon::parse($weekStart)->addDays(7)->toDateString();
         $rosterWeekLabel = 'Week of '.\Carbon\Carbon::parse($weekStart)->format('M j')
             .' – '.\Carbon\Carbon::parse($rosterWeekEnd)->format('j, Y');
-        $rosterAmStaff = $amRows->pluck('user_id')->map(fn ($id) => (int) $id)->all();
-        $rosterPmStaff = $pmRows->pluck('user_id')->map(fn ($id) => (int) $id)->all();
-        $rosterAmStart = $amRows->first()
-            ? \Carbon\Carbon::parse($amRows->first()->start_time)->format('H:i') : '10:00';
-        $rosterAmEnd = $amRows->first()
-            ? \Carbon\Carbon::parse($amRows->first()->end_time)->format('H:i') : '16:00';
-        $rosterPmStart = $pmRows->first()
-            ? \Carbon\Carbon::parse($pmRows->first()->start_time)->format('H:i') : '16:00';
-        $rosterPmEnd = $pmRows->first()
-            ? \Carbon\Carbon::parse($pmRows->first()->end_time)->format('H:i') : '21:00';
+
+        $byUser = $staff->keyBy('id');
+        $rowShape = function ($userId, $start, $end) use ($byUser) {
+            $member = $byUser->get((int) $userId);
+            if (! $member) {
+                return null;
+            }
+
+            return [
+                'user_id' => (int) $userId,
+                'name' => $member->fullName(),
+                'position' => $member->staffProfile->position ?? 'Staff',
+                'start' => substr((string) $start, 0, 5) ?: '10:00',
+                'end' => substr((string) $end, 0, 5) ?: '21:00',
+            ];
+        };
+
+        // After a failed save, redisplay the submitted rows instead of the
+        // stored ones so nothing the manager typed is lost.
+        $old = $request->old('assignments');
+        if (is_array($old) && $old !== []) {
+            $rosterAssignments = collect($old)
+                ->map(fn ($row) => $rowShape($row['user_id'] ?? 0, $row['start_time'] ?? null, $row['end_time'] ?? null))
+                ->filter()
+                ->values()
+                ->all();
+        } else {
+            $rosterAssignments = StaffShiftAssignment::forWeek($sourceWeek)
+                ->orderBy('user_id')
+                ->get()
+                ->map(fn ($assignment) => $rowShape($assignment->user_id, $assignment->start_time, $assignment->end_time))
+                ->filter()
+                ->values()
+                ->all();
+        }
+
+        $rosterStaff = $staff
+            ->filter(fn ($member) => ($member->staffProfile?->employment_status ?? null) === 'active')
+            ->map(fn ($member) => [
+                'id' => $member->id,
+                'name' => $member->fullName(),
+                'position' => $member->staffProfile->position ?? 'Staff',
+            ])
+            ->values()
+            ->all();
+
+        // Position names for the roster picker pills + grouping order —
+        // every position in the table, so newly added ones appear with no
+        // code changes (see App\Models\Position).
+        $rosterPositions = Position::orderBy('id')->pluck('name')->all();
 
         return view('admin.availability.index', compact(
             'businessHours', 'staff', 'schedules', 'services', 'blockedSlots',
             'rosterWeekStart', 'rosterWeekEnd', 'rosterPrevWeek', 'rosterNextWeek',
-            'rosterWeekLabel', 'rosterAmStaff', 'rosterPmStaff',
-            'rosterAmStart', 'rosterAmEnd', 'rosterPmStart', 'rosterPmEnd'
+            'rosterWeekLabel', 'rosterAssignments', 'rosterStaff', 'rosterPositions'
         ));
     }
 
@@ -143,79 +181,83 @@ class AvailabilityController extends Controller
         return back()->with('success', 'Staff schedule updated.');
     }
 
-    // ─── Weekly Roster (AM/PM shifts) ──────────────────────────────────
+    // ─── Weekly Roster (individual per-person shifts) ────────────────
 
     /**
-     * Save one week's AM/PM roster: existing assignments for that week are
-     * replaced wholesale in a single transaction. week_start accepts any
-     * date and is normalized to its Sunday. A person works one shift per
-     * week — appearing in both lists is a validation error naming them.
+     * Save one week's roster as individual rows: each entry is one staff
+     * member with their own start/end times for the whole week. Existing
+     * assignments for that week are replaced wholesale in a single
+     * transaction. week_start accepts any date and is normalized to its
+     * Sunday. An empty (or missing) assignments list clears the week, which
+     * falls back to the legacy weekday schedules exactly as before.
      */
     public function updateWeeklyRoster(Request $request)
     {
         $validated = $request->validate([
             'week_start' => 'required|date',
-            'am_start' => 'required|date_format:H:i',
-            'am_end' => 'required|date_format:H:i|after:am_start',
-            'pm_start' => 'required|date_format:H:i',
-            'pm_end' => 'required|date_format:H:i|after:pm_start',
-            'am_staff' => 'nullable|array',
-            'am_staff.*' => [
+            'assignments' => 'nullable|array',
+            'assignments.*.user_id' => [
+                'required',
                 'integer',
                 Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
             ],
-            'pm_staff' => 'nullable|array',
-            'pm_staff.*' => [
-                'integer',
-                Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
-            ],
+            'assignments.*.start_time' => 'required|date_format:H:i',
+            'assignments.*.end_time' => 'required|date_format:H:i',
         ]);
 
-        $amStaff = collect($validated['am_staff'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
-        $pmStaff = collect($validated['pm_staff'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
+        $rows = collect($validated['assignments'] ?? [])
+            ->map(fn ($row) => [
+                'user_id' => (int) $row['user_id'],
+                'start_time' => $row['start_time'],
+                'end_time' => $row['end_time'],
+            ])
+            ->values();
 
-        $overlap = $amStaff->intersect($pmStaff);
-        if ($overlap->isNotEmpty()) {
-            $names = User::whereIn('id', $overlap->all())->orderBy('name')->pluck('name')->all();
+        $duplicates = $rows->pluck('user_id')
+            ->countBy()
+            ->filter(fn ($count) => $count > 1)
+            ->keys();
+        if ($duplicates->isNotEmpty()) {
+            $names = User::whereIn('id', $duplicates->all())->orderBy('name')->pluck('name')->all();
 
             throw ValidationException::withMessages([
-                'pm_staff' => 'One shift per person per week: '.implode(', ', $names).' cannot be on both AM and PM.',
+                'assignments' => 'Each person can appear only once per week: '.implode(', ', $names).'.',
             ]);
         }
 
-        $inactive = User::whereIn('id', $amStaff->merge($pmStaff)->all())
+        foreach ($rows as $row) {
+            if ($row['end_time'] <= $row['start_time']) {
+                $name = User::where('id', $row['user_id'])->value('name') ?? "Staff #{$row['user_id']}";
+
+                throw ValidationException::withMessages([
+                    'assignments' => "End time must be after start time for {$name} (no overnight shifts).",
+                ]);
+            }
+        }
+
+        $inactive = User::whereIn('id', $rows->pluck('user_id')->all())
             ->whereDoesntHave('staffProfile', fn ($query) => $query->where('employment_status', 'active'))
             ->orderBy('name')
             ->pluck('name')
             ->all();
         if ($inactive !== []) {
             throw ValidationException::withMessages([
-                'am_staff' => 'Only active staff can be rostered: '.implode(', ', $inactive).'.',
+                'assignments' => 'Only active staff can be rostered: '.implode(', ', $inactive).'.',
             ]);
         }
 
         $weekStart = StaffShiftAssignment::weekStartOf($validated['week_start']);
 
-        DB::transaction(function () use ($weekStart, $validated, $amStaff, $pmStaff) {
+        DB::transaction(function () use ($weekStart, $rows) {
             StaffShiftAssignment::forWeek($weekStart)->delete();
 
-            foreach ($amStaff as $userId) {
+            foreach ($rows as $row) {
                 StaffShiftAssignment::create([
-                    'user_id' => $userId,
+                    'user_id' => $row['user_id'],
                     'week_start' => $weekStart,
-                    'shift' => 'am',
-                    'start_time' => $validated['am_start'],
-                    'end_time' => $validated['am_end'],
-                ]);
-            }
-
-            foreach ($pmStaff as $userId) {
-                StaffShiftAssignment::create([
-                    'user_id' => $userId,
-                    'week_start' => $weekStart,
-                    'shift' => 'pm',
-                    'start_time' => $validated['pm_start'],
-                    'end_time' => $validated['pm_end'],
+                    'shift' => null,
+                    'start_time' => $row['start_time'],
+                    'end_time' => $row['end_time'],
                 ]);
             }
         });

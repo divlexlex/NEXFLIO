@@ -73,7 +73,7 @@
                             <strong>{{ $row['staff']->fullName() }}</strong>
                             <div class="small text-muted">{{ $row['staff']->staffProfile->position ?? 'Staff' }}</div>
                             @if($row['shift'])
-                                <span class="badge text-bg-primary mt-1">{{ $row['shift']->shift === 'am' ? 'AM' : 'PM' }} · {{ \Carbon\Carbon::parse($row['shift']->start_time)->format('g:i A') }} – {{ \Carbon\Carbon::parse($row['shift']->end_time)->format('g:i A') }}</span>
+                                <span class="badge text-bg-primary mt-1">{{ \Carbon\Carbon::parse($row['shift']->start_time)->format('g:i A') }} – {{ \Carbon\Carbon::parse($row['shift']->end_time)->format('g:i A') }}</span>
                             @else
                                 <span class="text-muted small mt-1 d-inline-block">Not assigned</span>
                             @endif

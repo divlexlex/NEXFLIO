@@ -55,7 +55,9 @@ class Payment extends Model
      * Display label for the structured rejection category (see
      * config/payment.php 'rejection_reasons'). Null when the payment was
      * never rejected or carries no category (pre-category rejections, API
-     * cancels).
+     * cancels). A stored key missing from config (retired categories like
+     * duplicate_booking) falls back to a prettified key so historical rows
+     * still render.
      */
     public function rejectionCategoryLabel(): ?string
     {
@@ -65,7 +67,7 @@ class Payment extends Model
 
         return config(
             'payment.rejection_reasons.'.$this->rejection_category.'.label',
-            $this->rejection_category
+            ucfirst(str_replace('_', ' ', $this->rejection_category))
         );
     }
 
@@ -80,5 +82,22 @@ class Payment extends Model
             'partial_receipt' => 'Partial receipt',
             default => null,
         };
+    }
+
+    /**
+     * True refund amount for every refund display (admin card + client
+     * lines + mail): the rejection flow stores what was actually received
+     * in amount_received; the cancellation-approval flow leaves it null
+     * and the money fact is the appointment's verifiedPaid() total at
+     * approval time. One helper, used by both flows, so both print the
+     * true amount.
+     */
+    public function refundDueAmount(): float
+    {
+        if ($this->amount_received !== null) {
+            return (float) $this->amount_received;
+        }
+
+        return (float) ($this->appointment?->verifiedPaid() ?? 0);
     }
 }

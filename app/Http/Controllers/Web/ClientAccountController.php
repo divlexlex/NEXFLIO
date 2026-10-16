@@ -165,6 +165,12 @@ class ClientAccountController extends Controller
         $appointments = Appointment::with([
             'service', 'personnel', 'address', 'payment', 'payments',
             'pendingChangeRequest.requestedPersonnel:id,name',
+            // Approved cancellation (if any) drives the cancelled-card
+            // refund lines below (refund_decision + payment refund_status).
+            'changeRequests' => fn ($query) => $query
+                ->where('type', AppointmentChangeRequest::TYPE_CANCELLATION)
+                ->where('status', AppointmentChangeRequest::STATUS_APPROVED)
+                ->latest('id'),
         ])
             ->where('user_id', Auth::id())
             ->orderByDesc('appointment_date')
@@ -196,12 +202,23 @@ class ClientAccountController extends Controller
     {
         $type = $request->input('type');
 
+        // Change requests open only once the reservation fee is verified
+        // (Booked) — Unverified bookings must wait for payment verification.
+        if ($appointment->status !== AppointmentStatus::Booked) {
+            return back()->withErrors(['type' => 'You can request changes once your reservation fee has been verified.']);
+        }
+
         AppointmentChangeRequest::create([
             'appointment_id' => $appointment->id,
             'requested_by' => Auth::id(),
             'type' => $type,
             'status' => AppointmentChangeRequest::STATUS_PENDING,
             'reason' => $request->input('reason'),
+            // Cancellation category key (config/booking.php); null for
+            // reschedules and legacy rows.
+            'reason_category' => $type === AppointmentChangeRequest::TYPE_CANCELLATION
+                ? $request->input('reason_category')
+                : null,
             'requested_date' => $type === AppointmentChangeRequest::TYPE_RESCHEDULE ? $request->input('requested_date') : null,
             'requested_start_time' => $type === AppointmentChangeRequest::TYPE_RESCHEDULE ? $request->input('requested_start_time') : null,
             'requested_personnel_id' => $type === AppointmentChangeRequest::TYPE_RESCHEDULE ? $request->input('requested_personnel_id') : null,
@@ -225,40 +242,6 @@ class ClientAccountController extends Controller
         $changeRequest->delete();
 
         return back()->with('success', 'Request withdrawn.');
-    }
-
-    /**
-     * Client asks for their money back on a rejected booking. Only the
-     * booking owner, only on the rejected booking-time payment, only when
-     * the rejection category is refund-eligible with money recorded, only
-     * once, and never while a top-up is in flight (choosing top-up hides
-     * the refund path and vice versa) — every condition re-checked here
-     * server-side, never trusted from the button that posted. The branch
-     * settles it on the Payments page (PaymentController@markRefundSent).
-     */
-    public function requestRefund(Appointment $appointment)
-    {
-        $appointment->loadMissing(['payment', 'payments']);
-        $payment = $appointment->payment;
-
-        $eligible = $appointment->user_id === Auth::id()
-            && $payment !== null
-            && $payment->status === PaymentStatus::Rejected
-            && $payment->refund_status === null
-            && ! $appointment->hasActiveTopup()
-            && (float) ($payment->amount_received ?? 0) > 0
-            && (bool) config('payment.rejection_reasons.'.$payment->rejection_category.'.refund_eligible', false);
-
-        if (! $eligible) {
-            return back()->withErrors(['refund' => 'A refund cannot be requested for this booking.']);
-        }
-
-        $payment->update([
-            'refund_status' => 'requested',
-            'refund_requested_at' => now(),
-        ]);
-
-        return back()->with('success', 'Refund requested — the branch will send it back via your payment method.');
     }
 
     /**
@@ -314,14 +297,10 @@ class ClientAccountController extends Controller
         ]);
 
         // The slot may have been taken while the booking sat cancelled —
-        // refuse instead of double-booking; the client can still refund.
-        if ($appointment->personnel_id && Appointment::query()
-            ->where('personnel_id', $appointment->personnel_id)
-            ->whereDate('appointment_date', $appointment->appointment_date->toDateString())
-            ->where('start_time', $appointment->start_time)
-            ->where('status', '!=', AppointmentStatus::Cancelled->value)
-            ->exists()) {
-            return back()->withErrors(['topup' => 'That time slot was just taken. You may request a refund instead.']);
+        // refuse instead of double-booking; the client can make a fresh
+        // booking for another time.
+        if ($this->slotTakenByOther($appointment)) {
+            return back()->withErrors(['topup' => 'That time slot was just taken — please make a fresh booking for another time.']);
         }
 
         DB::transaction(function () use ($request, $appointment, $validated, $shortfall) {
@@ -338,6 +317,89 @@ class ClientAccountController extends Controller
 
         return redirect()->route('account.bookings')
             ->with('success', 'Top-up submitted — the team will verify your proof shortly.');
+    }
+
+    /**
+     * The exact slot-collision check shared by the top-up and resubmit-proof
+     * submissions: same personnel, same date, same start time, still held by
+     * a live (non-cancelled) appointment. One implementation, used by both —
+     * never a second availability check.
+     */
+    private function slotTakenByOther(Appointment $appointment): bool
+    {
+        return (bool) ($appointment->personnel_id && Appointment::query()
+            ->where('personnel_id', $appointment->personnel_id)
+            ->whereDate('appointment_date', $appointment->appointment_date->toDateString())
+            ->where('start_time', $appointment->start_time)
+            ->where('status', '!=', AppointmentStatus::Cancelled->value)
+            ->exists());
+    }
+
+    /**
+     * Resubmit a clearer proof for an invalid_proof rejection: replaces the
+     * rejected payment's proof, reopens it as Pending with a clean slate
+     * (rejection + refund fields cleared, amount untouched — no new row),
+     * and resurrects the appointment Cancelled → Unverified, the same direct
+     * write the top-up submission uses (terminal statuses have no normal
+     * outgoing transition, and there are no payment side effects to run).
+     * Owner only; every precondition re-checked server-side.
+     */
+    public function resubmitProof(Request $request, Appointment $appointment)
+    {
+        abort_unless($appointment->user_id === Auth::id(), 404);
+
+        $appointment->loadMissing(['service', 'payment', 'payments']);
+
+        $payment = $appointment->payment;
+        $resubmittable = $payment !== null
+            && $payment->status === PaymentStatus::Rejected
+            && (bool) config('payment.rejection_reasons.'.$payment->rejection_category.'.resubmit_proof', false);
+
+        if (! $resubmittable) {
+            return back()->withErrors(['resubmit' => 'A new proof cannot be sent for this booking.']);
+        }
+
+        if ($appointment->status !== AppointmentStatus::Cancelled) {
+            return back()->withErrors(['resubmit' => 'A new proof cannot be sent for this booking.']);
+        }
+
+        try {
+            $start = Carbon::parse(
+                $appointment->appointment_date->toDateString().' '.substr((string) $appointment->start_time, 0, 5)
+            );
+        } catch (\Throwable) {
+            return back()->withErrors(['resubmit' => 'A new proof cannot be sent for this booking.']);
+        }
+
+        if (! $start->isFuture()) {
+            return back()->withErrors(['resubmit' => 'This appointment is in the past — please make a fresh booking.']);
+        }
+
+        if ($this->slotTakenByOther($appointment)) {
+            return back()->withErrors(['resubmit' => 'That time slot was just taken — please make a fresh booking for another time.']);
+        }
+
+        $validated = $request->validate([
+            'payment_proof' => 'required|image|max:5120',
+        ]);
+
+        DB::transaction(function () use ($request, $appointment, $payment, $validated) {
+            $payment->update([
+                'proof_path' => $request->file('payment_proof')->store('payment_proofs', 'public'),
+                'status' => PaymentStatus::Pending,
+                'rejection_category' => null,
+                'rejection_reason' => null,
+                'refund_status' => null,
+                'refund_requested_at' => null,
+                'refund_sent_at' => null,
+                'refund_sent_by' => null,
+            ]);
+
+            $appointment->update(['status' => AppointmentStatus::Unverified]);
+        });
+
+        return redirect()->route('account.bookings')
+            ->with('success', 'New proof submitted — the team will verify it shortly.');
     }
 
     public function profile()

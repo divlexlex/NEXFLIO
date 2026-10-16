@@ -13,7 +13,10 @@ use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
- * Step 2A — reason-dropdown rework, amount received, and the REFUND flow.
+ * Step 2A remnants — reason-dropdown rework, amount received, and the
+ * LEGACY requested-refund settlement path (markRefundSent). The client
+ * refund-request flow for rejected bookings is gone: outcomes are now
+ * top-up (insufficient_amount), resubmit-proof (invalid_proof), or final.
  * Top-up (step 2B) is intentionally absent: no top-up UI, routes, or
  * storage exist after this suite.
  */
@@ -75,20 +78,23 @@ class PaymentRefundFlowTest extends TestCase
 
         $this->assertStringContainsString('>Reason</label>', $html);
         $this->assertStringContainsString('Choose a reason…', $html);
-        foreach (['Insufficient amount sent', 'Duplicate booking', 'Proof is invalid or unreadable',
+        foreach (['Insufficient amount sent', 'Proof is invalid or unreadable',
             'Payment sent to a wrong account', 'No payment received', 'Other'] as $label) {
             $this->assertStringContainsString($label, $html);
         }
+        $this->assertStringNotContainsString('Duplicate booking', $html);
         $this->assertStringContainsString('id="reject-custom-wrap" class="d-none', $html);
         $this->assertStringContainsString('>Custom reason</label>', $html);
         $this->assertStringContainsString('id="reject-amount-wrap" class="d-none', $html);
         $this->assertStringContainsString('Amount actually received', $html);
-        $this->assertStringContainsString('refund_eligible', $html);
+        $this->assertStringNotContainsString('refund_eligible', $html);
         $this->assertStringContainsString('topup_eligible', $html);
     }
 
-    // (b) Full refund arc: reject with amount -> request -> sent + mailed.
-    public function test_full_refund_flow(): void
+    // (b) Legacy requested refunds still settle: reject with amount, then a
+    // pre-existing 'requested' row (legacy in-flight or cancellation path)
+    // is marked sent + mailed. The client request endpoint is gone.
+    public function test_legacy_requested_refund_can_be_marked_sent(): void
     {
         Mail::fake();
         $appointment = $this->pendingBooking();
@@ -103,25 +109,16 @@ class PaymentRefundFlowTest extends TestCase
         $this->assertNull($appointment->payment->rejection_reason);
         $this->assertEquals(200, (float) $appointment->payment->amount_received);
 
-        // Client card: label-only line (no colon text) + refund button.
-        $this->actingAs($this->client)->get(route('account.bookings'))
-            ->assertOk()
-            ->assertSee('Payment rejected — Insufficient amount sent')
-            ->assertDontSee('Insufficient amount sent:')
-            ->assertSee('Request refund of ₱200.00');
+        // The client refund-request route no longer exists...
+        $this->actingAs($this->client)->post('/account/bookings/'.$appointment->id.'/refund')
+            ->assertNotFound();
 
-        // Client requests the refund.
-        $this->actingAs($this->client)->post(route('account.bookings.refund', $appointment->id))
-            ->assertRedirect()->assertSessionHasNoErrors();
-        $this->assertSame('requested', $appointment->payment->refresh()->refund_status);
-        $this->assertNotNull($appointment->payment->refund_requested_at);
+        // ...but a legacy in-flight request still settles + mails.
+        $appointment->payment->update([
+            'refund_status' => 'requested',
+            'refund_requested_at' => now(),
+        ]);
 
-        $this->actingAs($this->client)->get(route('account.bookings'))
-            ->assertOk()
-            ->assertDontSee('Request refund of')
-            ->assertSee('Refund requested — the branch will send ₱200.00 back via your payment method.');
-
-        // Admin marks it sent; client is mailed.
         $this->actingAs($this->manager)->patch(route('admin.payments.refund-sent', $appointment->payment->id))
             ->assertRedirect()->assertSessionHasNoErrors();
 
@@ -137,7 +134,7 @@ class PaymentRefundFlowTest extends TestCase
 
         $this->actingAs($this->client)->get(route('account.bookings'))
             ->assertOk()
-            ->assertSee("Refund sent (₱200.00) on {$payment->refund_sent_at->format('M j, Y')}.");
+            ->assertDontSee('Request refund');
 
         // Appointment status never moved past the rejection cancel.
         $this->assertSame(AppointmentStatus::Cancelled, $appointment->refresh()->status);
@@ -187,9 +184,9 @@ class PaymentRefundFlowTest extends TestCase
             ->assertSee('Payment rejected — No payment received')
             ->assertDontSee('Request refund');
 
-        // And a stray refund request is refused server-side.
-        $this->actingAs($this->client)->post(route('account.bookings.refund', $appointment->id))
-            ->assertSessionHasErrors('refund');
+        // The removed refund endpoint 404s instead of erroring.
+        $this->actingAs($this->client)->post('/account/bookings/'.$appointment->id.'/refund')
+            ->assertNotFound();
         $this->assertNull($appointment->payment->refresh()->refund_status);
     }
 
@@ -215,29 +212,20 @@ class PaymentRefundFlowTest extends TestCase
             ->assertDontSee('Request refund');
     }
 
-    // Guards: strangers, double-requests, and wrong states are refused.
-    public function test_refund_guards(): void
+    // Guards: unknown categories are rejected by validation, the removed
+    // refund route 404s, and mark-sent on a non-requested payment refused.
+    public function test_reject_and_legacy_refund_guards(): void
     {
         $appointment = $this->pendingBooking();
 
         $this->actingAs($this->manager)->patch(
             route('admin.payments.reject', $appointment->payment->id),
             ['rejection_category' => 'duplicate_booking', 'amount_received' => 600]
-        )->assertRedirect();
+        )->assertSessionHasErrors('rejection_category');
 
-        // Another client cannot request on someone else's booking.
-        $stranger = User::create([
-            'name' => 'Stranger', 'email' => 'stranger@nexflio.test',
-            'password' => bcrypt('password'), 'role_id' => User::ROLE_CLIENT,
-        ]);
-        $this->actingAs($stranger)->post(route('account.bookings.refund', $appointment->id))
-            ->assertSessionHasErrors('refund');
-
-        // Double request refused.
-        $this->actingAs($this->client)->post(route('account.bookings.refund', $appointment->id))
-            ->assertRedirect()->assertSessionHasNoErrors();
-        $this->actingAs($this->client)->post(route('account.bookings.refund', $appointment->id))
-            ->assertSessionHasErrors('refund');
+        // The removed client refund route is gone entirely.
+        $this->actingAs($this->client)->post('/account/bookings/'.$appointment->id.'/refund')
+            ->assertNotFound();
 
         // Mark-sent on a non-requested payment refused.
         $fresh = $this->pendingBooking();

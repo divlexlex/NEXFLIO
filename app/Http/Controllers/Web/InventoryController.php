@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\Inventory;
+use App\Models\InventoryCategory;
 use App\Models\StockMovement;
 use App\Services\InventoryService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class InventoryController extends Controller
 {
@@ -16,23 +18,47 @@ class InventoryController extends Controller
 
     public function index(Request $request)
     {
-        $validCategories = ['facial', 'massage', 'nails', 'aesthetic'];
+        // Category sources are the table (id order keeps the classics
+        // first); the requested value resolves case-insensitively so old
+        // lowercase links keep working, falling back to the first one.
+        $categories = InventoryCategory::orderBy('id')->pluck('name')->all();
 
-        $category = $request->get('category', 'facial');
-        if (! in_array($category, $validCategories, true)) {
-            $category = 'facial';
+        $category = InventoryCategory::canonicalize($request->get('category'))
+            ?? ($categories[0] ?? null);
+
+        $q = trim((string) $request->query('q', ''));
+        $stock = $request->query('stock', 'all');
+        if (! in_array($stock, ['all', 'in', 'low', 'out'], true)) {
+            $stock = 'all';
         }
+
+        // Stock definitions mirror the page's "Low" badge rule
+        // (quantity <= reorder_point): In = above the point, Low = at or
+        // below it (0 included, exactly like the badge), Out = zero.
+        $itemsQuery = Inventory::with(['batches' => function ($query) {
+            $query->where('quantity_remaining', '>', 0)
+                ->orderBy('received_at')
+                ->orderBy('id');
+        }])
+            ->when($category !== null, fn ($query) => $query->where('category', $category))
+            ->when($q !== '', fn ($query) => $query->where('item_name', 'like', '%'.$q.'%'))
+            ->when($stock === 'in', fn ($query) => $query->whereColumn('quantity', '>', 'reorder_point'))
+            ->when($stock === 'low', fn ($query) => $query->whereColumn('quantity', '<=', 'reorder_point'))
+            ->when($stock === 'out', fn ($query) => $query->where('quantity', 0))
+            ->orderBy('item_name');
+
+        $totalInCategory = $category === null
+            ? 0
+            : Inventory::where('category', $category)->count();
 
         return view('admin.inventory.index', [
             'category' => $category,
-            'items' => Inventory::with(['batches' => function ($query) {
-                $query->where('quantity_remaining', '>', 0)
-                    ->orderBy('received_at')
-                    ->orderBy('id');
-            }])
-                ->where('category', $category)
-                ->orderBy('item_name')
-                ->get(),
+            'categories' => $categories,
+            'items' => $itemsQuery->paginate(10)->withQueryString(),
+            'totalInCategory' => $totalInCategory,
+            'currentQ' => $q,
+            'currentStock' => $stock,
+            'filtersActive' => $q !== '' || $stock !== 'all',
             'recentMovements' => StockMovement::with(['inventory:id,item_name', 'user:id,name'])
                 ->latest()
                 ->limit(20)
@@ -44,16 +70,22 @@ class InventoryController extends Controller
     {
         $validated = $request->validate([
             'item_name' => 'required|string|max:255',
-            'category' => 'required|string|in:facial,massage,nails,aesthetic',
+            'category' => 'required|string|max:255',
             'unit' => 'required|string|max:50',
             'reorder_point' => 'required|integer|min:0',
             'price_per_unit' => 'required|numeric|min:0',
             'initial_quantity' => 'nullable|integer|min:1',
         ]);
 
+        $category = InventoryCategory::canonicalize($validated['category']);
+
+        if ($category === null) {
+            throw ValidationException::withMessages(['category' => 'Please select a valid category from the list.']);
+        }
+
         $inventory = Inventory::create([
             'item_name' => $validated['item_name'],
-            'category' => $validated['category'],
+            'category' => $category,
             'unit' => $validated['unit'],
             'quantity' => 0,
             'reorder_point' => $validated['reorder_point'],
@@ -71,6 +103,41 @@ class InventoryController extends Controller
         }
 
         return back()->with('success', 'Item added.');
+    }
+
+    /**
+     * Edit an item's master data (name, category, unit, price, reorder
+     * point). On-hand quantity and FIFO batches are never touched here —
+     * stock moves only via Receive / Pull Out, so no movement rows are
+     * written and history is undisturbed.
+     */
+    public function update(Request $request, $id)
+    {
+        $item = Inventory::findOrFail((int) $id);
+
+        $validated = $request->validate([
+            'item_name' => 'required|string|max:255',
+            'category' => 'required|string|max:255',
+            'unit' => 'required|string|max:50',
+            'reorder_point' => 'required|integer|min:0',
+            'price_per_unit' => 'required|numeric|min:0',
+        ]);
+
+        $category = InventoryCategory::canonicalize($validated['category']);
+
+        if ($category === null) {
+            throw ValidationException::withMessages(['category' => 'Please select a valid category from the list.']);
+        }
+
+        $item->update([
+            'item_name' => $validated['item_name'],
+            'category' => $category,
+            'unit' => $validated['unit'],
+            'reorder_point' => $validated['reorder_point'],
+            'price_per_unit' => $validated['price_per_unit'],
+        ]);
+
+        return back()->with('success', 'Item updated.');
     }
 
     public function addBatch(Request $request, $id)

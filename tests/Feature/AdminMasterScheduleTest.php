@@ -112,7 +112,7 @@ class AdminMasterScheduleTest extends TestCase
         $this->assertStringContainsString('Week of ', $html);
     }
 
-    public function test_shift_label_shown_or_not_assigned(): void
+    public function test_shift_times_shown_without_shift_label(): void
     {
         $weekStart = StaffShiftAssignment::weekStartOf(now()->addDays(14)->toDateString());
 
@@ -129,7 +129,9 @@ class AdminMasterScheduleTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('AM · 10:00 AM – 4:00 PM', $html);
+        $this->assertStringContainsString('10:00 AM – 4:00 PM', $html);
+        $this->assertStringNotContainsString('AM ·', $html);
+        $this->assertStringNotContainsString('PM ·', $html);
         // Seeded staff without an assignment for that week.
         $this->assertStringContainsString('Not assigned', $html);
     }

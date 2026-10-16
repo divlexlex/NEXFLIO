@@ -224,6 +224,44 @@ class Appointment extends Model
     }
 
     /**
+     * Whether "Send a new proof" may be offered: rejected primary with a
+     * resubmit_proof category, appointment still Cancelled post-rejection,
+     * and the slot still upcoming. The live slot-occupancy re-check happens
+     * server-side on submit (shared with the top-up flow). Mirrors
+     * canContinueBooking() for the resubmit path.
+     */
+    public function canResubmitProof(): bool
+    {
+        $primary = $this->payment;
+
+        if (! $primary || $primary->status !== PaymentStatus::Rejected) {
+            return false;
+        }
+
+        $flags = $primary->rejection_category
+            ? config('payment.rejection_reasons.'.$primary->rejection_category, [])
+            : [];
+
+        if (empty($flags['resubmit_proof'])) {
+            return false;
+        }
+
+        if ($this->status !== AppointmentStatus::Cancelled) {
+            return false;
+        }
+
+        try {
+            $start = Carbon::parse(
+                $this->appointment_date->toDateString().' '.substr((string) $this->start_time, 0, 5)
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $start->isFuture();
+    }
+
+    /**
      * Client/manager-facing payment state, derived from the booked total plus
      * verified payments only — pending proofs and cash promises never count
      * as paid.
@@ -276,6 +314,50 @@ class Appointment extends Model
     public function changeRequests()
     {
         return $this->hasMany(AppointmentChangeRequest::class);
+    }
+
+    /**
+     * At-a-glance refund remark for appointments cancelled through an
+     * approved cancellation change request: 'refund' for a stored
+     * refundable decision (or, on legacy decision-less approvals, while a
+     * refund is in flight or completed), 'no_refund' for a stored
+     * non-refundable decision (or legacy approvals with money paid but no
+     * refund moving), null otherwise (no approved cancellation request, or
+     * nothing was ever paid). A stored manager decision always wins; rows
+     * approved before the decision column existed keep the payments'
+     * refund_status behaviour.
+     */
+    public function cancellationRefundRemark(): ?string
+    {
+        $requests = $this->relationLoaded('changeRequests')
+            ? $this->changeRequests
+            : $this->changeRequests()->get();
+
+        $approved = $requests
+            ->where('type', AppointmentChangeRequest::TYPE_CANCELLATION)
+            ->where('status', AppointmentChangeRequest::STATUS_APPROVED)
+            ->sortByDesc('id')
+            ->first();
+
+        if (! $approved || $this->verifiedPaid() <= 0) {
+            return null;
+        }
+
+        if ($approved->refund_decision === 'refundable') {
+            return 'refund';
+        }
+
+        if ($approved->refund_decision === 'non_refundable') {
+            return 'no_refund';
+        }
+
+        $payments = $this->relationLoaded('payments')
+            ? $this->payments
+            : $this->payments()->get();
+
+        return $payments->contains(
+            fn ($payment) => in_array($payment->refund_status, ['requested', 'sent'], true)
+        ) ? 'refund' : 'no_refund';
     }
 
     /**

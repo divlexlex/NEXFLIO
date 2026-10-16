@@ -29,7 +29,7 @@ use Illuminate\Database\Seeder;
  */
 class AestheticInventorySeeder extends Seeder
 {
-    private const CATEGORY = 'aesthetic';
+    private const CATEGORY = 'Aesthetic';
 
     public function run(): void
     {

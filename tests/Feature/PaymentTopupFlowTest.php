@@ -16,8 +16,8 @@ use Tests\TestCase;
  * Step 2B — top-up ("Continue to book this"). The money recorded at a
  * topup_eligible rejection stays on the appointment as a Verified partial
  * receipt; the client adds only the shortfall on the SAME appointment.
- * No refund/top-up interplay beyond the specified mutual exclusion, no new
- * appointment statuses.
+ * Rejected-booking refunds no longer exist, so no refund interplay remains;
+ * no new appointment statuses.
  */
 class PaymentTopupFlowTest extends TestCase
 {
@@ -110,12 +110,13 @@ class PaymentTopupFlowTest extends TestCase
         $this->assertNotNull($partial->verified_at);
         $this->assertSame($appointment->payment->id, $appointment->refresh()->payment->id);
 
-        // Card: both buttons together on the card's bottom line with the
+        // Card: Continue button on the card's bottom line with the
         // ID and personnel, identical solid styling, shortfall 300.
+        // No refund button anywhere.
         $this->actingAs($this->client)->get(route('account.bookings'))
             ->assertOk()
             ->assertSee('Continue to book this — add ₱300.00')
-            ->assertSee('Request refund of ₱200.00')
+            ->assertDontSee('Request refund')
             ->assertSee('justify-content-between align-items-end', false);
 
         // Form: fixed amount, no cash, proof check UI.
@@ -191,32 +192,32 @@ class PaymentTopupFlowTest extends TestCase
 
         $this->actingAs($this->client)->get(route('account.bookings'))
             ->assertOk()
-            ->assertSee('Request refund of ₱200.00');
+            ->assertDontSee('Request refund of');
     }
 
-    // (c) Refund and Continue are mutually exclusive, both directions.
-    public function test_refund_and_continue_exclude_each_other(): void
+    // (c) A submitted top-up hides Continue (active top-up in flight) and
+    // no refund is ever offered.
+    public function test_submitted_topup_hides_continue_with_no_refund_offered(): void
     {
         $appointment = $this->pendingRejected(200);
 
-        $this->actingAs($this->client)->post(route('account.bookings.refund', $appointment->id))
-            ->assertRedirect();
         $this->actingAs($this->client)->get(route('account.bookings'))
             ->assertOk()
-            ->assertDontSee('Continue to book this');
+            ->assertSee('Continue to book this')
+            ->assertDontSee('Request refund');
 
-        // ...and the top-up form itself refuses once a refund is in motion.
-        $this->actingAs($this->client)->get(route('account.bookings.topup', $appointment->id))
-            ->assertRedirect(route('account.bookings'));
-
-        $fresh = $this->pendingRejected(200);
         $this->actingAs($this->client)->post(
-            route('account.bookings.topup.store', $fresh->id),
+            route('account.bookings.topup.store', $appointment->id),
             ['method' => 'gcash', 'payment_proof' => UploadedFile::fake()->image('topup.jpg')]
         )->assertRedirect();
         $this->actingAs($this->client)->get(route('account.bookings'))
             ->assertOk()
+            ->assertDontSee('Continue to book this')
             ->assertDontSee('Request refund');
+
+        // ...and the top-up form itself refuses while one is in motion.
+        $this->actingAs($this->client)->get(route('account.bookings.topup', $appointment->id))
+            ->assertRedirect(route('account.bookings'));
     }
 
     // (d) Rejecting the topup folds its received amount into the original
@@ -247,7 +248,7 @@ class PaymentTopupFlowTest extends TestCase
         $this->actingAs($this->client)->get(route('account.bookings'))
             ->assertOk()
             ->assertSee('Continue to book this — add ₱200.00')
-            ->assertSee('Request refund of ₱300.00');
+            ->assertDontSee('Request refund');
     }
 
     // (e) Ineligible rejections never create partials or Continue; past
@@ -262,7 +263,8 @@ class PaymentTopupFlowTest extends TestCase
         $this->assertFalse($appointment->canContinueBooking());
         $this->actingAs($this->client)->get(route('account.bookings'))
             ->assertOk()
-            ->assertDontSee('Continue to book this');
+            ->assertDontSee('Continue to book this')
+            ->assertSee('Send a new proof');
 
         $past = Appointment::create([
             'user_id' => $this->client->id,

@@ -1,36 +1,46 @@
 {{--
-    Shared inventory category dropdown (Inventory page).
+    Shared inventory category dropdown (Inventory page). Categories come
+    from the inventory_categories table (id order keeps the classics
+    first), so newly added ones appear with no code changes.
 
     Usage:
-        @include('partials.inventory-category-select', ['current' => $category])
+        @include('partials.inventory-category-select', ['current' => $category, 'categories' => $categories])
 
     Params:
-        current     currently selected category key (null = none/all)
+        current     currently selected category name (null = none/all)
+        categories  list of category names (defaults to the classic four
+                    when the caller predates the table)
         showAll     add an "All categories" option (default false)
         label       optional small caption shown before the select
         id          optional id for the <select>
+        form        when true, changing submits the enclosing GET form
+                    (filter bar) instead of navigating directly
 --}}
 @php
-    $categories = ['facial' => 'Facial', 'massage' => 'Massage', 'nails' => 'Nails', 'aesthetic' => 'Aesthetic'];
+    $categories = $categories ?? ['Facial', 'Massage', 'Nails', 'Aesthetic'];
     $showAll = $showAll ?? false;
     $current = $current ?? null;
-    $hasSelection = $current !== null && array_key_exists($current, $categories);
+    $hasSelection = $current !== null && in_array($current, $categories, true);
+    $inForm = $form ?? false;
 @endphp
 <div class="spa-category-select d-inline-flex align-items-center">
     @isset($label)
         <span class="spa-category-select__label me-2">{{ $label }}</span>
     @endisset
     <i class="bi bi-folder2 me-2 text-gold"></i>
-    <select class="spa-category-select__control"
+    <select class="spa-category-select__control" name="category"
             @isset($id) id="{{ $id }}" @endisset
             data-base="{{ url()->current() }}"
             aria-label="Inventory category"
-            onchange="const v = this.value; window.location.href = v ? this.dataset.base + '?category=' + v : this.dataset.base;">
+            @if(! $inForm)
+                onchange="const v = this.value; window.location.href = v ? this.dataset.base + '?category=' + v : this.dataset.base;"
+            @endif
+            >
         @if($showAll)
             <option value="" {{ $current === null || ! $hasSelection ? 'selected' : '' }}>All categories</option>
         @endif
-        @foreach($categories as $key => $label)
-            <option value="{{ $key }}" {{ $current === $key ? 'selected' : '' }}>{{ $label }}</option>
+        @foreach($categories as $name)
+            <option value="{{ $name }}" {{ $current === $name ? 'selected' : '' }}>{{ $name }}</option>
         @endforeach
     </select>
     <i class="bi bi-chevron-down spa-category-select__caret"></i>

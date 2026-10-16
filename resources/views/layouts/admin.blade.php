@@ -538,7 +538,7 @@
         </script>
         @include('partials.flash-alerts')
         @if($errors->any())
-            <div class="alert alert-danger alert-dismissible fade show">
+            <div class="alert alert-danger alert-dismissible fade show" data-nx-flash>
                 <ul class="mb-0">
                     @foreach($errors->all() as $error)
                         <li>{{ $error }}</li>

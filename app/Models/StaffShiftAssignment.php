@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * One staff member's shift for one roster week (AM/PM with that shift's
- * times). At most one row per person per week (unique user_id/week_start);
- * a person works either AM or PM in a given week, never both. Weeks are
- * keyed by their Sunday (week_start).
+ * One staff member's shift for one roster week, with THEIR OWN start/end
+ * times applying to every day of that week (Sunday–Saturday). At most one
+ * row per person per week (unique user_id/week_start). Weeks are keyed by
+ * their Sunday (week_start). The legacy `shift` column (am/pm) is nullable
+ * and ignored — old rows keep their values, new rows store null.
  */
 class StaffShiftAssignment extends Model
 {

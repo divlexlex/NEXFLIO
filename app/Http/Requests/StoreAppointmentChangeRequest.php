@@ -35,7 +35,24 @@ class StoreAppointmentChangeRequest extends FormRequest
     {
         return [
             'type' => ['required', Rule::in(AppointmentChangeRequest::TYPES)],
-            'reason' => ['nullable', 'string', 'max:1000'],
+            // Cancellation category: required for cancellations only, must
+            // be a config/booking.php key. Reschedules never send it.
+            'reason_category' => [
+                Rule::requiredIf(fn () => $this->input('type') === AppointmentChangeRequest::TYPE_CANCELLATION),
+                'nullable',
+                'string',
+                Rule::in(array_keys(config('booking.cancellation_reasons', []))),
+            ],
+            // Details text lives in the existing `reason` column: required
+            // when the category is `other`, optional otherwise. Reschedule
+            // notes stay optional as before.
+            'reason' => [
+                'nullable',
+                'string',
+                'max:1000',
+                Rule::requiredIf(fn () => $this->input('type') === AppointmentChangeRequest::TYPE_CANCELLATION
+                    && $this->input('reason_category') === 'other'),
+            ],
 
             'requested_date' => ['nullable', 'required_if:type,reschedule', 'date', 'after_or_equal:today'],
             'requested_start_time' => ['nullable', 'required_if:type,reschedule', 'date_format:H:i'],
@@ -51,6 +68,9 @@ class StoreAppointmentChangeRequest extends FormRequest
         return [
             'requested_date.required_if' => 'Please pick the date you would like to move the appointment to.',
             'requested_start_time.required_if' => 'Please pick the time you would like to move the appointment to.',
+            'reason_category.required' => 'Please choose a reason for the cancellation.',
+            'reason_category.in' => 'Please choose a valid reason for the cancellation.',
+            'reason.required' => 'Please add details for your cancellation reason.',
         ];
     }
 

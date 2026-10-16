@@ -160,7 +160,8 @@ class StaffController extends Controller
                 continue;
             }
 
-            $shiftLabel = $assignment->shift === 'am' ? 'AM shift' : 'PM shift';
+            $shiftLabel = Carbon::parse($assignment->start_time)->format('g:i A')
+                .' – '.Carbon::parse($assignment->end_time)->format('g:i A');
 
             for ($i = 0; $i < 7; $i++) {
                 $day = Carbon::parse($weekStart)->addDays($i)->toDateString();

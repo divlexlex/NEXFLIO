@@ -89,57 +89,24 @@
         <form method="POST" action="{{ route('admin.availability.weekly-roster') }}">
             @csrf
             <input type="hidden" name="week_start" value="{{ $rosterWeekStart }}">
-            @if($errors->has('am_staff') || $errors->has('pm_staff'))
+            @if($errors->has('assignments') || $errors->has('week_start'))
                 <div class="alert alert-danger py-2 small">
-                    {{ $errors->first('am_staff') }} {{ $errors->first('pm_staff') }}
+                    {{ $errors->first('assignments') }} {{ $errors->first('week_start') }}
                 </div>
             @endif
-            <div class="row g-3">
-                <div class="col-12 col-md-6">
-                    <div class="card p-3 h-100">
-                        <h6 class="mb-2">AM — Morning shift</h6>
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <input type="time" name="am_start" value="{{ old('am_start', $rosterAmStart) }}" class="form-control form-control-sm w-auto" required>
-                            <span class="text-muted small">to</span>
-                            <input type="time" name="am_end" value="{{ old('am_end', $rosterAmEnd) }}" class="form-control form-control-sm w-auto" required>
-                        </div>
-                        @error('am_start')<div class="text-danger small">{{ $message }}</div>@enderror
-                        @error('am_end')<div class="text-danger small">{{ $message }}</div>@enderror
-                        <div class="d-flex flex-wrap gap-2" data-chips="am"></div>
-                        <div class="mt-2">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" data-add-btn="am">+ Add staff</button>
-                        </div>
-                        <div class="d-none" aria-hidden="true">
-                            @foreach($staff as $s)
-                                <input class="roster-am" type="checkbox" name="am_staff[]" value="{{ $s->id }}" tabindex="-1"
-                                    data-staff-id="{{ $s->id }}" data-staff-name="{{ $s->fullName() }}" data-staff-position="{{ $s->staffProfile->position ?? 'Staff' }}"
-                                    {{ in_array($s->id, old('am_staff', $rosterAmStaff)) ? 'checked' : '' }}>
-                            @endforeach
-                        </div>
-                    </div>
+            <div class="card p-3 mb-3">
+                <h6 class="mb-3">{{ $rosterWeekLabel }}</h6>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr><th>Staff</th><th>Category</th><th>Start of shift</th><th>End of shift</th><th></th></tr>
+                        </thead>
+                        <tbody id="rosterBody"></tbody>
+                    </table>
                 </div>
-                <div class="col-12 col-md-6">
-                    <div class="card p-3 h-100">
-                        <h6 class="mb-2">PM — Afternoon shift</h6>
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <input type="time" name="pm_start" value="{{ old('pm_start', $rosterPmStart) }}" class="form-control form-control-sm w-auto" required>
-                            <span class="text-muted small">to</span>
-                            <input type="time" name="pm_end" value="{{ old('pm_end', $rosterPmEnd) }}" class="form-control form-control-sm w-auto" required>
-                        </div>
-                        @error('pm_start')<div class="text-danger small">{{ $message }}</div>@enderror
-                        @error('pm_end')<div class="text-danger small">{{ $message }}</div>@enderror
-                        <div class="d-flex flex-wrap gap-2" data-chips="pm"></div>
-                        <div class="mt-2">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" data-add-btn="pm">+ Add staff</button>
-                        </div>
-                        <div class="d-none" aria-hidden="true">
-                            @foreach($staff as $s)
-                                <input class="roster-pm" type="checkbox" name="pm_staff[]" value="{{ $s->id }}" tabindex="-1"
-                                    data-staff-id="{{ $s->id }}" data-staff-name="{{ $s->fullName() }}" data-staff-position="{{ $s->staffProfile->position ?? 'Staff' }}"
-                                    {{ in_array($s->id, old('pm_staff', $rosterPmStaff)) ? 'checked' : '' }}>
-                            @endforeach
-                        </div>
-                    </div>
+                <p id="rosterEmpty" class="text-muted small mb-0 mt-2" hidden>No staff assigned yet — everyone falls back to the standard schedule this week.</p>
+                <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="rosterAddBtn">+ Add staff</button>
                 </div>
             </div>
             <div class="card p-3 mt-3">
@@ -148,7 +115,7 @@
             </div>
             <button class="btn btn-spa mt-3">Save Roster</button>
         </form>
-        {{-- Reusable "Add staff" floating box (modal) for the AM/PM cards --}}
+        {{-- Reusable "Add staff" floating box (modal) --}}
         <div id="rosterModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1050; align-items:center; justify-content:center; padding:1rem;">
             <div class="card" role="dialog" aria-modal="true" aria-labelledby="rosterModalTitle" style="width:100%; max-width:430px; max-height:85vh; display:flex; flex-direction:column; border-radius:.75rem;">
                 <div class="p-3 border-bottom">
@@ -158,6 +125,12 @@
                             <div class="text-muted small">{{ $rosterWeekLabel }}</div>
                         </div>
                         <button type="button" class="btn-close" data-modal-close aria-label="Close"></button>
+                    </div>
+                    <div class="d-flex flex-wrap gap-1 mt-2" id="rosterCategoryPills">
+                        <button type="button" class="btn btn-sm btn-outline-secondary active" data-cat="All">All</button>
+                        @foreach($rosterPositions as $rosterPosition)
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-cat="{{ $rosterPosition }}">{{ $rosterPosition }}</button>
+                        @endforeach
                     </div>
                     <input id="rosterModalSearch" type="search" class="form-control form-control-sm mt-2" placeholder="Search by name..." autocomplete="off">
                 </div>
@@ -310,118 +283,161 @@
         const unassignedEl = document.getElementById('rosterUnassigned');
         if (!unassignedEl) return;
 
-        // Single source of truth: the hidden am_staff[] / pm_staff[] checkboxes.
-        // Chips and the modal render from them; the submitted form data is identical.
+        // Single source of truth: the rows array below. The table (with its
+        // assignments[i][..] inputs) renders from it; the modal and the
+        // Not-assigned strip derive from the same state.
         const directory = {};
         const order = [];
-        document.querySelectorAll('.roster-am').forEach((box) => {
-            directory[box.dataset.staffId] = {
-                name: box.dataset.staffName,
-                position: box.dataset.staffPosition || 'Staff',
-            };
-            order.push(box.dataset.staffId);
+        @json($rosterStaff).forEach((s) => {
+            const id = String(s.id);
+            directory[id] = { name: s.name, position: s.position || 'Staff' };
+            order.push(id);
         });
 
+        let rows = @json($rosterAssignments).map((r) => ({
+            id: String(r.user_id),
+            name: r.name,
+            position: r.position || 'Staff',
+            start: r.start,
+            end: r.end,
+        }));
+
+        // Position pills group in table order, so a newly added position
+        // appears without code changes (see $rosterPositions above).
+        const CATEGORIES = @json($rosterPositions);
+
         const overlay = document.getElementById('rosterModalOverlay');
-        const modalTitle = document.getElementById('rosterModalTitle');
         const modalSearch = document.getElementById('rosterModalSearch');
         const modalList = document.getElementById('rosterModalList');
         const modalCount = document.getElementById('rosterModalCount');
-        let modalShift = 'am';
+        const catPills = document.getElementById('rosterCategoryPills');
+        const addBtn = document.getElementById('rosterAddBtn');
+        const tbody = document.getElementById('rosterBody');
+        const emptyEl = document.getElementById('rosterEmpty');
 
-        const shiftLabel = (shift) => (shift === 'am' ? 'AM · Morning shift' : 'PM · Afternoon shift');
-        const shiftShort = (shift) => (shift === 'am' ? 'AM' : 'PM');
+        let pending = new Set();
+        let modalCat = 'All';
 
-        const box = (shift, id) => document.querySelector(
-            (shift === 'am' ? '.roster-am' : '.roster-pm') + '[data-staff-id="' + id + '"]'
-        );
-        const isChecked = (shift, id) => {
-            const b = box(shift, id);
-            return !!(b && b.checked);
-        };
-        const unassignedIds = () => order.filter(
-            (id) => !isChecked('am', id) && !isChecked('pm', id)
-        );
-        const shiftIds = (shift) => order.filter((id) => isChecked(shift, id));
+        const rosteredIds = () => new Set(rows.map((r) => r.id));
+        const unassignedIds = () => order.filter((id) => !rosteredIds().has(id));
 
         function initials(name) {
             const parts = (name || '').trim().split(/\s+/).filter(Boolean);
             return ((parts[0] ? parts[0][0] : '') + (parts[1] ? parts[1][0] : '')).toUpperCase() || '•';
         }
 
-        function makeChip(shift, id) {
-            const info = directory[id];
-            const chip = document.createElement('span');
-            chip.className = 'd-inline-flex align-items-center gap-1 border rounded px-2 py-1 small bg-light';
-
-            const wrap = document.createElement('span');
-            const name = document.createElement('span');
-            name.className = 'fw-semibold';
-            name.textContent = info.name;
-            const pos = document.createElement('span');
-            pos.className = 'd-block text-muted';
-            pos.style.fontSize = '.75rem';
-            pos.textContent = info.position;
-            wrap.appendChild(name);
-            wrap.appendChild(pos);
-
-            const remove = document.createElement('button');
-            remove.type = 'button';
-            remove.className = 'btn-close ms-1';
-            remove.style.fontSize = '.6rem';
-            remove.setAttribute('aria-label', 'Remove ' + info.name);
-            remove.setAttribute('data-remove', shift);
-            remove.dataset.staffId = id;
-
-            chip.appendChild(wrap);
-            chip.appendChild(remove);
-            return chip;
+        function makeTimeInput(name, value) {
+            const input = document.createElement('input');
+            input.type = 'time';
+            input.name = name;
+            input.value = value;
+            input.required = true;
+            input.className = 'form-control form-control-sm w-auto';
+            return input;
         }
 
-        function renderChips(shift) {
-            const area = document.querySelector('[data-chips="' + shift + '"]');
-            if (!area) return;
-            area.innerHTML = '';
-            document.querySelectorAll((shift === 'am' ? '.roster-am' : '.roster-pm')).forEach((b) => {
-                if (b.checked) area.appendChild(makeChip(shift, b.dataset.staffId));
+        function renderRows() {
+            tbody.innerHTML = '';
+            rows.forEach((row, i) => {
+                const tr = document.createElement('tr');
+
+                const nameTd = document.createElement('td');
+                const name = document.createElement('span');
+                name.className = 'fw-semibold';
+                name.textContent = row.name;
+                nameTd.appendChild(name);
+                const hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'assignments[' + i + '][user_id]';
+                hidden.value = row.id;
+                nameTd.appendChild(hidden);
+
+                const catTd = document.createElement('td');
+                const pill = document.createElement('span');
+                pill.className = 'badge text-bg-light border';
+                pill.textContent = row.position;
+                catTd.appendChild(pill);
+
+                const startTd = document.createElement('td');
+                startTd.appendChild(makeTimeInput('assignments[' + i + '][start_time]', row.start));
+                const endTd = document.createElement('td');
+                endTd.appendChild(makeTimeInput('assignments[' + i + '][end_time]', row.end));
+
+                const rmTd = document.createElement('td');
+                const rm = document.createElement('button');
+                rm.type = 'button';
+                rm.className = 'btn-close';
+                rm.style.fontSize = '.7rem';
+                rm.setAttribute('aria-label', 'Remove ' + row.name);
+                rm.setAttribute('data-remove', row.id);
+                rmTd.appendChild(rm);
+
+                tr.appendChild(nameTd);
+                tr.appendChild(catTd);
+                tr.appendChild(startTd);
+                tr.appendChild(endTd);
+                tr.appendChild(rmTd);
+                tbody.appendChild(tr);
             });
-            if (!area.children.length) {
-                const empty = document.createElement('span');
-                empty.className = 'text-muted small';
-                empty.textContent = 'No staff assigned.';
-                area.appendChild(empty);
-            }
+            emptyEl.hidden = rows.length > 0;
         }
 
         function renderUnassigned() {
-            const names = unassignedIds().map((id) => directory[id].name);
-            unassignedEl.textContent = names.length ? names.join(', ') : 'Everyone is assigned.';
-        }
-
-        function renderAddButtons() {
-            const noneLeft = unassignedIds().length === 0;
-            document.querySelectorAll('[data-add-btn]').forEach((btn) => {
-                btn.disabled = noneLeft;
-                btn.classList.toggle('d-none', noneLeft);
+            const inRoster = rosteredIds();
+            const groups = {};
+            order.forEach((id) => {
+                if (inRoster.has(id)) return;
+                const pos = directory[id].position;
+                (groups[pos] = groups[pos] || []).push(id);
+            });
+            unassignedEl.innerHTML = '';
+            const cats = [
+                ...CATEGORIES.filter((c) => groups[c]),
+                ...Object.keys(groups).filter((c) => !CATEGORIES.includes(c)).sort(),
+            ];
+            if (!cats.length) {
+                unassignedEl.textContent = 'Everyone is assigned.';
+                return;
+            }
+            cats.forEach((cat) => {
+                const div = document.createElement('div');
+                div.className = 'mb-1';
+                const badge = document.createElement('span');
+                badge.className = 'badge text-bg-light border me-1';
+                badge.textContent = cat;
+                div.appendChild(badge);
+                div.appendChild(document.createTextNode(
+                    groups[cat].map((id) => directory[id].name).join(', ')
+                ));
+                unassignedEl.appendChild(div);
             });
         }
 
+        function renderAddButton() {
+            const noneLeft = unassignedIds().length === 0;
+            addBtn.disabled = noneLeft;
+            addBtn.classList.toggle('d-none', noneLeft);
+        }
+
         function syncAll() {
-            renderChips('am');
-            renderChips('pm');
+            renderRows();
             renderUnassigned();
-            renderAddButtons();
+            renderAddButton();
         }
 
         // ── Modal ────────────────────────────────────────────────
         function renderModalCount() {
-            const n = shiftIds(modalShift).length;
-            modalCount.textContent = n + ' staff in ' + shiftShort(modalShift) + ' shift';
+            modalCount.textContent = pending.size + ' staff in roster';
+        }
+
+        function syncCatPills() {
+            catPills.querySelectorAll('[data-cat]').forEach((b) => {
+                b.classList.toggle('active', b.getAttribute('data-cat') === modalCat);
+            });
         }
 
         function makeRow(id) {
             const info = directory[id];
-            const other = modalShift === 'am' ? 'pm' : 'am';
 
             const row = document.createElement('div');
             row.className = 'd-flex align-items-center gap-2 px-2 py-2 border-bottom';
@@ -442,27 +458,18 @@
             text.appendChild(pos);
 
             const action = document.createElement('span');
-            if (isChecked(modalShift, id)) {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'btn btn-sm btn-outline-success';
-                btn.setAttribute('data-mremove', modalShift);
-                btn.dataset.staffId = id;
-                btn.textContent = 'Added ✓';
-                action.appendChild(btn);
-            } else if (isChecked(other, id)) {
-                const label = document.createElement('button');
-                label.type = 'button';
-                label.className = 'btn btn-sm btn-outline-secondary';
-                label.disabled = true;
-                label.textContent = 'In ' + shiftShort(other) + ' shift';
-                action.appendChild(label);
+            if (pending.has(id)) {
+                const done = document.createElement('button');
+                done.type = 'button';
+                done.className = 'btn btn-sm btn-outline-success';
+                done.disabled = true;
+                done.textContent = 'Added ✓';
+                action.appendChild(done);
             } else {
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'btn btn-sm btn-spa';
-                btn.setAttribute('data-madd', modalShift);
-                btn.dataset.staffId = id;
+                btn.setAttribute('data-madd', id);
                 btn.textContent = '+ Add';
                 action.appendChild(btn);
             }
@@ -476,7 +483,11 @@
         function renderModalList() {
             const q = (modalSearch.value || '').trim().toLowerCase();
             modalList.innerHTML = '';
-            const ids = order.filter((id) => directory[id].name.toLowerCase().includes(q));
+            const ids = order.filter((id) => {
+                const info = directory[id];
+                const catOk = modalCat === 'All' || info.position === modalCat;
+                return catOk && info.name.toLowerCase().includes(q);
+            });
             if (!ids.length) {
                 const empty = document.createElement('div');
                 empty.className = 'text-muted small px-2 py-3 text-center';
@@ -488,17 +499,35 @@
             renderModalCount();
         }
 
-        function openModal(shift) {
-            modalShift = shift;
-            modalTitle.textContent = 'Add staff — ' + shiftLabel(shift);
+        function openModal() {
+            pending = new Set(rows.map((r) => r.id));
+            modalCat = 'All';
             modalSearch.value = '';
+            syncCatPills();
             renderModalList();
             overlay.style.display = 'flex';
             document.body.style.overflow = 'hidden';
             modalSearch.focus();
         }
 
+        function applyPending() {
+            const next = [];
+            order.forEach((id) => {
+                if (!pending.has(id)) return;
+                const existing = rows.find((r) => r.id === id);
+                next.push(existing || {
+                    id: id,
+                    name: directory[id].name,
+                    position: directory[id].position,
+                    start: '10:00',
+                    end: '21:00',
+                });
+            });
+            rows = next;
+        }
+
         function closeModal() {
+            applyPending();
             overlay.style.display = 'none';
             document.body.style.overflow = '';
             syncAll();
@@ -512,42 +541,33 @@
 
         modalList.addEventListener('click', (e) => {
             const add = e.target.closest('[data-madd]');
-            if (add) {
-                const shift = add.getAttribute('data-madd');
-                const id = add.dataset.staffId;
-                const target = box(shift, id);
-                const other = box(shift === 'am' ? 'pm' : 'am', id);
-                if (target) target.checked = true;
-                if (other) other.checked = false;
-                renderModalList();
-                return;
-            }
-            const remove = e.target.closest('[data-mremove]');
-            if (remove) {
-                const b = box(remove.getAttribute('data-mremove'), remove.dataset.staffId);
-                if (b) b.checked = false;
-                renderModalList();
-            }
+            if (!add) return;
+            pending.add(add.getAttribute('data-madd'));
+            renderModalList();
+        });
+
+        catPills.addEventListener('click', (e) => {
+            const pill = e.target.closest('[data-cat]');
+            if (!pill) return;
+            modalCat = pill.getAttribute('data-cat');
+            syncCatPills();
+            renderModalList();
         });
 
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay || e.target.closest('[data-modal-close]')) closeModal();
         });
 
-        document.addEventListener('click', (e) => {
+        tbody.addEventListener('click', (e) => {
             const remove = e.target.closest('[data-remove]');
-            if (remove) {
-                const b = box(remove.getAttribute('data-remove'), remove.dataset.staffId);
-                if (b) b.checked = false;
-                syncAll();
-                return;
-            }
+            if (!remove) return;
+            rows = rows.filter((r) => r.id !== remove.getAttribute('data-remove'));
+            syncAll();
+        });
 
-            const add = e.target.closest('[data-add-btn]');
-            if (add) {
-                if (add.disabled) return;
-                openModal(add.getAttribute('data-add-btn'));
-            }
+        addBtn.addEventListener('click', () => {
+            if (addBtn.disabled) return;
+            openModal();
         });
 
         document.addEventListener('keydown', (e) => {

@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Mail\PaymentRejectedMail;
 use App\Mail\PaymentVerifiedMail;
 use App\Models\Appointment;
+use App\Models\AppointmentChangeRequest;
 use App\Models\Commission;
 use App\Models\StockMovement;
 use App\Models\User;
@@ -34,6 +35,7 @@ class AppointmentService
      *     amount_received?: float|int|string|null,
      *     payment_id?: int|null,
      *     items?: array<int, array{inventory_id: int, quantity: int}>,
+     *     notify_body?: string|null,
      * } $options
      *
      * @throws AuthorizationException on role violations (renders 403)
@@ -50,6 +52,20 @@ class AppointmentService
         if (! $current->canTransitionTo($target)) {
             throw ValidationException::withMessages([
                 'status' => "Cannot change status from '{$current->value}' to '{$target->value}'.",
+            ]);
+        }
+
+        // A service in progress can't be started while the client asks to
+        // cancel it: a pending cancellation request blocks the move to
+        // In-Service until it is approved, rejected, or withdrawn. The
+        // approval and Payments-rejection paths target Cancelled, so they
+        // are unaffected by this guard.
+        if ($target === AppointmentStatus::InService && AppointmentChangeRequest::where('appointment_id', $appointment->id)
+            ->where('type', AppointmentChangeRequest::TYPE_CANCELLATION)
+            ->where('status', AppointmentChangeRequest::STATUS_PENDING)
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'status' => 'This appointment has a pending cancellation request — review it in Change Requests first.',
             ]);
         }
 
@@ -137,7 +153,7 @@ class AppointmentService
                 $this->notificationService->notify(
                     $appointment->user,
                     'Appointment ' . $target->label(),
-                    "Your booking for {$serviceName} is now \"{$target->label()}\".",
+                    $options['notify_body'] ?? "Your booking for {$serviceName} is now \"{$target->label()}\".",
                     $mailable,
                     ['appointment_id' => $appointment->id, 'status' => $target->value]
                 );
@@ -188,7 +204,7 @@ class AppointmentService
 
         $category = $options['rejection_category'] ?? null;
         $flags = $category ? config('payment.rejection_reasons.'.$category, []) : [];
-        $amountEligible = ! empty($flags['refund_eligible']) || ! empty($flags['topup_eligible']);
+        $amountEligible = ! empty($flags['topup_eligible']);
 
         $rejected->update([
             'status' => PaymentStatus::Rejected,

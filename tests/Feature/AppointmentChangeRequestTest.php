@@ -71,7 +71,11 @@ class AppointmentChangeRequestTest extends TestCase
         $appointment = $this->booking();
 
         $this->actingAs($this->client)
-            ->post(route('account.bookings.change-request', $appointment), ['type' => 'cancellation', 'reason' => 'Sick'])
+            ->post(route('account.bookings.change-request', $appointment), [
+                'type' => 'cancellation',
+                'reason_category' => 'health_reasons',
+                'reason' => 'Sick',
+            ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('appointment_change_requests', [
@@ -79,6 +83,7 @@ class AppointmentChangeRequestTest extends TestCase
             'type' => 'cancellation',
             'status' => 'pending',
             'requested_by' => $this->client->id,
+            'reason_category' => 'health_reasons',
         ]);
         $this->assertSame(AppointmentStatus::Booked, $appointment->fresh()->status);
     }
@@ -118,7 +123,10 @@ class AppointmentChangeRequestTest extends TestCase
         $appointment = $this->booking(AppointmentStatus::Completed);
 
         $this->actingAs($this->client)
-            ->post(route('account.bookings.change-request', $appointment), ['type' => 'cancellation'])
+            ->post(route('account.bookings.change-request', $appointment), [
+                'type' => 'cancellation',
+                'reason_category' => 'change_of_plans',
+            ])
             ->assertSessionHasErrors('type');
 
         $this->assertDatabaseCount('appointment_change_requests', 0);
@@ -133,7 +141,10 @@ class AppointmentChangeRequestTest extends TestCase
         ]);
 
         $this->actingAs($this->client)
-            ->post(route('account.bookings.change-request', $appointment), ['type' => 'cancellation'])
+            ->post(route('account.bookings.change-request', $appointment), [
+                'type' => 'cancellation',
+                'reason_category' => 'change_of_plans',
+            ])
             ->assertSessionHasErrors('type');
 
         $this->assertDatabaseCount('appointment_change_requests', 1);
@@ -144,7 +155,10 @@ class AppointmentChangeRequestTest extends TestCase
         $appointment = $this->booking(owner: $this->otherClient);
 
         $this->actingAs($this->client)
-            ->post(route('account.bookings.change-request', $appointment), ['type' => 'cancellation'])
+            ->post(route('account.bookings.change-request', $appointment), [
+                'type' => 'cancellation',
+                'reason_category' => 'change_of_plans',
+            ])
             ->assertForbidden();
     }
 
@@ -154,15 +168,20 @@ class AppointmentChangeRequestTest extends TestCase
         $req = AppointmentChangeRequest::create([
             'appointment_id' => $appointment->id, 'requested_by' => $this->client->id,
             'type' => 'cancellation', 'status' => 'pending', 'reason' => 'Change of plans',
+            'reason_category' => 'change_of_plans',
         ]);
 
         $this->actingAs($this->manager)
-            ->patch(route('admin.appointment-requests.review', $req), ['decision' => 'approve'])
+            ->patch(route('admin.appointment-requests.review', $req), [
+                'decision' => 'approve',
+                'refund_decision' => 'non_refundable',
+            ])
             ->assertRedirect();
 
         $this->assertSame(AppointmentStatus::Cancelled, $appointment->fresh()->status);
         $this->assertSame('approved', $req->fresh()->status);
         $this->assertSame($this->manager->id, $req->fresh()->reviewed_by);
+        $this->assertSame('non_refundable', $req->fresh()->refund_decision);
     }
 
     public function test_manager_approving_a_reschedule_moves_the_appointment(): void

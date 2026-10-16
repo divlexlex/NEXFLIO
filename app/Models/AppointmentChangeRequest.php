@@ -34,6 +34,8 @@ class AppointmentChangeRequest extends Model
         'type',
         'status',
         'reason',
+        'reason_category',
+        'refund_decision',
         'requested_date',
         'requested_start_time',
         'requested_personnel_id',
@@ -78,5 +80,29 @@ class AppointmentChangeRequest extends Model
     public function isReschedule(): bool
     {
         return $this->type === self::TYPE_RESCHEDULE;
+    }
+
+    public function isCancellation(): bool
+    {
+        return $this->type === self::TYPE_CANCELLATION;
+    }
+
+    /**
+     * Display label for the client-picked cancellation category (see
+     * config/booking.php 'cancellation_reasons'). Null when no category
+     * was stored (reschedules, legacy pre-category rows). A stored key
+     * missing from config falls back to a prettified key so historical
+     * rows still render.
+     */
+    public function cancellationReasonLabel(): ?string
+    {
+        if ($this->type !== self::TYPE_CANCELLATION || ! $this->reason_category) {
+            return null;
+        }
+
+        return config(
+            'booking.cancellation_reasons.'.$this->reason_category,
+            ucfirst(str_replace('_', ' ', (string) $this->reason_category))
+        );
     }
 }

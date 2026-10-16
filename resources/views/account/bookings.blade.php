@@ -72,7 +72,7 @@
                                     'cancelled', 'no-show' => 'nx-status-cancelled',
                                     default => 'nx-status-done',
                                 })
-                                @php($canRequestChange = in_array($appointment->status->value, ['unverified', 'booked'], true))
+                                @php($canRequestChange = $appointment->status === \App\Enums\AppointmentStatus::Booked)
                                 @php($pendingRequest = $appointment->pendingChangeRequest)
                                 <div class="nx-booking-row">
                                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
@@ -91,29 +91,42 @@
                                     @if($appointment->price !== null)
                                         <p class="small nx-text-secondary mb-1"><i class="bi bi-cash-coin me-2"></i>₱{{ number_format((float) $appointment->price, 2)}}</p>
                                         <p class="small nx-text-secondary mb-1"><i class="bi bi-wallet2 me-2"></i>{{ $appointment->paymentState() }}</p>
-                                        @php($showRefundButton = false)
                                         @php($showContinueButton = false)
+                                        @php($showResubmitButton = false)
                                         @if($appointment->payment?->status->value === 'rejected')
                                             <p class="small nx-text-secondary mb-1"><i class="bi bi-x-circle me-2"></i>Payment rejected{{ $appointment->payment->rejectionCategoryLabel() ? ' — '.$appointment->payment->rejectionCategoryLabel() : '' }}{{ $appointment->payment->rejection_reason ? ': '.$appointment->payment->rejection_reason : '' }}</p>
-                                            {{-- Rejected-payment flags (step 2A refund + step 2B
-                                                 top-up). The action row itself lives at the very
-                                                 bottom of the card, sharing one line with the ID
-                                                 and personnel lines below. --}}
-                                            @php($refundEligible = (bool) config('payment.rejection_reasons.'.$appointment->payment->rejection_category.'.refund_eligible', false))
-                                            @php($refundAmount = (float) ($appointment->payment->amount_received ?? 0))
-                                            @php($showRefundButton = $refundEligible && $refundAmount > 0 && $appointment->payment->refund_status === null && ! $appointment->hasActiveTopup())
+                                            {{-- Rejected-payment outcomes: "Continue to book this"
+                                                 (top-up) XOR "Send a new proof" (resubmit) — never
+                                                 both, never a refund. Anything else is final with
+                                                 no action buttons. The action row itself lives at
+                                                 the very bottom of the card, sharing one line
+                                                 with the ID and personnel lines below. --}}
                                             @php($showContinueButton = $appointment->canContinueBooking())
-                                            @if($refundEligible && $refundAmount > 0)
-                                                @if($appointment->payment->refund_status === 'requested')
-                                                    <p class="small nx-text-secondary mb-1"><i class="bi bi-hourglass-split me-2"></i>Refund requested — the branch will send ₱{{ number_format($refundAmount, 2) }} back via your payment method.</p>
-                                                @elseif($appointment->payment->refund_status === 'sent')
-                                                    <p class="small nx-text-secondary mb-1"><i class="bi bi-check-circle me-2"></i>Refund sent (₱{{ number_format($refundAmount, 2) }}) on {{ $appointment->payment->refund_sent_at?->format('M j, Y') }}.</p>
+                                            @php($showResubmitButton = $appointment->canResubmitProof())
+                                            @if($showResubmitButton)
+                                                <p class="small nx-text-secondary mb-1"><i class="bi bi-info-circle me-2"></i>Your proof was rejected as invalid or unreadable — you can send a clearer photo or screenshot.</p>
+                                            @endif
+                                        @endif
+                                        {{-- Cancelled-card refund lines (approved cancellation
+                                             request's refund_decision + primary payment's
+                                             refund_status; X = refundDueAmount(), the same
+                                             helper the admin card uses). Nothing paid → no line. --}}
+                                        @php($approvedCancellation = ($appointment->relationLoaded('changeRequests') ? $appointment->changeRequests : $appointment->changeRequests()->get())->sortByDesc('id')->first())
+                                        @if($appointment->status === \App\Enums\AppointmentStatus::Cancelled && $approvedCancellation && $approvedCancellation->refund_decision)
+                                            @php($refundX = $appointment->payment ? $appointment->payment->refundDueAmount() : $appointment->verifiedPaid())
+                                            @if($refundX > 0)
+                                                @if($approvedCancellation->refund_decision === 'refundable' && $appointment->payment?->refund_status === 'requested')
+                                                    <p class="small nx-text-secondary mb-1"><i class="bi bi-arrow-counterclockwise me-2"></i>Refund expected: ₱{{ number_format($refundX, 2) }} — the branch will send it back to your payment method.</p>
+                                                @elseif($approvedCancellation->refund_decision === 'refundable' && $appointment->payment?->refund_status === 'sent')
+                                                    <p class="small nx-text-secondary mb-1"><i class="bi bi-check-circle me-2"></i>Refund sent: ₱{{ number_format($refundX, 2) }} · {{ $appointment->payment->refund_sent_at?->format('M j, Y') }}</p>
+                                                @elseif($approvedCancellation->refund_decision === 'non_refundable')
+                                                    <p class="small nx-text-secondary mb-1"><i class="bi bi-info-circle me-2"></i>Down payment is non-refundable (per booking policy).</p>
                                                 @endif
                                             @endif
                                         @endif
-                                        @if($showRefundButton || $showContinueButton)
+                                        @if($showContinueButton || $showResubmitButton)
                                             {{-- Bottom line of the card: ID + personnel stay
-                                                 bottom-left, both action buttons sit bottom-right
+                                                 bottom-left, action button(s) sit bottom-right
                                                  in identical solid styling — text is the only
                                                  difference. No top margin beyond the card's
                                                  normal line spacing. --}}
@@ -125,22 +138,35 @@
                                                     @endif
                                                 </div>
                                                 <div class="d-flex gap-2 flex-wrap">
-                                                    @if($showRefundButton)
-                                                        <form method="POST" action="{{ route('account.bookings.refund', $appointment->id) }}">
-                                                            @csrf
-                                                            <button class="nx-btn nx-btn-primary btn-sm">Request refund of ₱{{ number_format($refundAmount, 2) }}</button>
-                                                        </form>
-                                                    @endif
                                                     @if($showContinueButton)
                                                         <a href="{{ route('account.bookings.topup', $appointment->id) }}" class="nx-btn nx-btn-primary btn-sm">Continue to book this — add ₱{{ number_format($appointment->shortfall(), 2) }}</a>
                                                     @endif
+                                                    @if($showResubmitButton)
+                                                        <button type="button" class="nx-btn nx-btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#resubmit-{{ $appointment->id }}" aria-expanded="false">
+                                                            <i class="bi bi-upload me-1"></i>Send a new proof
+                                                        </button>
+                                                    @endif
                                                 </div>
                                             </div>
+                                            @if($showResubmitButton)
+                                                <div class="collapse mt-2" id="resubmit-{{ $appointment->id }}">
+                                                    <form method="POST" action="{{ route('account.bookings.resubmit-proof', $appointment->id) }}" enctype="multipart/form-data" class="d-flex flex-column gap-2">
+                                                        @csrf
+                                                        <input type="file" name="payment_proof" class="form-control form-control-sm resubmit-proof-input" accept="image/*" required>
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <button type="button" class="nx-preview-link d-none" data-preview-btn>
+                                                                <i class="bi bi-eye me-1"></i>View image
+                                                            </button>
+                                                            <button type="submit" class="nx-btn nx-btn-primary btn-sm">Submit proof</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            @endif
                                         @else
                                             <p class="small nx-text-secondary mb-1"><i class="bi bi-hash me-2"></i>ID {{ $appointment->referenceCode() }}</p>
                                         @endif
                                     @endif
-                                    @if($appointment->personnel && ! ($showRefundButton || $showContinueButton))
+                                    @if($appointment->personnel && ! ($showContinueButton || $showResubmitButton))
                                         <p class="small nx-text-secondary mb-0"><i class="bi bi-person me-2"></i>{{ $appointment->personnel->name }}</p>
                                     @endif
                                     @if($appointment->address)
@@ -186,6 +212,8 @@
                                                 <i class="bi bi-x-circle me-1"></i>Request cancellation
                                             </button>
                                         </div>
+                                    @elseif($appointment->status === \App\Enums\AppointmentStatus::Unverified)
+                                        <p class="small nx-text-secondary mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>Requests to reschedule or cancel will be available once your reservation fee is verified.</p>
                                     @endif
 
                                     {{-- Rating (Completed cards only — refund/continue buttons above are untouched) --}}
@@ -322,9 +350,21 @@
                     </div>
                 </div>
 
+                <div id="cr-cancel-fields" hidden>
+                    <div class="mb-2">
+                        <label class="form-label small" for="cr-category">Reason for cancellation <span class="text-danger">*</span></label>
+                        <select name="reason_category" id="cr-category" class="form-select">
+                            <option value="">Choose a reason</option>
+                            @foreach(config('booking.cancellation_reasons', []) as $value => $label)
+                                <option value="{{ $value }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
                 <div class="mb-2">
-                    <label class="form-label small">Message to the team <span class="nx-text-secondary">(optional)</span></label>
-                    <textarea name="reason" rows="3" maxlength="1000" class="form-control" placeholder="Let us know why, or anything else that helps."></textarea>
+                    <label class="form-label small" id="cr-reason-label">Message to the team <span class="nx-text-secondary">(optional)</span></label>
+                    <textarea name="reason" id="cr-reason" rows="3" maxlength="1000" class="form-control" placeholder="Let us know why, or anything else that helps."></textarea>
                 </div>
                 <p class="small nx-text-secondary mb-0">
                     <i class="bi bi-info-circle me-1"></i>Nothing changes yet — the team reviews every request first and you'll be notified of the outcome.
@@ -335,6 +375,35 @@
                 <button class="nx-btn nx-btn-primary" id="cr-submit">Send request</button>
             </div>
         </form>
+    </div>
+</div>
+
+{{-- SHARED RESUBMIT PREVIEW — one full-size proof viewer for every inline
+     resubmit form above (same borderless "View image" pattern as the
+     top-up page, but shared so each card doesn't duplicate the modal). --}}
+<style>
+    .nx-preview-link {
+        background: none; border: none; padding: 0;
+        font-size: 13px; font-weight: 500;
+        color: var(--nx-accent); text-decoration: none;
+        cursor: pointer;
+    }
+    .nx-preview-link:hover {
+        color: var(--nx-accent); text-decoration: underline;
+        filter: brightness(1.15);
+    }
+</style>
+<div class="modal fade" id="resubmit-preview-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 nx-body" style="border-radius: var(--nx-radius-lg); overflow: hidden;">
+            <div class="modal-header" style="border-color: var(--nx-border);">
+                <h2 class="h5 mb-0">Proof of payment</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-2 text-center">
+                <img id="resubmit-preview-full" src="" alt="Proof of payment full size" class="img-fluid w-100">
+            </div>
+        </div>
     </div>
 </div>
 
@@ -349,17 +418,36 @@
         var title = document.getElementById('cr-title');
         var context = document.getElementById('cr-context');
         var rescheduleFields = document.getElementById('cr-reschedule-fields');
+        var cancelFields = document.getElementById('cr-cancel-fields');
+        var categoryInput = document.getElementById('cr-category');
+        var reasonInput = document.getElementById('cr-reason');
+        var reasonLabel = document.getElementById('cr-reason-label');
         var dateInput = document.getElementById('cr-date');
         var timeInput = document.getElementById('cr-time');
         var submitBtn = document.getElementById('cr-submit');
         var base = "{{ url('account/bookings') }}";
 
+        function syncCancelReason() {
+            var isCancel = typeInput.value === 'cancellation';
+            var needsDetails = isCancel && categoryInput.value === 'other';
+            reasonInput.required = needsDetails;
+            reasonInput.placeholder = isCancel ? 'Add details (optional)' : "Let us know why, or anything else that helps.";
+            reasonLabel.innerHTML = isCancel
+                ? (needsDetails
+                    ? 'Details <span class="text-danger">*</span>'
+                    : 'Details <span class="nx-text-secondary">(optional)</span>')
+                : 'Message to the team <span class="nx-text-secondary">(optional)</span>';
+        }
+
         function setMode(mode) {
             typeInput.value = mode;
             var isReschedule = mode === 'reschedule';
             rescheduleFields.hidden = !isReschedule;
+            cancelFields.hidden = isReschedule;
             dateInput.required = isReschedule;
             timeInput.required = isReschedule;
+            categoryInput.required = !isReschedule;
+            if (isReschedule) categoryInput.value = '';
             title.textContent = isReschedule ? 'Request a reschedule' : 'Request a cancellation';
             submitBtn.textContent = isReschedule ? 'Send reschedule request' : 'Send cancellation request';
             modal.querySelectorAll('.js-cr-mode').forEach(function (b) {
@@ -367,6 +455,7 @@
                 b.classList.toggle('btn-secondary', b.dataset.mode === mode);
                 b.classList.toggle('btn-outline-secondary', b.dataset.mode !== mode);
             });
+            syncCancelReason();
         }
 
         modal.addEventListener('show.bs.modal', function (event) {
@@ -380,6 +469,47 @@
 
         modal.querySelectorAll('.js-cr-mode').forEach(function (b) {
             b.addEventListener('click', function () { setMode(b.dataset.mode); });
+        });
+
+        categoryInput.addEventListener('change', syncCancelReason);
+    })();
+
+    // Resubmit-proof file inputs (one inline form per invalid_proof card):
+    // reveal the borderless "View image" preview button once an image is
+    // chosen, showing it in the shared modal above. One delegated setup for
+    // every card on the page.
+    (function () {
+        var previewModal = document.getElementById('resubmit-preview-modal');
+        var previewFull = document.getElementById('resubmit-preview-full');
+        var previewUrl = null;
+        if (!previewModal) return;
+
+        function setPreview(url) {
+            if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+            if (url) {
+                previewUrl = url;
+                previewFull.src = url;
+            } else {
+                previewFull.removeAttribute('src');
+            }
+        }
+
+        document.querySelectorAll('.resubmit-proof-input').forEach(function (input) {
+            var btn = input.closest('form').querySelector('[data-preview-btn]');
+            if (!btn) return;
+            input.addEventListener('change', function () {
+                setPreview(null);
+                var file = input.files && input.files[0];
+                if (!file || !file.type || file.type.indexOf('image/') !== 0) {
+                    btn.classList.add('d-none');
+                    return;
+                }
+                setPreview(URL.createObjectURL(file));
+                btn.classList.remove('d-none');
+            });
+            btn.addEventListener('click', function () {
+                new bootstrap.Modal(previewModal).show();
+            });
         });
     })();
 </script>

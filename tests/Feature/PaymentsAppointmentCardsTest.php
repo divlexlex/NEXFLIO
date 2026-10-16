@@ -85,7 +85,8 @@ class PaymentsAppointmentCardsTest extends TestCase
             ->get(route('admin.payments', ['status' => 'verified']))
             ->assertOk()->getContent();
 
-        $this->assertSame(1, substr_count($html, 'Package LIZ (test)'));
+        $this->assertSame(1, substr_count($html, 'col-md-6 col-xl-4'));
+        $this->assertStringContainsString('Package LIZ (test)', $html);
         $this->assertStringContainsString('Paid online ₱500.00', $html);
         $this->assertStringContainsString('Paid at branch ₱0.00', $html);
         $this->assertStringContainsString('Balance due ₱3,199.00', $html);
@@ -162,8 +163,9 @@ class PaymentsAppointmentCardsTest extends TestCase
         $this->assertStringNotContainsString('Record branch payment', $html);
     }
 
-    // (d) Rejected tab: category + refund status on the card; mark-sent works.
-    public function test_rejected_card_shows_category_and_refund_action(): void
+    // (d) Rejected tab: category on the card; a legacy 'requested' refund
+    // row still shows the admin action and mark-sent works.
+    public function test_rejected_card_shows_category_and_legacy_refund_action(): void
     {
         Storage::fake('public');
 
@@ -182,8 +184,10 @@ class PaymentsAppointmentCardsTest extends TestCase
             route('admin.payments.reject', $appointment->payment->id),
             ['rejection_category' => 'insufficient_amount', 'amount_received' => 200]
         )->assertRedirect();
-        $this->actingAs($this->client)->post(route('account.bookings.refund', $appointment->id))
-            ->assertRedirect();
+        $appointment->payment->update([
+            'refund_status' => 'requested',
+            'refund_requested_at' => now(),
+        ]);
 
         $html = $this->actingAs($this->manager)
             ->get(route('admin.payments', ['status' => 'rejected']))

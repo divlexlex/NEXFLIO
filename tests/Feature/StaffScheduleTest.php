@@ -156,7 +156,7 @@ class StaffScheduleTest extends TestCase
 
         $this->assertCount(7, $mine);
         $this->assertTrue($mine->every(fn ($event) => ($event['display'] ?? null) === 'background'));
-        $this->assertTrue($mine->every(fn ($event) => $event['title'] === 'AM shift'));
+        $this->assertTrue($mine->every(fn ($event) => $event['title'] === '10:00 AM – 4:00 PM'));
 
         $theirs = collect($this->feed($this->otherStaff, $weekStart, $weekEnd))
             ->where('extendedProps.kind', 'shift');

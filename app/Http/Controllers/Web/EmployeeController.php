@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Models\Attendance;
+use App\Models\Position;
 use App\Models\StaffProfile;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -30,6 +31,9 @@ class EmployeeController extends Controller
                 ->get()
                 ->keyBy('user_id'),
             'attendanceDate' => $date,
+            // Position options for the employee forms (id-ordered, so the
+            // classic positions come first) — see App\Models\Position.
+            'positions' => Position::orderBy('id')->get(['id', 'name']),
         ]);
     }
 
@@ -84,7 +88,7 @@ class EmployeeController extends Controller
         $validated = $request->validate([
             'base_pay'          => 'required|numeric|min:0',
             'commission_rate'   => 'required|numeric|min:0|max:100',
-            'position'          => ['required', Rule::in(array_column(\App\Enums\Position::cases(), 'value'))],
+            'position'          => ['required', Rule::exists('positions', 'name')],
             'employment_status' => ['required', Rule::in(['active', 'inactive'])],
         ]);
 

@@ -161,11 +161,12 @@
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Position <span class="text-danger">*</span></label>
-                    <select name="position" class="form-select" required>
+                    <select name="position" id="new-emp-position" class="form-select" required>
                         <option value="">Select position...</option>
-                        <option value="Nail Technician">Nail Technician</option>
-                        <option value="Massage Technician">Massage Technician</option>
-                        <option value="Facial Technician">Facial Technician</option>
+                        @foreach($positions as $position)
+                            <option value="{{ $position->name }}">{{ $position->name }}</option>
+                        @endforeach
+                        <option value="__new__">+ New position…</option>
                     </select>
                 </div>
                 <div class="mb-2">
@@ -215,9 +216,10 @@
                 <div class="mb-2">
                     <label class="form-label">Position</label>
                     <select name="position" id="edit-emp-position" class="form-select" required>
-                        <option value="Nail Technician">Nail Technician</option>
-                        <option value="Massage Technician">Massage Technician</option>
-                        <option value="Facial Technician">Facial Technician</option>
+                        @foreach($positions as $position)
+                            <option value="{{ $position->name }}">{{ $position->name }}</option>
+                        @endforeach
+                        <option value="__new__">+ New position…</option>
                     </select>
                 </div>
                 <div class="mb-2">
@@ -231,6 +233,43 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button class="btn btn-spa">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- NEW POSITION MODAL (shared by Add + Edit Employee): creates the
+     position without losing the employee form's typed data — the form
+     below submits via fetch (JSON) and the new option is appended +
+     selected in place. Without fetch (very old browser) the plain POST
+     runs instead and the endpoint redirects back with a flash. --}}
+<div class="modal fade" id="newPositionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ route('admin.positions.store') }}" id="newPositionForm" class="modal-content">
+            @csrf
+            <div class="modal-header">
+                <h5 class="modal-title">New position</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-danger mb-2 d-none" id="new-position-error"></p>
+                <div class="mb-2">
+                    <label class="form-label" for="new-position-name">Position name <span class="text-danger">*</span></label>
+                    <input name="name" id="new-position-name" class="form-control" maxlength="100" required>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label" for="new-position-category">Handles service category</label>
+                    <select name="service_category" id="new-position-category" class="form-select">
+                        <option value="">None</option>
+                        @foreach(\App\Support\ServiceCatalog::CATEGORY_ORDER as $category)
+                            <option value="{{ $category }}">{{ $category }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-spa">Add Position</button>
             </div>
         </form>
     </div>
@@ -275,5 +314,74 @@
         document.getElementById('deleteEmployeeForm').action = "{{ url('admin/employees') }}/" + btn.dataset.id;
         document.getElementById('delete-emp-name').textContent = btn.dataset.name;
     });
+
+    // "+ New position…" (last option of both employee selects): open the
+    // shared modal instead of submitting that value, then create via fetch
+    // so the employee form keeps everything already typed. The new option
+    // is appended to both selects and selected in the originating one.
+    (function () {
+        const modal = document.getElementById('newPositionModal');
+        const form = document.getElementById('newPositionForm');
+        const errorEl = document.getElementById('new-position-error');
+        const selects = ['new-emp-position', 'edit-emp-position']
+            .map((id) => document.getElementById(id))
+            .filter(Boolean);
+        let target = null;
+
+        selects.forEach((select) => {
+            select.addEventListener('change', () => {
+                if (select.value !== '__new__') return;
+                target = select;
+                select.value = '';
+                errorEl.textContent = '';
+                errorEl.classList.add('d-none');
+                form.reset();
+                new bootstrap.Modal(modal).show();
+            });
+        });
+
+        form.addEventListener('submit', (event) => {
+            // No fetch: let the plain POST run (redirect back + flash).
+            if (typeof fetch === 'undefined') return;
+            event.preventDefault();
+
+            const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            fetch(form.action, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' },
+                body: new FormData(form),
+            })
+                .then(async (response) => {
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        const message = (data.errors && (data.errors.name || [])[0])
+                            || (data.errors && (data.errors.service_category || [])[0])
+                            || 'Could not add this position.';
+                        throw new Error(message);
+                    }
+                    return data;
+                })
+                .then((position) => {
+                    selects.forEach((select) => {
+                        const existing = Array.from(select.options).find((o) => o.value === position.name);
+                        if (existing) {
+                            existing.selected = select === target;
+                            return;
+                        }
+                        const option = document.createElement('option');
+                        option.value = position.name;
+                        option.textContent = position.name;
+                        const plus = select.querySelector('option[value="__new__"]');
+                        select.insertBefore(option, plus);
+                        if (select === target) select.value = position.name;
+                    });
+                    bootstrap.Modal.getInstance(modal).hide();
+                })
+                .catch((error) => {
+                    errorEl.textContent = error.message;
+                    errorEl.classList.remove('d-none');
+                });
+        });
+    })();
 </script>
 @endpush

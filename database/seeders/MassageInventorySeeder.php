@@ -28,7 +28,7 @@ use Illuminate\Database\Seeder;
  */
 class MassageInventorySeeder extends Seeder
 {
-    private const CATEGORY = 'massage';
+    private const CATEGORY = 'Massage';
 
     public function run(): void
     {

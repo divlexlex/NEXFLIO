@@ -15,12 +15,14 @@ use App\Http\Controllers\Web\EmailVerificationController;
 use App\Http\Controllers\Web\EmployeeController;
 use App\Http\Controllers\Web\AvailabilityController;
 use App\Http\Controllers\Web\InventoryController;
+use App\Http\Controllers\Web\InventoryCategoryController;
 use App\Http\Controllers\Web\LandingController;
 use App\Http\Controllers\Web\LeaveController;
 use App\Http\Controllers\Web\OffersController;
 use App\Http\Controllers\Web\PageController;
 use App\Http\Controllers\Web\PasswordResetController;
 use App\Http\Controllers\Web\PaymentController;
+use App\Http\Controllers\Web\PositionController;
 use App\Http\Controllers\Web\PromoController;
 use App\Http\Controllers\Web\ReceiptController;
 use App\Http\Controllers\Web\ReportController;
@@ -88,13 +90,13 @@ Route::prefix('account')->name('account.')->middleware(['auth', 'role:4'])->grou
     // them in the /admin queue before anything on the appointment changes.
     Route::post('/bookings/{appointment}/change-requests', [ClientAccountController::class, 'storeChangeRequest'])->name('bookings.change-request');
     Route::delete('/bookings/{appointment}/change-requests/{changeRequest}', [ClientAccountController::class, 'withdrawChangeRequest'])->name('bookings.change-request.withdraw');
-    // Refund request on a rejected booking (step 2A) — the booking owner's
-    // own appointment only; ClientAccountController@requestRefund guards.
-    Route::post('/bookings/{appointment}/refund', [ClientAccountController::class, 'requestRefund'])->name('bookings.refund');
     // Top-up shortfall on a rejected booking (step 2B) — form + submit, both
     // owner-only and gated by Appointment::canContinueBooking().
     Route::get('/bookings/{appointment}/topup', [ClientAccountController::class, 'showTopupForm'])->name('bookings.topup');
     Route::post('/bookings/{appointment}/topup', [ClientAccountController::class, 'storeTopup'])->name('bookings.topup.store');
+    // Resubmit a clearer proof on an invalid_proof rejection — owner-only,
+    // gated by the resubmit_proof config flag in resubmitProof().
+    Route::post('/bookings/{appointment}/resubmit-proof', [ClientAccountController::class, 'resubmitProof'])->name('bookings.resubmit-proof');
     Route::post('/bookings/{appointment}/review', [ReviewController::class, 'store'])->name('bookings.review.store');
     Route::get('/bookings/{appointment}/receipt', [ReceiptController::class, 'client'])->name('bookings.receipt');
 
@@ -189,13 +191,23 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
 
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory');
     Route::post('/inventory', [InventoryController::class, 'store'])->name('inventory.store');
+    Route::patch('/inventory/{id}', [InventoryController::class, 'update'])->name('inventory.update');
     Route::post('/inventory/{id}/batches', [InventoryController::class, 'addBatch'])->name('inventory.batches');
     Route::post('/inventory/{id}/pull-out', [InventoryController::class, 'pullOut'])->name('inventory.pull-out');
+    // Inventory categories backing the page filter + item-form selects
+    // (same manager-only guard as inventory management via group
+    // middleware).
+    Route::post('/inventory-categories', [InventoryCategoryController::class, 'store'])->name('inventory-categories.store');
 
     Route::get('/employees', [EmployeeController::class, 'index'])->name('employees');
     Route::post('/employees', [EmployeeController::class, 'store'])->name('employees.store');
     Route::patch('/employees/{id}', [EmployeeController::class, 'update'])->name('employees.update');
     Route::delete('/employees/{id}', [EmployeeController::class, 'destroy'])->name('employees.destroy');
+
+    // Staff positions backing the employee-form selects (see
+    // PositionController) — same manager-only guard as employee
+    // management via the group middleware.
+    Route::post('/positions', [PositionController::class, 'store'])->name('positions.store');
 
     Route::get('/clients', [ClientDirectoryController::class, 'index'])->name('clients');
     Route::get('/clients/{user}', [ClientDirectoryController::class, 'show'])->name('clients.show');

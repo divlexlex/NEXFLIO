@@ -6,6 +6,7 @@ use App\Enums\AppointmentStatus;
 use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
+use App\Models\AppointmentChangeRequest;
 use App\Models\LeaveRequest;
 use App\Models\Notification;
 use App\Models\Service;
@@ -23,8 +24,15 @@ class AppointmentController extends Controller
 {
     public function index(Request $request)
     {
+        // The status dropdown persists per session: WITH the param uses +
+        // stores it, WITHOUT it the stored choice applies, then show-all.
+        $statusFilter = $request->query('status', $request->session()->get('filters.appointments.status', ''));
+        if ($request->query('status') !== null) {
+            $request->session()->put('filters.appointments.status', $statusFilter);
+        }
+
         $appointments = Appointment::with(['user', 'service', 'personnel', 'payment', 'payments'])
-            ->when($request->query('status'), fn ($query, $status) => $query->where('status', $status))
+            ->when($statusFilter, fn ($query, $status) => $query->where('status', $status))
             ->orderByDesc('appointment_date')
             ->paginate(15)
             ->withQueryString();
@@ -37,6 +45,7 @@ class AppointmentController extends Controller
                 ->orderBy('name')
                 ->get(),
             'statuses' => AppointmentStatus::cases(),
+            'currentStatus' => $statusFilter,
         ]);
     }
 
@@ -140,6 +149,9 @@ class AppointmentController extends Controller
      * Appointments page needs in extendedProps, so clicking an event never
      * needs a second request. Cancelled / no-show are included (greyed) so
      * the calendar legend is meaningful and past cancellations stay visible.
+     * An appointment with a pending cancellation request is presented with
+     * the Pending colour/class and no operation buttons (see
+     * pending_cancellation below); reschedule requests change nothing.
      */
     public function feed(Request $request)
     {
@@ -165,7 +177,18 @@ class AppointmentController extends Controller
             ->pluck('user_id')
             ->all();
 
-        return response()->json($appointments->map(function (Appointment $appointment) use ($returningUserIds) {
+        // Pending CANCELLATION requests, keyed by appointment (request id +
+        // reason text included for the drawer). One grouped query — no
+        // per-event lookups. Reschedule requests are deliberately ignored here.
+        $pendingCancellations = AppointmentChangeRequest::query()
+            ->whereIn('appointment_id', $appointments->pluck('id'))
+            ->where('type', AppointmentChangeRequest::TYPE_CANCELLATION)
+            ->where('status', AppointmentChangeRequest::STATUS_PENDING)
+            ->get(['id', 'appointment_id', 'reason'])
+            ->keyBy('appointment_id')
+            ->all();
+
+        return response()->json($appointments->map(function (Appointment $appointment) use ($returningUserIds, $pendingCancellations) {
             $date = $appointment->appointment_date->toDateString();
             $start = "{$date}T{$appointment->start_time}";
             $duration = $appointment->service->duration_minutes ?? 60;
@@ -187,6 +210,18 @@ class AppointmentController extends Controller
                 'no-show' => ['#f6e5e3', '#e4c0ba', '#93534a'],
                 default => ['#e9e2d8', '#d8ccbc', '#5b5148'],
             };
+
+            // A pending cancellation request presents the event as Pending
+            // (the exact Unverified triple + class from the match above),
+            // overriding the appointment's normal status colour. Approving,
+            // rejecting, or withdrawing the request returns the event to its
+            // normal colour automatically on the next feed load.
+            $pendingCancellation = array_key_exists($appointment->id, $pendingCancellations);
+            $classNames = ['nx-evt', 'nx-evt-'.$statusKey];
+            if ($pendingCancellation) {
+                [$bg, $border, $fg] = ['#fcebd2', '#ecc78f', '#8a5a16'];
+                $classNames = ['nx-evt', 'nx-evt-unverified'];
+            }
 
             $payment = $appointment->payment;
             $methodLabel = $payment
@@ -210,7 +245,7 @@ class AppointmentController extends Controller
                 'backgroundColor' => $bg,
                 'borderColor' => $border,
                 'textColor' => $fg,
-                'classNames' => ['nx-evt', 'nx-evt-'.$statusKey],
+                'classNames' => $classNames,
                 'extendedProps' => [
                     'client' => $appointment->clientName() ?? 'Client',
                     'reference_code' => $appointment->referenceCode(),
@@ -247,7 +282,10 @@ class AppointmentController extends Controller
                     // still re-validates each via AppointmentService::transition).
                     // "Start service" is only available when a staff member is assigned.
                     'verificationLocked' => $verificationLocked,
-                    'actions' => $verificationLocked ? [] : match ($appointment->status) {
+                    'pending_cancellation' => $pendingCancellation,
+                    'pending_cancellation_request_id' => $pendingCancellations[$appointment->id]->id ?? null,
+                    'cancellation_reason' => $pendingCancellations[$appointment->id]->reason ?? null,
+                    'actions' => ($verificationLocked || $pendingCancellation) ? [] : match ($appointment->status) {
                         AppointmentStatus::Unverified => [
                             ['to' => 'booked', 'label' => 'Confirm booking', 'style' => 'success'],
                             ['to' => 'cancelled', 'label' => 'Reject / Cancel', 'style' => 'outline-danger', 'reason' => true],

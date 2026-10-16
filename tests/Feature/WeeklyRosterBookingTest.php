@@ -11,9 +11,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Weekly AM/PM roster: in a roster week only assigned staff are bookable
- * and their slots follow the shift window; weeks without a roster behave
- * exactly as before (staff_schedules fallback + business hours).
+ * Weekly individual roster: in a roster week only assigned staff are
+ * bookable and their slots follow their own shift window; weeks without a
+ * roster behave exactly as before (staff_schedules fallback + business
+ * hours).
  */
 class WeeklyRosterBookingTest extends TestCase
 {
@@ -74,15 +75,22 @@ class WeeklyRosterBookingTest extends TestCase
         return $user;
     }
 
-    private function saveRoster(string $weekStart, array $amStaff, array $pmStaff): void
+    private function saveRoster(string $weekStart, array $rows): void
     {
         $this->actingAs($this->manager)->post(route('admin.availability.weekly-roster'), [
             'week_start' => $weekStart,
-            'am_start' => '10:00', 'am_end' => '16:00',
-            'pm_start' => '16:00', 'pm_end' => '21:00',
-            'am_staff' => $amStaff,
-            'pm_staff' => $pmStaff,
+            'assignments' => $rows,
         ])->assertRedirect()->assertSessionHasNoErrors();
+    }
+
+    private function amRow(int $userId): array
+    {
+        return ['user_id' => $userId, 'start_time' => '10:00', 'end_time' => '16:00'];
+    }
+
+    private function pmRow(int $userId): array
+    {
+        return ['user_id' => $userId, 'start_time' => '16:00', 'end_time' => '21:00'];
     }
 
     // Roster week: assigned staff listed, unassigned staff not.
@@ -90,7 +98,7 @@ class WeeklyRosterBookingTest extends TestCase
     {
         $date = now()->addDays(7)->toDateString();
         $weekStart = StaffShiftAssignment::weekStartOf($date);
-        $this->saveRoster($weekStart, [$this->amStaff->id], [$this->pmStaff->id]);
+        $this->saveRoster($weekStart, [$this->amRow($this->amStaff->id), $this->pmRow($this->pmStaff->id)]);
 
         $html = $this->actingAs($this->client)->get(route('account.booking.branch.schedule', [
             'service' => $this->service->id, 'date' => $date, 'personnel' => 'any',
@@ -106,7 +114,7 @@ class WeeklyRosterBookingTest extends TestCase
     {
         $date = now()->addDays(7)->toDateString();
         $weekStart = StaffShiftAssignment::weekStartOf($date);
-        $this->saveRoster($weekStart, [$this->amStaff->id], [$this->pmStaff->id]);
+        $this->saveRoster($weekStart, [$this->amRow($this->amStaff->id), $this->pmRow($this->pmStaff->id)]);
 
         $html = $this->actingAs($this->client)->get(route('account.booking.branch.schedule', [
             'service' => $this->service->id, 'date' => $date, 'personnel' => (string) $this->amStaff->id,
@@ -124,8 +132,7 @@ class WeeklyRosterBookingTest extends TestCase
         $rosterDate = now()->addDays(7)->toDateString();
         $this->saveRoster(
             StaffShiftAssignment::weekStartOf($rosterDate),
-            [$this->amStaff->id],
-            [$this->pmStaff->id]
+            [$this->amRow($this->amStaff->id), $this->pmRow($this->pmStaff->id)]
         );
 
         $plainDate = now()->addDays(21)->toDateString();
@@ -156,30 +163,32 @@ class WeeklyRosterBookingTest extends TestCase
     public function test_empty_save_clears_the_week(): void
     {
         $weekStart = StaffShiftAssignment::weekStartOf(now()->addDays(7)->toDateString());
-        $this->saveRoster($weekStart, [$this->amStaff->id], [$this->pmStaff->id]);
+        $this->saveRoster($weekStart, [$this->amRow($this->amStaff->id), $this->pmRow($this->pmStaff->id)]);
         $this->assertTrue(StaffShiftAssignment::weekHasRoster($weekStart));
 
         $this->actingAs($this->manager)->post(route('admin.availability.weekly-roster'), [
             'week_start' => $weekStart,
-            'am_start' => '10:00', 'am_end' => '16:00',
-            'pm_start' => '16:00', 'pm_end' => '21:00',
-            'am_staff' => [],
-            'pm_staff' => [],
+            'assignments' => [],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame(0, StaffShiftAssignment::forWeek($weekStart)->count());
         $this->assertFalse(StaffShiftAssignment::weekHasRoster($weekStart));
     }
 
-    // Saving a week replaces its previous assignments.
+    // Saving a week replaces its previous assignments, each with their
+    // own times.
     public function test_saving_a_week_replaces_assignments(): void
     {
         $weekStart = StaffShiftAssignment::weekStartOf(now()->addDays(7)->toDateString());
 
-        $this->saveRoster($weekStart, [$this->amStaff->id], [$this->pmStaff->id]);
-        $this->assertSame(['am'], StaffShiftAssignment::where('user_id', $this->amStaff->id)->forWeek($weekStart)->pluck('shift')->all());
+        $this->saveRoster($weekStart, [$this->amRow($this->amStaff->id), $this->pmRow($this->pmStaff->id)]);
+        $this->assertSame(2, StaffShiftAssignment::forWeek($weekStart)->count());
+        $this->assertSame(
+            '10:00',
+            substr(StaffShiftAssignment::where('user_id', $this->amStaff->id)->forWeek($weekStart)->value('start_time'), 0, 5)
+        );
 
-        $this->saveRoster($weekStart, [$this->offStaff->id], []);
+        $this->saveRoster($weekStart, [['user_id' => $this->offStaff->id, 'start_time' => '11:00', 'end_time' => '19:00']]);
         $this->assertSame(1, StaffShiftAssignment::forWeek($weekStart)->count());
         $this->assertSame(
             [$this->offStaff->id],
@@ -187,23 +196,59 @@ class WeeklyRosterBookingTest extends TestCase
         );
     }
 
-    // The same person on both shifts is rejected, naming them.
-    public function test_same_person_on_both_shifts_is_rejected(): void
+    // Copy previous week reproduces the individual rows and times.
+    public function test_copy_previous_week_reproduces_individual_times(): void
+    {
+        $prevWeek = StaffShiftAssignment::weekStartOf(now()->addDays(7)->toDateString());
+        $thisWeek = StaffShiftAssignment::weekStartOf(now()->addDays(14)->toDateString());
+        $this->assertNotSame($prevWeek, $thisWeek);
+
+        $this->saveRoster($prevWeek, [
+            ['user_id' => $this->amStaff->id, 'start_time' => '09:00', 'end_time' => '15:00'],
+            ['user_id' => $this->pmStaff->id, 'start_time' => '15:00', 'end_time' => '21:00'],
+        ]);
+
+        $html = $this->actingAs($this->manager)
+            ->get(route('admin.availability', ['week' => $thisWeek, 'copy_from' => $prevWeek]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('Amy Amshift', $html);
+        $this->assertStringContainsString('Pam Pmshift', $html);
+
+        // Saving the prefilled week writes the copied individual times there.
+        $this->actingAs($this->manager)->post(route('admin.availability.weekly-roster'), [
+            'week_start' => $thisWeek,
+            'assignments' => [
+                ['user_id' => $this->amStaff->id, 'start_time' => '09:00', 'end_time' => '15:00'],
+                ['user_id' => $this->pmStaff->id, 'start_time' => '15:00', 'end_time' => '21:00'],
+            ],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame(
+            '09:00',
+            substr(StaffShiftAssignment::where('user_id', $this->amStaff->id)->forWeek($thisWeek)->value('start_time'), 0, 5)
+        );
+        $this->assertSame(2, StaffShiftAssignment::forWeek($thisWeek)->count());
+    }
+
+    // The same person twice in one payload is rejected, naming them.
+    public function test_duplicate_person_in_payload_is_rejected(): void
     {
         $weekStart = StaffShiftAssignment::weekStartOf(now()->addDays(7)->toDateString());
 
         $response = $this->actingAs($this->manager)->post(route('admin.availability.weekly-roster'), [
             'week_start' => $weekStart,
-            'am_start' => '10:00', 'am_end' => '16:00',
-            'pm_start' => '16:00', 'pm_end' => '21:00',
-            'am_staff' => [$this->amStaff->id],
-            'pm_staff' => [$this->amStaff->id],
+            'assignments' => [
+                $this->amRow($this->amStaff->id),
+                $this->pmRow($this->amStaff->id),
+            ],
         ]);
 
-        $response->assertSessionHasErrors('pm_staff');
+        $response->assertSessionHasErrors('assignments');
         $this->assertStringContainsString(
             'Amy Amshift',
-            collect(session()->get('errors')->get('pm_staff'))->implode(' ')
+            collect(session()->get('errors')->get('assignments'))->implode(' ')
         );
         $this->assertSame(0, StaffShiftAssignment::forWeek($weekStart)->count());
     }
@@ -220,18 +265,54 @@ class WeeklyRosterBookingTest extends TestCase
 
         $this->actingAs($this->manager)->post(route('admin.availability.weekly-roster'), [
             'week_start' => $weekStart,
-            'am_start' => '10:00', 'am_end' => '16:00',
-            'pm_start' => '16:00', 'pm_end' => '21:00',
-            'am_staff' => [$inactive->id],
-            'pm_staff' => [],
-        ])->assertSessionHasErrors('am_staff');
+            'assignments' => [
+                ['user_id' => $inactive->id, 'start_time' => '10:00', 'end_time' => '16:00'],
+            ],
+        ])->assertSessionHasErrors('assignments');
 
         $this->actingAs($this->manager)->post(route('admin.availability.weekly-roster'), [
             'week_start' => $weekStart,
-            'am_start' => '16:00', 'am_end' => '10:00',
-            'pm_start' => '16:00', 'pm_end' => '21:00',
-        ])->assertSessionHasErrors('am_end');
+            'assignments' => [
+                ['user_id' => $this->amStaff->id, 'start_time' => '16:00', 'end_time' => '10:00'],
+            ],
+        ])->assertSessionHasErrors('assignments');
 
         $this->assertSame(0, StaffShiftAssignment::forWeek($weekStart)->count());
+    }
+
+    // The roster tab renders individual rows with no AM/PM cards: category
+    // pills plus the grouped Not-assigned strip.
+    public function test_roster_tab_renders_individual_rows(): void
+    {
+        $weekStart = StaffShiftAssignment::weekStartOf(now()->addDays(7)->toDateString());
+        $this->saveRoster($weekStart, [$this->amRow($this->amStaff->id)]);
+
+        $html = $this->actingAs($this->manager)
+            ->get(route('admin.availability', ['week' => $weekStart]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('Amy Amshift', $html);
+        $this->assertStringContainsString('Nail Technician', $html);
+        $this->assertStringContainsString('Not assigned — not bookable this week', $html);
+        $this->assertStringContainsString('Pam Pmshift', $html);
+        $this->assertStringNotContainsString('AM — Morning shift', $html);
+        $this->assertStringNotContainsString('PM — Afternoon shift', $html);
+        $this->assertStringNotContainsString('am_staff', $html);
+        $this->assertStringNotContainsString('pm_staff', $html);
+    }
+
+    // The Master Schedule badge shows times without any AM/PM label.
+    public function test_master_schedule_badge_shows_times_only(): void
+    {
+        $weekStart = StaffShiftAssignment::weekStartOf(now()->addDays(7)->toDateString());
+        $this->saveRoster($weekStart, [$this->amRow($this->amStaff->id)]);
+
+        $html = $this->actingAs($this->manager)
+            ->get(route('admin.master-schedule', ['week' => $weekStart]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('10:00 AM – 4:00 PM', $html);
     }
 }

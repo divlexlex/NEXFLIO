@@ -30,7 +30,7 @@ class RefundSentMail extends Mailable implements ShouldQueue
     public function content(): Content
     {
         $appointment = $this->payment->appointment;
-        $amount = number_format((float) ($this->payment->amount_received ?? 0), 2);
+        $amount = number_format($this->payment->refundDueAmount(), 2);
         $code = $appointment?->referenceCode() ?? 'your booking';
 
         return new Content(view: 'mail.notification', with: [

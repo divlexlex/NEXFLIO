@@ -13,6 +13,7 @@ use App\Models\Appointment;
 use App\Models\BlockedSlot;
 use App\Models\BusinessHours;
 use App\Models\LeaveRequest;
+use App\Models\Position;
 use App\Models\Service;
 use App\Models\ServiceVariant;
 use App\Models\StaffSchedule;
@@ -827,23 +828,23 @@ class BookingController extends Controller
     {
         $dayOfWeek = (int) Carbon::parse($date)->dayOfWeek; // 0=Sun
 
-        // Map service category to staff position for filtering
-        $positionFilter = $service?->category ? match ($service->category) {
-            'Facial' => \App\Enums\Position::FacialTechnician->value,
-            'Massage' => \App\Enums\Position::MassageTechnician->value,
-            'Nails' => \App\Enums\Position::NailTechnician->value,
-            default => null, // Lashes & Brows, Aesthetics, Head Spa, Home Service → show all
-        } : null;
+        // Map service category to staff positions for filtering, driven by
+        // the positions table (see App\Models\Position): a category WITH
+        // linked positions shows only staff holding one of them; a category
+        // with NONE keeps the no-filter behaviour below.
+        $positionNames = $service?->category
+            ? Position::namesForServiceCategory($service->category)
+            : [];
 
         $weekStart = StaffShiftAssignment::weekStartOf($date);
         $rosterWeek = StaffShiftAssignment::weekHasRoster($weekStart);
 
         $query = User::where('role_id', User::ROLE_STAFF)
-            ->whereHas('staffProfile', function ($query) use ($positionFilter) {
+            ->whereHas('staffProfile', function ($query) use ($positionNames) {
                 $query->where('employment_status', 'active')
                     ->where('is_on_break', false);
-                if ($positionFilter) {
-                    $query->where('position', $positionFilter);
+                if ($positionNames !== []) {
+                    $query->whereIn('position', $positionNames);
                 }
             })
             ->whereDoesntHave('leaveRequests', function ($leaves) use ($date) {

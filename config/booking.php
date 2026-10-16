@@ -34,4 +34,29 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Cancellation Reason Categories (client side)
+    |--------------------------------------------------------------------------
+    |
+    | Structured reason a client picks when requesting a cancellation
+    | (the free-text details stay alongside it in the request's `reason`
+    | column). Single source of truth for the client <select> and the admin
+    | Change Requests Reason column — never hardcoded in a blade. Follows
+    | the config/payment.php rejection_reasons pattern.
+    |
+    */
+
+    'cancellation_reasons' => [
+        'change_of_plans' => 'Change of plans',
+        'schedule_conflict' => 'Schedule conflict',
+        'personal_emergency' => 'Personal or family emergency',
+        'health_reasons' => 'Health reasons',
+        'booked_by_mistake' => 'Booked by mistake',
+        'duplicate_booking' => 'Duplicate booking',
+        'price_concerns' => 'Price concerns',
+        'travel_issues' => 'Travel or transportation issues',
+        'other' => 'Other (specify)',
+    ],
+
 ];

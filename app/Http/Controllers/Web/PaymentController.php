@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Mail\RefundSentMail;
 use App\Models\Appointment;
+use App\Models\AppointmentChangeRequest;
 use App\Models\Payment;
 use App\Services\AppointmentService;
 use App\Services\NotificationService;
@@ -35,8 +36,17 @@ class PaymentController extends Controller
      */
     public function index(Request $request)
     {
-        $status = $request->query('status', PaymentStatus::Pending->value);
-        $balance = $request->query('balance', 'all');
+        // Dropdown selections persist per session: a request WITH the param
+        // uses it and stores it; without it the stored choice applies, then
+        // the default. Search-style inputs are never persisted.
+        $status = $request->query('status', $request->session()->get('filters.payments.status', PaymentStatus::Pending->value));
+        if ($request->query('status') !== null) {
+            $request->session()->put('filters.payments.status', $status);
+        }
+        $balance = $request->query('balance', $request->session()->get('filters.payments.balance', 'all'));
+        if ($request->query('balance') !== null) {
+            $request->session()->put('filters.payments.balance', $balance);
+        }
         if (! in_array($balance, ['all', 'due', 'paid'], true)) {
             $balance = 'all';
         }
@@ -45,6 +55,12 @@ class PaymentController extends Controller
             'user', 'service', 'personnel',
             'payments' => fn ($query) => $query->orderBy('id'),
             'payments.verifier',
+            // Latest-first approved cancellations for the card's refund
+            // remark (see cancellationRefundRemark()) — avoids N+1.
+            'changeRequests' => fn ($query) => $query
+                ->where('type', AppointmentChangeRequest::TYPE_CANCELLATION)
+                ->where('status', AppointmentChangeRequest::STATUS_APPROVED)
+                ->latest('id'),
         ])
             ->select('appointments.*')
             ->selectSub(
@@ -60,10 +76,51 @@ class PaymentController extends Controller
                 'payments',
                 fn ($query) => $query->where('status', $status)
             ))
-            ->when($status === 'all', fn ($query) => $query->whereHas('payments'));
+            ->when($status === 'all', fn ($query) => $query->whereHas('payments'))
+            // Refund remarks as filters — same stored signals as
+            // cancellationRefundRemark(): an approved cancellation request
+            // plus verified money paid. A stored refund_decision wins;
+            // decision-less (legacy) approvals fall back to the payments'
+            // refund_status. 'refund' = refundable decision, or legacy
+            // with a requested/sent refund row; 'no_refund' =
+            // non-refundable decision, or legacy with no refund row.
+            ->when($status === 'refund' || $status === 'no_refund', fn ($query) => $query
+                ->whereHas('changeRequests', fn ($query) => $query
+                    ->where('type', AppointmentChangeRequest::TYPE_CANCELLATION)
+                    ->where('status', AppointmentChangeRequest::STATUS_APPROVED))
+                ->whereHas('payments', fn ($query) => $query
+                    ->where('status', PaymentStatus::Verified->value)))
+            ->when($status === 'refund', fn ($query) => $query->where(function ($query) {
+                $query->whereHas('changeRequests', fn ($query) => $query
+                    ->where('type', AppointmentChangeRequest::TYPE_CANCELLATION)
+                    ->where('status', AppointmentChangeRequest::STATUS_APPROVED)
+                    ->where('refund_decision', 'refundable'))
+                    ->orWhere(function ($query) {
+                        $query->whereHas('changeRequests', fn ($query) => $query
+                            ->where('type', AppointmentChangeRequest::TYPE_CANCELLATION)
+                            ->where('status', AppointmentChangeRequest::STATUS_APPROVED)
+                            ->whereNull('refund_decision'))
+                            ->whereHas('payments', fn ($query) => $query
+                                ->whereIn('refund_status', ['requested', 'sent']));
+                    });
+            }))
+            ->when($status === 'no_refund', fn ($query) => $query->where(function ($query) {
+                $query->whereHas('changeRequests', fn ($query) => $query
+                    ->where('type', AppointmentChangeRequest::TYPE_CANCELLATION)
+                    ->where('status', AppointmentChangeRequest::STATUS_APPROVED)
+                    ->where('refund_decision', 'non_refundable'))
+                    ->orWhere(function ($query) {
+                        $query->whereHas('changeRequests', fn ($query) => $query
+                            ->where('type', AppointmentChangeRequest::TYPE_CANCELLATION)
+                            ->where('status', AppointmentChangeRequest::STATUS_APPROVED)
+                            ->whereNull('refund_decision'))
+                            ->whereDoesntHave('payments', fn ($query) => $query
+                                ->whereIn('refund_status', ['requested', 'sent']));
+                    });
+            }));
 
         if ($balance === 'all') {
-            $appointments = $query->paginate(15)->withQueryString();
+            $appointments = $query->paginate(6)->withQueryString();
         } else {
             // balanceDue() is derived from verified sums, not a column — so
             // the balance filter runs in PHP over the tab's rows, then
@@ -75,7 +132,7 @@ class PaymentController extends Controller
             })->values();
 
             $page = LengthAwarePaginator::resolveCurrentPage();
-            $perPage = 15;
+            $perPage = 6;
             $appointments = new LengthAwarePaginator(
                 $filtered->slice(($page - 1) * $perPage, $perPage)->values(),
                 $filtered->count(),
@@ -93,7 +150,6 @@ class PaymentController extends Controller
             // category — the modal JS only reads flags, never category keys.
             'rejectionFlags' => collect(config('payment.rejection_reasons', []))
                 ->map(fn ($reason) => [
-                    'refund_eligible' => (bool) ($reason['refund_eligible'] ?? false),
                     'topup_eligible' => (bool) ($reason['topup_eligible'] ?? false),
                 ])
                 ->all(),
@@ -119,7 +175,7 @@ class PaymentController extends Controller
 
         $reasons = config('payment.rejection_reasons', []);
         $flags = $reasons[$request->input('rejection_category')] ?? [];
-        $needsAmount = ! empty($flags['refund_eligible']) || ! empty($flags['topup_eligible']);
+        $needsAmount = ! empty($flags['topup_eligible']);
 
         $validated = $request->validate([
             'rejection_category' => ['required', Rule::in(array_keys($reasons))],
@@ -127,7 +183,8 @@ class PaymentController extends Controller
             // every predefined reason, required when Other is picked.
             'rejection_reason' => 'exclude_unless:rejection_category,other|required|string|max:1000',
             // What the manager actually saw on the proof — only meaningful
-            // for refund/topup-eligible reasons, capped at what was charged.
+            // for topup-eligible reasons (the top-up needs the held amount),
+            // capped at what was charged.
             'amount_received' => $needsAmount
                 ? ['required', 'numeric', 'min:0', 'max:'.$payment->amount]
                 : ['nullable'],
@@ -149,16 +206,18 @@ class PaymentController extends Controller
     }
 
     /**
-     * Mark a requested refund as sent (step 2A). Only a rejected payment
-     * with a pending client request qualifies — everything re-checked here
-     * server-side. The client is notified by mail that the money is on its
-     * way back. No appointment status moves; top-up is step 2B.
+     * Mark a requested refund as sent. Only a payment with a pending client
+     * or cancellation-approval request qualifies (rejected booking-time
+     * payments and verified payments held on an approved cancellation) —
+     * everything re-checked here server-side. The client is notified by mail
+     * that the money is on its way back. No appointment status moves.
      */
     public function markRefundSent(Request $request, $id, NotificationService $notificationService)
     {
-        $payment = Payment::with(['appointment.user', 'appointment.service'])->findOrFail($id);
+        $payment = Payment::with(['appointment.user', 'appointment.service', 'appointment.payments'])->findOrFail($id);
 
-        if ($payment->status !== PaymentStatus::Rejected || $payment->refund_status !== 'requested') {
+        if (! in_array($payment->status, [PaymentStatus::Rejected, PaymentStatus::Verified], true)
+            || $payment->refund_status !== 'requested') {
             return back()->withErrors(['refund' => 'This payment has no pending refund request.']);
         }
 
@@ -169,7 +228,7 @@ class PaymentController extends Controller
         ]);
 
         if ($payment->appointment->user !== null) {
-            $amount = number_format((float) ($payment->amount_received ?? 0), 2);
+            $amount = number_format($payment->refundDueAmount(), 2);
             $notificationService->notify(
                 $payment->appointment->user,
                 'Refund sent',

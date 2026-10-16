@@ -31,7 +31,7 @@ class InventorySeeder extends Seeder
             // Orange Tissue are seeded under 'massage' too — still gets its own
             // row here instead of being treated as a duplicate.
             Inventory::withTrashed()->firstOrCreate(
-                ['item_name' => $itemName, 'category' => 'nails'],
+                ['item_name' => $itemName, 'category' => 'Nails'],
                 [
                     'unit' => 'pc',
                     'quantity' => 0,
