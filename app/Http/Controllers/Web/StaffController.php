@@ -61,6 +61,79 @@ class StaffController extends Controller
     }
 
     /**
+     * "My Attendance" — the logged-in staff member's OWN attendance history
+     * for one month (defaults to the current month), plus a monthly summary.
+     * Read-only: the clock controls reuse the same POST endpoints as the
+     * dashboard. The month is taken from ?month=YYYY-MM with any invalid
+     * value silently falling back to the current month (never a 500).
+     */
+    public function attendance(Request $request)
+    {
+        $user = $request->user();
+
+        $monthParam = $request->query('month');
+        $start = now()->startOfMonth();
+
+        if (is_string($monthParam) && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $monthParam)) {
+            try {
+                $start = Carbon::createFromFormat('Y-m-d', $monthParam.'-01')->startOfMonth();
+            } catch (\Throwable $e) {
+                $start = now()->startOfMonth();
+            }
+        }
+
+        $end = $start->copy()->endOfMonth();
+        $isCurrentMonth = $start->isSameMonth(now());
+
+        // Only this staff member's rows, keyed by day for the history table.
+        $rows = Attendance::where('user_id', $user->id)
+            ->whereDate('work_date', '>=', $start->toDateString())
+            ->whereDate('work_date', '<=', $end->toDateString())
+            ->orderByDesc('work_date')
+            ->get()
+            ->keyBy(fn ($row) => $row->work_date->toDateString());
+
+        $totalMinutes = (int) $rows->sum(fn ($row) => $row->workedMinutes() ?? 0);
+
+        // Every calendar day from the 1st through today (current month) or
+        // month-end (past months) — never future days, newest first.
+        $lastDay = $isCurrentMonth ? now()->startOfDay() : $end->copy()->startOfDay();
+        $days = [];
+        for ($day = $start->copy(); $day->lte($lastDay); $day->addDay()) {
+            $days[] = $day->copy();
+        }
+        $days = array_reverse($days);
+
+        return view('staff.attendance', [
+            'todayAttendance' => Attendance::where('user_id', $user->id)
+                ->whereDate('work_date', now()->toDateString())
+                ->first(),
+            'monthStart' => $start,
+            'isCurrentMonth' => $isCurrentMonth,
+            'prevMonth' => $start->copy()->subMonth()->format('Y-m'),
+            'nextMonth' => $start->copy()->addMonth()->format('Y-m'),
+            'daysPresent' => $rows->filter(fn ($row) => $row->time_in !== null)->count(),
+            'totalHours' => $this->humanWorkedTime($totalMinutes),
+            'lateCount' => $rows->filter(fn ($row) => $row->isLate())->count(),
+            'days' => $days,
+            'rows' => $rows,
+        ]);
+    }
+
+    /**
+     * Format a minute total with the Attendance model's own formatter so the
+     * monthly summary uses exactly the same "8h 30m"/"45m" shape as the rows
+     * (the model's #8 helpers are final and must not be modified).
+     */
+    private function humanWorkedTime(int $minutes): string
+    {
+        return (new Attendance)->forceFill([
+            'time_in' => Carbon::create(2000, 1, 1, 0, 0, 0),
+            'time_out' => Carbon::create(2000, 1, 1, 0, 0, 0)->addMinutes($minutes),
+        ])->workedForHumans();
+    }
+
+    /**
      * Personal schedule page — read-only FullCalendar of the logged-in
      * staff member's own appointments and Weekly Roster shifts.
      */

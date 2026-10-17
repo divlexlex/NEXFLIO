@@ -150,6 +150,7 @@ Route::prefix('account')->name('account.')->middleware(['auth', 'role:4'])->grou
 // requests.
 Route::prefix('staff')->name('staff.')->middleware(['auth', 'role:3'])->group(function () {
     Route::get('/dashboard', [StaffController::class, 'dashboard'])->name('dashboard');
+    Route::get('/attendance', [StaffController::class, 'attendance'])->name('attendance.index');
     Route::get('/schedule', [StaffController::class, 'schedule'])->name('schedule');
     Route::get('/schedule/events', [StaffController::class, 'scheduleEvents'])->name('schedule.events');
     Route::post('/attendance/time-in', [StaffController::class, 'timeIn'])->name('attendance.time-in');

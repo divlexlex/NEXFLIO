@@ -350,6 +350,11 @@
                     <i class="bi bi-calendar3 me-2"></i>My Schedule
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('staff.attendance.index') ? 'active' : '' }}" href="{{ route('staff.attendance.index') }}">
+                    <i class="bi bi-clock-history me-2"></i>My Attendance
+                </a>
+            </li>
         </ul>
     </aside>
 
