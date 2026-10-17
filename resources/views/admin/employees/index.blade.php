@@ -128,6 +128,12 @@
                                     {{ $attendance->time_in->format('g:i A') }}
                                     – {{ $attendance->time_out?->format('g:i A') ?? 'now' }}
                                 </span>
+                                @if($attendance->workedForHumans())
+                                    <span class="small text-muted">· {{ $attendance->workedForHumans() }}</span>
+                                @endif
+                                @if($attendance->isLate())
+                                    <span class="badge text-bg-warning ms-1">Late {{ $attendance->lateMinutes() }}m</span>
+                                @endif
                             @else
                                 <span class="text-muted small">No time-in</span>
                             @endif

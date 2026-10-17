@@ -234,7 +234,48 @@ class StaffController extends Controller
 
         $attendance->update(['time_out' => now()]);
 
+        // A wrap-up clears any break state so the next shift starts fresh.
+        $profile = $request->user()->staffProfile;
+        if ($profile) {
+            $profile->update(['is_on_break' => false, 'break_started_at' => null]);
+        }
+
         return back()->with('success', 'Timed out. See you next shift!');
+    }
+
+    /**
+     * Toggle the staff member's break state from the web dashboard. Only
+     * allowed while they have an open attendance for today; mirrors the
+     * mobile API toggle (App\Http\Controllers\API\StaffController) so the
+     * booking pool exclusion stays driven by the same profile flag.
+     */
+    public function toggleBreak(Request $request)
+    {
+        $user = $request->user();
+
+        $clockedIn = Attendance::where('user_id', $user->id)
+            ->whereDate('work_date', now()->toDateString())
+            ->whereNull('time_out')
+            ->exists();
+
+        $profile = $user->staffProfile;
+
+        if (! $clockedIn || ! $profile) {
+            return back()->withErrors([
+                'attendance' => 'You can only change break status while timed in.',
+            ]);
+        }
+
+        $target = ! $profile->is_on_break;
+
+        $profile->update([
+            'is_on_break' => $target,
+            'break_started_at' => $target ? now() : null,
+        ]);
+
+        return back()->with('success', $target
+            ? 'You are now on break.'
+            : 'You are back in the booking pool.');
     }
 
     public function updatePassword(Request $request)

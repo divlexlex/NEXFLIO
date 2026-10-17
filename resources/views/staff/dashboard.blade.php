@@ -29,17 +29,42 @@
                     <button class="btn btn-spa"><i class="bi bi-box-arrow-in-right me-1"></i>Time In</button>
                 </form>
             @elseif(!$todayAttendance->time_out)
-                <p class="mb-3">Timed in at <strong>{{ $todayAttendance->time_in->format('g:i A') }}</strong>.</p>
-                <form method="POST" action="{{ route('staff.attendance.time-out') }}">
-                    @csrf
-                    <button class="btn btn-outline-secondary"><i class="bi bi-box-arrow-right me-1"></i>Time Out</button>
-                </form>
+                <p class="mb-2">
+                    Timed in at <strong>{{ $todayAttendance->time_in->format('g:i A') }}</strong>.
+                    @if($todayAttendance->isLate())
+                        <span class="badge text-bg-warning">Late {{ $todayAttendance->lateMinutes() }}m</span>
+                    @endif
+                </p>
+                <p class="mb-3">
+                    @if($profile?->is_on_break)
+                        <span class="badge text-bg-warning">On break since {{ $profile->break_started_at?->format('g:i A') }}</span>
+                    @else
+                        <span class="badge text-bg-success">Active</span>
+                    @endif
+                </p>
+                <div class="d-flex gap-2 mb-3">
+                    <form method="POST" action="{{ route('staff.attendance.break') }}">
+                        @csrf
+                        <button class="btn btn-outline-secondary">
+                            @if($profile?->is_on_break)
+                                <i class="bi bi-play-fill me-1"></i>End Break
+                            @else
+                                <i class="bi bi-pause-fill me-1"></i>Start Break
+                            @endif
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ route('staff.attendance.time-out') }}">
+                        @csrf
+                        <button class="btn btn-outline-secondary"><i class="bi bi-box-arrow-right me-1"></i>Time Out</button>
+                    </form>
+                </div>
+                <p class="text-muted small mb-0">Total so far: {{ $todayAttendance->workedForHumans() }}</p>
             @else
-                <p class="mb-0">
-                    Timed in at <strong>{{ $todayAttendance->time_in->format('g:i A') }}</strong>,
+                <p class="mb-2">
+                    Timed in at <strong>{{ $todayAttendance->time_in->format('g:i A') }}</strong>@if($todayAttendance->isLate()) <span class="badge text-bg-warning">Late {{ $todayAttendance->lateMinutes() }}m</span>@endif,
                     timed out at <strong>{{ $todayAttendance->time_out->format('g:i A') }}</strong>.
                 </p>
-                <p class="text-muted small mb-0">Shift complete — see you next time.</p>
+                <p class="text-muted small mb-0">Shift complete — see you next time. Total today: {{ $todayAttendance->workedForHumans() }}.</p>
             @endif
         </div>
     </div>
