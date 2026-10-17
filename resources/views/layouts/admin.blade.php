@@ -574,6 +574,7 @@
         });
     })();
 </script>
+@include('admin.partials.flio')
 @stack('scripts')
 </body>
 </html>

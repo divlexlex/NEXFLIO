@@ -13,6 +13,7 @@ use App\Http\Controllers\Web\ClientDirectoryController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\EmailVerificationController;
 use App\Http\Controllers\Web\EmployeeController;
+use App\Http\Controllers\Web\FlioController;
 use App\Http\Controllers\Web\AvailabilityController;
 use App\Http\Controllers\Web\InventoryController;
 use App\Http\Controllers\Web\InventoryCategoryController;
@@ -166,6 +167,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/data', [DashboardController::class, 'chartData'])->name('dashboard.data');
     Route::get('/dashboard/insights', [DashboardController::class, 'insights'])->name('dashboard.insights');
+
+    // Flio — floating AI business assistant for Owner/Manager. Per-user
+    // throttled; answers from aggregate system data only (nothing stored).
+    Route::post('/flio/ask', [FlioController::class, 'ask'])
+        ->middleware('throttle:15,1')
+        ->name('flio.ask');
 
     Route::get('/appointments', [AppointmentController::class, 'index'])->name('appointments');
     Route::get('/appointments/feed', [AppointmentController::class, 'feed'])->name('appointments.feed');

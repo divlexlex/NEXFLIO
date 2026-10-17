@@ -70,4 +70,81 @@ class GeminiService
             return null;
         }
     }
+
+    /**
+     * Flio — the admin chat assistant. Answers a manager's question strictly
+     * from the aggregate $context snapshot supplied by the caller; the same
+     * config, HTTP pattern and failure-returns-null contract as
+     * summarizeOperations(). At most the last 6 conversation turns are ever
+     * forwarded, regardless of what the caller passes.
+     *
+     * @param  array<string, mixed>  $context   aggregated system data only — no client PII
+     * @param  array<int, array{role?: string, text?: string}>  $history
+     */
+    public function answerManagerQuestion(string $question, array $context, array $history = []): ?string
+    {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        $model = config('services.gemini.model');
+
+        $system = "You are Flio, the in-app business assistant for a small spa "
+            . "(nails, massage, aesthetics). Answer the manager's question using "
+            . "ONLY the DATA snapshot provided below. If the answer is not present "
+            . "in the data, say plainly that you don't have that information — "
+            . "never invent or estimate figures. Be concise: 1-4 short sentences "
+            . "or a short list. Format money as ₱ with thousands separators "
+            . "(e.g. ₱12,500). Use the branch's 12-hour clock for times "
+            . "(e.g. 2:00 PM). Do not use markdown tables. No preamble.\n\n"
+            . "DATA:\n"
+            . json_encode($context, JSON_PRETTY_PRINT);
+
+        // Only the last 6 turns are forwarded, no matter how many arrive.
+        $contents = [];
+        foreach (array_slice($history, -6) as $turn) {
+            $text = trim((string) ($turn['text'] ?? ''));
+            if ($text === '') {
+                continue;
+            }
+
+            $contents[] = [
+                'role' => ($turn['role'] ?? '') === 'assistant' ? 'model' : 'user',
+                'parts' => [['text' => $text]],
+            ];
+        }
+        $contents[] = ['role' => 'user', 'parts' => [['text' => $question]]];
+
+        try {
+            $response = Http::timeout(15)
+                ->withHeader('x-goog-api-key', config('services.gemini.key'))
+                ->post(
+                    "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent",
+                    [
+                        'systemInstruction' => ['parts' => [['text' => $system]]],
+                        'contents' => $contents,
+                        'generationConfig' => [
+                            'temperature' => 0.4,
+                            'maxOutputTokens' => 512,
+                        ],
+                    ]
+                );
+
+            if (! $response->successful()) {
+                Log::warning('Gemini Flio request failed', [
+                    'status' => $response->status(),
+                ]);
+
+                return null;
+            }
+
+            $text = $response->json('candidates.0.content.parts.0.text');
+
+            return is_string($text) && trim($text) !== '' ? trim($text) : null;
+        } catch (\Throwable $e) {
+            Log::warning('Gemini Flio request threw', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+    }
 }
