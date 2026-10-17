@@ -20,13 +20,14 @@ return new class extends Migration
             $table->unique('day_of_week');
         });
 
-        // Seed default: 10AM–9PM daily
-        $days = range(0, 6);
-        foreach ($days as $day) {
+        // Seed per-day-type defaults: weekdays (Mon–Fri) 12:00 PM–1:00 AM,
+        // weekends (Sat–Sun) 10:00 AM–1:00 AM (all Open).
+        foreach (range(0, 6) as $day) {
+            $weekend = in_array($day, [0, 6], true);
             DB::table('business_hours')->insert([
                 'day_of_week' => $day,
-                'open_at'     => '10:00:00',
-                'close_at'    => '21:00:00',
+                'open_at'     => $weekend ? '10:00:00' : '12:00:00',
+                'close_at'    => '01:00:00',
                 'is_open'     => true,
                 'created_at'  => now(),
                 'updated_at'  => now(),

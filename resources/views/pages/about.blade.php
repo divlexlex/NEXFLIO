@@ -90,7 +90,9 @@
             <div class="col-lg-7">
                 <p class="nx-eyebrow mb-2">Visit Us</p>
                 <h2 class="mb-2" style="font-size: 28px;">237 A. Mabini St., Maypajo, Caloocan</h2>
-                <p class="nx-text-secondary mb-0">Open daily, 10:00 AM &ndash; 9:00 PM.</p>
+                @foreach(\App\Models\BusinessHours::publicLines() as $hoursLine)
+                    <p class="nx-text-secondary mb-0">{{ $hoursLine }}</p>
+                @endforeach
             </div>
             <div class="col-lg-5 text-lg-end">
                 <a href="{{ route('contact') }}" class="nx-btn nx-btn-outline">Get in Touch <i class="bi bi-arrow-right ms-1"></i></a>

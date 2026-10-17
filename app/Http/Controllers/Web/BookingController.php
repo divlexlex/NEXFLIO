@@ -57,12 +57,10 @@ class BookingController extends Controller
     private const BOOKING_WINDOW_DAYS = 60;
 
     /**
-     * Business hours: 10:00 AM – 9:00 PM.
-     * Stored as minutes-from-midnight so slot math doesn't need to
-     * re-parse the display string.
+     * Slot grid granularity. The actual open/close window comes from the
+     * business_hours table per day (see App\Models\BusinessHours::
+     * windowForDay / slotStartAllowed) — there is no hardcoded default here.
      */
-    private const OPEN_MINUTE = 10 * 60; // 10:00 AM
-    private const CLOSE_MINUTE = 21 * 60; // 9:00 PM
     private const SLOT_STEP_MINUTES = 30;
 
     public function start()
@@ -886,27 +884,24 @@ class BookingController extends Controller
         $duration = $service->duration_minutes ?: 30;
         $dayOfWeek = (int) Carbon::parse($date)->dayOfWeek;
 
-        // Determine effective open/close for this day from business_hours table
-        $bhours = BusinessHours::where('day_of_week', $dayOfWeek)->first();
-        if (! $bhours || ! $bhours->is_open) {
+        // Business-hours window for this day, via the ONE shared rule
+        // (App\Models\BusinessHours). Overnight-aware: a close at/before open
+        // runs past midnight. Closed day → no slots.
+        $window = BusinessHours::windowForDay($dayOfWeek);
+        if ($window === null) {
             return []; // store closed this day
         }
-        $openMinute = (int) Carbon::parse($bhours->open_at)->hour * 60 + (int) Carbon::parse($bhours->open_at)->minute;
-        $closeMinute = (int) Carbon::parse($bhours->close_at)->hour * 60 + (int) Carbon::parse($bhours->close_at)->minute;
-        // Handle overnight (close < open means spans midnight)
-        if ($closeMinute <= $openMinute) {
-            $closeMinute += 24 * 60;
-        }
-        $lastStart = $closeMinute - $duration;
+        [$openMinute, $effectiveClose] = $window;
 
-        // Apply service-level time restrictions
-        $svcFrom = $service->available_from ? (int) Carbon::parse($service->available_from)->hour * 60 + (int) Carbon::parse($service->available_from)->minute : null;
-        $svcUntil = $service->available_until ? (int) Carbon::parse($service->available_until)->hour * 60 + (int) Carbon::parse($service->available_until)->minute : null;
-        if ($svcFrom !== null && $svcFrom > $openMinute) {
-            $openMinute = $svcFrom;
+        // Apply service-level time restrictions (per-service available windows)
+        // by narrowing the window; the shared start rule then governs the edge.
+        $svcFrom = $service->available_from ? $this->minutesOf($service->available_from) : null;
+        $svcUntil = $service->available_until ? $this->minutesOf($service->available_until) : null;
+        if ($svcFrom !== null) {
+            $openMinute = max($openMinute, $svcFrom);
         }
-        if ($svcUntil !== null && $svcUntil < $closeMinute) {
-            $lastStart = min($lastStart, $svcUntil - $duration);
+        if ($svcUntil !== null) {
+            $effectiveClose = min($effectiveClose, $svcUntil);
         }
 
         $candidateIds = $personnelParam === 'any' ? $eligibleIds : collect([(int) $personnelParam]);
@@ -984,8 +979,14 @@ class BookingController extends Controller
         $isToday = $date === $now->toDateString();
 
         $slots = [];
-        for ($minute = $openMinute; $minute <= $lastStart; $minute += self::SLOT_STEP_MINUTES) {
-            $label = sprintf('%02d:%02d', intdiv($minute, 60) % 24, $minute % 60);
+        for ($minute = $openMinute; $minute < 1440; $minute += self::SLOT_STEP_MINUTES) {
+            // The ONE shared last-call rule (no start at/after 12:00 AM; the
+            // service must finish by the overnight-aware close).
+            if (! BusinessHours::slotStartAllowed($minute, $duration, $openMinute, $effectiveClose)) {
+                break;
+            }
+
+            $label = sprintf('%02d:%02d', intdiv($minute, 60), $minute % 60);
             $trueMoment = Carbon::parse($date)->startOfDay()->addMinutes($minute);
 
             if ($isToday && $trueMoment->lte($now)) {

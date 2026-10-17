@@ -32,9 +32,19 @@
     {{-- ── TAB 1: BUSINESS HOURS ────────────────────────────────────── --}}
     <div class="tab-pane fade show active" id="tab-hours">
         <div class="card p-3">
-            <p class="text-muted small mb-3">Set the store's opening and closing times for each day. These apply to all booking slots.</p>
+            <p class="text-muted small mb-3">Set the store's opening and closing times for each day. These apply to all booking slots. A closing time earlier than opening means the store closes after midnight.</p>
+            <div class="d-flex justify-content-end gap-2 mb-3">
+                @if($businessHoursEditable)
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.availability') }}#tab-hours">Cancel</a>
+                    <button type="button" class="btn btn-sm btn-secondary" disabled><i class="bi bi-pencil me-1"></i>Edit</button>
+                @else
+                    <a class="btn btn-sm btn-spa" href="{{ route('admin.availability', ['edit' => 1]) }}#tab-hours"><i class="bi bi-pencil me-1"></i>Edit</a>
+                @endif
+            </div>
+            @if($businessHoursEditable)
             <form method="POST" action="{{ route('admin.availability.business-hours') }}">
                 @csrf
+            @endif
                 <div class="table-responsive">
                     <table class="table align-middle">
                         <thead>
@@ -44,36 +54,50 @@
                             @php($days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'])
                             @foreach($days as $i => $day)
                                 @php($hours = $businessHours->firstWhere('day_of_week', $i))
+                                @php($defaults = \App\Models\BusinessHours::defaultsForDay($i))
+                                @php($openValue = $hours?->open_at ? \Carbon\Carbon::parse($hours->open_at)->format('H:i') : substr($defaults['open_at'], 0, 5))
+                                @php($closeValue = $hours?->close_at ? \Carbon\Carbon::parse($hours->close_at)->format('H:i') : substr($defaults['close_at'], 0, 5))
                                 <tr>
                                     <td class="fw-semibold">{{ $day }}</td>
-                                    <td>
-                                        <input type="time" name="hours[{{ $i }}][open_at]"
-                                               value="{{ $hours?->open_at ? \Carbon\Carbon::parse($hours->open_at)->format('H:i') : '10:00' }}"
-                                               class="form-control form-control-sm w-auto"
-                                               {{ !$hours?->is_open ? 'disabled' : '' }}>
-                                    </td>
-                                    <td>
-                                        <input type="time" name="hours[{{ $i }}][close_at]"
-                                               value="{{ $hours?->close_at ? \Carbon\Carbon::parse($hours->close_at)->format('H:i') : '21:00' }}"
-                                               class="form-control form-control-sm w-auto"
-                                               {{ !$hours?->is_open ? 'disabled' : '' }}>
-                                    </td>
-                                    <td>
-                                        <div class="form-check form-switch">
-                                            <input class="form-check-input" type="checkbox"
-                                                   name="hours[{{ $i }}][is_open]" value="1"
-                                                   {{ ($hours?->is_open ?? true) ? 'checked' : '' }}
-                                                   onchange="this.closest('tr').querySelectorAll('input[type=time]').forEach(el => el.disabled = !this.checked)">
-                                            <label class="form-check-label small">{{ ($hours?->is_open ?? true) ? 'Open' : 'Closed' }}</label>
-                                        </div>
-                                    </td>
+                                    @if($businessHoursEditable)
+                                        <td>
+                                            <input type="time" name="hours[{{ $i }}][open_at]"
+                                                   value="{{ $openValue }}"
+                                                   class="form-control form-control-sm w-auto"
+                                                   {{ !$hours?->is_open ? 'disabled' : '' }}>
+                                        </td>
+                                        <td>
+                                            <input type="time" name="hours[{{ $i }}][close_at]"
+                                                   value="{{ $closeValue }}"
+                                                   class="form-control form-control-sm w-auto"
+                                                   {{ !$hours?->is_open ? 'disabled' : '' }}>
+                                        </td>
+                                        <td>
+                                            <div class="form-check form-switch">
+                                                <input type="hidden" name="hours[{{ $i }}][is_open]" value="0">
+                                                <input class="form-check-input" type="checkbox"
+                                                       name="hours[{{ $i }}][is_open]" value="1"
+                                                       {{ ($hours?->is_open ?? true) ? 'checked' : '' }}
+                                                       onchange="this.closest('tr').querySelectorAll('input[type=time]').forEach(el => el.disabled = !this.checked)">
+                                                <label class="form-check-label small">{{ ($hours?->is_open ?? true) ? 'Open' : 'Closed' }}</label>
+                                            </div>
+                                        </td>
+                                    @else
+                                        <td>{{ $hours?->is_open ? \Carbon\Carbon::parse($hours->open_at)->format('g:i A') : '—' }}</td>
+                                        <td>{{ $hours?->is_open ? \Carbon\Carbon::parse($hours->close_at)->format('g:i A') : '—' }}</td>
+                                        <td>
+                                            <span class="badge {{ $hours?->is_open ? 'text-bg-success' : 'text-bg-secondary' }}">{{ $hours?->is_open ? 'Open' : 'Closed' }}</span>
+                                        </td>
+                                    @endif
                                 </tr>
                             @endforeach
                         </tbody>
                     </table>
                 </div>
+                @if($businessHoursEditable)
                 <button class="btn btn-spa mt-2">Save Business Hours</button>
             </form>
+            @endif
         </div>
     </div>
 

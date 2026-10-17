@@ -41,7 +41,9 @@
                 </div>
                 <div class="mb-4">
                     <p class="nx-eyebrow mb-1">Business Hours</p>
-                    <p class="mb-0">{{ $info['hours'] }}</p>
+                    @foreach(\App\Models\BusinessHours::publicLines() as $hoursLine)
+                        <p class="mb-0">{{ $hoursLine }}</p>
+                    @endforeach
                 </div>
                 <div class="mb-4">
                     <p class="nx-eyebrow mb-1">Call Us</p>

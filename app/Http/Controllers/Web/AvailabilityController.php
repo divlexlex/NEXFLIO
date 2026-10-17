@@ -112,11 +112,15 @@ class AvailabilityController extends Controller
         // code changes (see App\Models\Position).
         $rosterPositions = Position::orderBy('id')->pluck('name')->all();
 
+        // Business Hours lock: saved hours open read-only unless the manager
+        // asks to edit (?edit=1) — the same flag the Weekly Roster lock uses.
+        $businessHoursEditable = $request->boolean('edit');
+
         return view('admin.availability.index', compact(
             'businessHours', 'staff', 'schedules', 'services', 'blockedSlots',
             'rosterWeekStart', 'rosterWeekEnd', 'rosterPrevWeek', 'rosterNextWeek',
             'rosterWeekLabel', 'rosterAssignments', 'rosterStaff', 'rosterPositions',
-            'rosterHasAssignments', 'rosterEditable'
+            'rosterHasAssignments', 'rosterEditable', 'businessHoursEditable'
         ));
     }
 
@@ -141,27 +145,44 @@ class AvailabilityController extends Controller
 
     public function updateBusinessHours(Request $request)
     {
+        // Any time is allowed; a close EARLIER than open is valid and means
+        // the business closes after midnight. The only invalid pair is a
+        // zero-length day (close == open) — see the check below.
         $validated = $request->validate([
             'hours'   => 'required|array|size:7',
             'hours.*.is_open'   => 'required|boolean',
             'hours.*.open_at'   => 'required_if:hours.*.is_open,1|nullable|date_format:H:i',
-            'hours.*.close_at'  => 'required_if:hours.*.is_open,1|nullable|date_format:H:i|after:hours.*.open_at',
+            'hours.*.close_at'  => 'required_if:hours.*.is_open,1|nullable|date_format:H:i',
         ]);
+
+        foreach ($validated['hours'] as $day => $data) {
+            if (($data['is_open'] ?? false) && ($data['open_at'] ?? null) === ($data['close_at'] ?? null)) {
+                throw ValidationException::withMessages([
+                    "hours.{$day}.close_at" => 'Closing time cannot be the same as opening time.',
+                ]);
+            }
+        }
 
         DB::transaction(function () use ($validated) {
             foreach ($validated['hours'] as $day => $data) {
+                $defaults = BusinessHours::defaultsForDay((int) $day);
+
                 BusinessHours::updateOrCreate(
                     ['day_of_week' => $day],
                     [
                         'is_open'  => $data['is_open'] ?? false,
-                        'open_at'  => $data['open_at'] ?? '10:00:00',
-                        'close_at' => $data['close_at'] ?? '21:00:00',
+                        'open_at'  => $data['open_at'] ?? $defaults['open_at'],
+                        'close_at' => $data['close_at'] ?? $defaults['close_at'],
                     ]
                 );
             }
         });
 
-        return back()->with('success', 'Business hours updated.');
+        // Land on the locked (read-only) view with the success flash.
+        return redirect()
+            ->route('admin.availability')
+            ->withFragment('tab-hours')
+            ->with('success', 'Business hours updated.');
     }
 
     // ─── Staff Schedules ──────────────────────────────────────────────
