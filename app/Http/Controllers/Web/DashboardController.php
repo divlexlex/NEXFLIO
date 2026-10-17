@@ -120,6 +120,53 @@ class DashboardController extends Controller
             ->where('appointment_date', '>=', now()->subDays(30))
             ->get();
 
+        // Verified money over the last 30 days rolled up by the appointment's
+        // service category — category names and totals only, no client rows.
+        $revenueByCategory = Payment::with(['appointment:id,service_id', 'appointment.service:id,category'])
+            ->where('status', PaymentStatus::Verified)
+            ->where('verified_at', '>=', now()->subDays(30))
+            ->get()
+            ->groupBy(fn (Payment $payment) => $payment->appointment->service->category ?? 'Unknown')
+            ->map(fn ($payments) => round((float) $payments->sum('amount'), 2))
+            ->sortDesc();
+
+        // 90-day booking rhythm: per weekday and per start hour.
+        $last90 = Appointment::where('appointment_date', '>=', now()->subDays(90))->get();
+
+        $byDay = $last90
+            ->groupBy(fn (Appointment $appointment) => $appointment->appointment_date->format('l'))
+            ->map->count()
+            ->sortDesc();
+
+        $byHour = $last90
+            ->groupBy(fn (Appointment $appointment) => (int) substr((string) $appointment->start_time, 0, 2))
+            ->map->count()
+            ->sortDesc()
+            ->take(3)
+            ->map(fn ($count, $hour) => ['hour' => (int) $hour, 'count' => $count])
+            ->values();
+
+        // Repeat rate: among registered clients with a completed visit in the
+        // window, the share who completed two or more.
+        $completedByClient = $last90
+            ->where('status', AppointmentStatus::Completed)
+            ->whereNotNull('user_id')
+            ->groupBy('user_id')
+            ->map->count();
+
+        $repeatClients = $completedByClient->filter(fn ($count) => $count >= 2)->count();
+        $repeatClientRate = $completedByClient->isNotEmpty()
+            ? round($repeatClients / $completedByClient->count() * 100, 1)
+            : 0.0;
+
+        $nonCancelled = $recent->reject(fn (Appointment $appointment) => $appointment->status === AppointmentStatus::Cancelled);
+        $averageBookingValue = $nonCancelled->isNotEmpty()
+            ? round((float) $nonCancelled->avg(fn (Appointment $appointment) => (float) $appointment->booked_price), 2)
+            : 0.0;
+        $cancellationRate = $recent->isNotEmpty()
+            ? round($recent->where('status', AppointmentStatus::Cancelled)->count() / $recent->count() * 100, 1)
+            : 0.0;
+
         return [
             'currency' => 'PHP',
             'revenue_this_week' => round($revenueThisWeek, 2),
@@ -134,8 +181,21 @@ class DashboardController extends Controller
                 ->map->count()
                 ->sortDesc()
                 ->take(5),
-            'low_stock_items' => Inventory::whereColumn('quantity', '<=', 'reorder_point')
-                ->pluck('item_name'),
+            'revenue_by_category_last_30_days' => $revenueByCategory,
+            'bookings_by_day_of_week_last_90_days' => $byDay,
+            'peak_day' => $byDay->keys()->first(),
+            'busiest_start_hours_last_90_days' => $byHour,
+            'repeat_client_rate_last_90_days' => $repeatClientRate,
+            'average_booking_value_last_30_days' => $averageBookingValue,
+            'cancellation_rate_last_30_days' => $cancellationRate,
+            // On-hand stock is the sum of each item's remaining FIFO batches,
+            // never the denormalized inventories.quantity cache — computed the
+            // same way the Inventory page surfaces on-hand. Item names only.
+            'low_stock_items' => Inventory::withSum('batches', 'quantity_remaining')
+                ->get()
+                ->filter(fn (Inventory $item) => (int) ($item->batches_sum_quantity_remaining ?? 0) <= (int) $item->reorder_point)
+                ->pluck('item_name')
+                ->values(),
         ];
     }
 }

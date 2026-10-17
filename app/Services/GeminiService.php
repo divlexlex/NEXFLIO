@@ -29,10 +29,11 @@ class GeminiService
         $model = config('services.gemini.model');
 
         $prompt = "You are a business analyst for a small spa "
-            . "(nails, massage, aesthetics). Based on the operational metrics "
-            . "below, write a short insight summary for the owner: 3-4 plain "
-            . "sentences covering how the business is doing, one notable trend, "
-            . "and one concrete recommendation. No markdown, no preamble.\n\n"
+            . "(nails, massage, aesthetics). Based on the aggregated operational "
+            . "metrics below, write a short insight summary for the owner: 3-5 "
+            . "plain sentences covering how the business is performing, the most "
+            . "notable trend in these numbers, and one concrete recommendation. "
+            . "No markdown, no preamble.\n\n"
             . json_encode($metrics, JSON_PRETTY_PRINT);
 
         try {
