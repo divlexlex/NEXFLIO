@@ -44,7 +44,7 @@ class ServiceController extends Controller
             'services' => $services,
             'filters' => $filters,
             'hasFilters' => $filters['q'] !== '' || $filters['category'] !== '' || $filters['status'] !== '',
-            'categories' => ServiceCatalog::CATEGORY_ORDER,
+            'categories' => ServiceCatalog::categoryOrder(),
             'statuses' => Service::query()->distinct()->orderBy('status')->pluck('status')->all(),
             'totalServices' => Service::count(),
         ]);
@@ -94,10 +94,10 @@ class ServiceController extends Controller
 
     private function validated(Request $request, ?Service $service = null): array
     {
-        // New services must use a canonical category; an update keeps its
-        // current (possibly legacy) category valid so the edit form never
-        // silently rewrites it.
-        $allowedCategories = ServiceCatalog::CATEGORY_ORDER;
+        // New services must use a category from the service_categories table;
+        // an update keeps its current (possibly legacy) category valid so the
+        // edit form never silently rewrites it.
+        $allowedCategories = ServiceCatalog::categoryOrder();
 
         if ($service !== null && ! in_array($service->category, $allowedCategories, true)) {
             $allowedCategories[] = $service->category;
@@ -107,6 +107,10 @@ class ServiceController extends Controller
             'name' => 'required|string|max:255',
             'category' => ['required', Rule::in($allowedCategories)],
             'description' => 'nullable|string|max:2000',
+            // Package inclusions are only meaningful for the Packages
+            // category: required there, optional everywhere else. Stored
+            // exactly as typed (one inclusion per line).
+            'package_details' => ['nullable', 'string', 'required_if:category,Packages'],
             'price' => 'required|numeric|min:0',
             'duration_minutes' => 'required|integer|min:5',
             'status' => ['required', Rule::in(['active', 'inactive', 'suspended'])],

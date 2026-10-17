@@ -30,7 +30,7 @@ class SendAppointmentReminders extends Command
             $notifications->notify(
                 $appointment->user,
                 'Appointment reminder',
-                "Reminder: {$appointment->service->name} tomorrow at {$appointment->start_time}.",
+                "Reminder: {$appointment->service->name} tomorrow at {$appointment->startTimeLabel()}.",
                 new AppointmentReminderMail($appointment),
                 ['appointment_id' => $appointment->id]
             );

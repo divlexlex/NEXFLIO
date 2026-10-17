@@ -51,7 +51,7 @@
                 <div class="small text-muted">
                     {{ $appointment->displayServiceName() }} ·
                     {{ $appointment->appointment_date?->format('M j') }}
-                    {{ $appointment->start_time }}
+                    {{ \Carbon\Carbon::parse($appointment->start_time)->format('g:i A') }}
                 </div>
                 <div class="small text-muted mb-2">
                     with {{ $appointment->personnel?->name ?? '—' }} · ID {{ $appointment->referenceCode() }}

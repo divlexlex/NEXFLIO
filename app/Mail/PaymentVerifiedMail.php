@@ -33,7 +33,7 @@ class PaymentVerifiedMail extends Mailable implements ShouldQueue
                 "Hi {$this->appointment->clientName()},",
                 "Your payment has been verified and {$service} is booked for "
                     . $this->appointment->appointment_date->format('F j, Y')
-                    . " at {$this->appointment->start_time}"
+                    . ' at '.$this->appointment->startTimeLabel()
                     . ($this->appointment->personnel ? " with {$this->appointment->personnel->name}." : '.'),
                 'See you at the spa! If you need to make changes, please contact us ahead of time.',
             ],

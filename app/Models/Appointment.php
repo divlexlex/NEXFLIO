@@ -428,4 +428,14 @@ class Appointment extends Model
 
         return $this->variant_label ? $name.' ('.$this->variant_label.')' : $name;
     }
+
+    /**
+     * The appointment's start time as a 12-hour display label, e.g. "2:00 PM".
+     * Display only — the raw H:i(:s) column value is untouched for storage,
+     * slot math, and payloads.
+     */
+    public function startTimeLabel(): string
+    {
+        return Carbon::parse((string) $this->start_time)->format('g:i A');
+    }
 }

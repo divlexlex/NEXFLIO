@@ -33,6 +33,15 @@
                             data-bs-toggle="pill" data-bs-target="#cat-all" type="button" role="tab">
                         <i class="bi bi-grid"></i>All Services
                     </button>
+                    {{-- Fixed "Packages" tab presenting the Head Spa package
+                         records (ServiceCatalog::PACKAGE_SERVICE_NAMES). This
+                         is a VIEW-level grouping, distinct from a service
+                         category literally named "Packages": if a service is
+                         assigned to that DB category, its own pill/section
+                         also renders below (same label, different contents).
+                         Both are kept working on purpose — the fixed tab
+                         always presents the Head Spa packages; the DB tab
+                         presents that category's services. --}}
                     <button class="nav-link {{ $activeCategory === 'Packages' ? 'active' : '' }}"
                             data-bs-toggle="pill" data-bs-target="#cat-packages" type="button" role="tab">
                         <i class="bi bi-gift"></i>Packages
@@ -59,6 +68,7 @@
                                         'badge' => $service['badge'],
                                         'ctaText' => 'Book',
                                     ])
+                                    @include('partials.package-inclusions', ['service' => $service])
                                 </div>
                             @endforeach
                         </div>
@@ -77,6 +87,7 @@
                                         'badge' => $service['badge'],
                                         'ctaText' => 'Book',
                                     ])
+                                    @include('partials.package-inclusions', ['service' => $service])
                                 </div>
                             @endforeach
                         </div>
@@ -99,6 +110,7 @@
                                             'badge' => $service['badge'],
                                             'ctaText' => 'Book',
                                         ])
+                                        @include('partials.package-inclusions', ['service' => $service])
                                     </div>
                                 @endforeach
                             </div>

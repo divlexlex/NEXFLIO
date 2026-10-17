@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Service;
+use App\Models\ServiceCategory;
 use Illuminate\Support\Collection;
 
 /**
@@ -18,9 +19,11 @@ use Illuminate\Support\Collection;
 class ServiceCatalog
 {
     /**
-     * Preferred category tab order. Anything not listed here (e.g. a new
-     * category added only in the database) is appended after these, sorted
-     * alphabetically, so the tabs never look arbitrary.
+     * Legacy category tab order, kept as the ServiceCategorySeeder source
+     * and as the fallback when the service_categories table has no rows
+     * (see categoryOrder()). Anything not listed here (e.g. a new category
+     * added in the database) is appended after these, sorted alphabetically,
+     * so the tabs never look arbitrary.
      */
     public const CATEGORY_ORDER = [
         'Facial', 'Massage', 'Nails', 'Lashes & Brows', 'Aesthetics', 'Head Spa', 'Home Service',
@@ -60,12 +63,30 @@ class ServiceCatalog
         'Perfect Package',
     ];
 
+    /**
+     * The live category order: the service_categories table (seed order =
+     * id order) when it has rows, otherwise the legacy CATEGORY_ORDER
+     * constant as a fallback. This is what both the admin selects and the
+     * public grouping read, so a category added in the admin shows up on the
+     * client side with no code change.
+     *
+     * @return string[]
+     */
+    public static function categoryOrder(): array
+    {
+        $names = ServiceCategory::names();
+
+        return $names !== [] ? $names : self::CATEGORY_ORDER;
+    }
+
     public static function activeGroupedByCategory(): Collection
     {
+        $order = static::categoryOrder();
+
         return static::active()
             ->groupBy('category')
-            ->sortBy(function ($services, string $category) {
-                $position = array_search($category, self::CATEGORY_ORDER, true);
+            ->sortBy(function ($services, string $category) use ($order) {
+                $position = array_search($category, $order, true);
 
                 return $position === false ? [1, $category] : [0, $position];
             });
@@ -85,6 +106,7 @@ class ServiceCatalog
                 'image_url' => $service->image_url,
                 'badge' => $service->badge,
                 'description' => $service->description,
+                'package_details' => $service->package_details,
             ]);
     }
 }

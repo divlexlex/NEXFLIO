@@ -32,6 +32,7 @@
                         <span class="nx-review-label">Service</span>
                         <span class="nx-review-value">{{ $service->name }}</span>
                     </div>
+                    @include('partials.package-inclusions', ['service' => $service])
                     <div class="nx-review-row">
                         <span class="nx-review-label">Price</span>
                         <span class="nx-review-value">₱{{ number_format($price, 2) }}</span>

@@ -11,23 +11,26 @@ use App\Models\Service;
  * here from the real Service row and the chosen package tier label.
  * No category is exempt.
  *
- * Resolution order: a chosen package variant decides first (Solo ₱300 /
- * Couple ₱500 / Barkada ₱2,000 — see config/booking.php). Variant-less
- * bookings use the price rule instead: booked price ₱500+ → flat ₱300,
- * below ₱500 → exactly half the price (2 decimals).
+ * Resolution order: a chosen package variant decides first. A mapped tier
+ * label (Solo ₱300 / Couple ₱500 / Barkada ₱2,000 — see config/booking.php)
+ * keeps its exact fee. Any OTHER variant label falls back to the same price
+ * rule used for variant-less bookings, applied to the VARIANT's price:
+ * booked price ₱500+ → flat ₱300, below ₱500 → exactly half the price
+ * (2 decimals). Variant-less bookings use that price rule directly. The fee
+ * therefore always resolves for a chosen variant.
  *
  * See config/booking.php for the tier amounts.
  */
 class ReservationFee
 {
     /**
-     * The reservation fee due now, or null when it can't be determined yet
-     * (a package variant with an unmapped label). Variant-less bookings use
-     * the price rule and always resolve. Never exceeds the booked price as
-     * a safety net: a fee at or above the price simply means the whole
-     * booking is paid online (no balance).
+     * The reservation fee due now. Always resolves: a mapped tier label uses
+     * its tier amount, any other variant label (or no variant) uses the price
+     * rule on the booked price. Never exceeds the booked price as a safety
+     * net: a fee at or above the price simply means the whole booking is paid
+     * online (no balance).
      */
-    public static function for(Service $service, ?string $variantLabel = null, ?int $guests = null): ?float
+    public static function for(Service $service, ?string $variantLabel = null, ?int $guests = null): float
     {
         $price = static::priceFor($service, $variantLabel);
 
@@ -35,13 +38,25 @@ class ReservationFee
             $tier = static::tier($variantLabel, null);
             $tiers = (array) config('booking.reservation_fee.tiers', []);
 
-            if ($tier === null || ! isset($tiers[$tier])) {
-                return null;
+            // Mapped labels keep their exact current fee and take priority.
+            if ($tier !== null && isset($tiers[$tier])) {
+                return min((float) $tiers[$tier], $price);
             }
 
-            return min((float) $tiers[$tier], $price);
+            // Unmapped label: same price rule as a variant-less service, on
+            // the variant's own price.
+            return static::priceRule($price);
         }
 
+        return static::priceRule($price);
+    }
+
+    /**
+     * The variant-less price rule: ₱500+ → flat ₱300, below ₱500 → exactly
+     * half (2 decimals); never more than the price itself.
+     */
+    private static function priceRule(float $price): float
+    {
         $fee = $price >= 500 ? 300.0 : round($price / 2, 2);
 
         return min($fee, $price);

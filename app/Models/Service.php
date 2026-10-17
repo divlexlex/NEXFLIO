@@ -18,6 +18,7 @@ class Service extends Model
         'name',
         'category',
         'description',
+        'package_details',
         'price',
         'duration_minutes',
         'image_path',

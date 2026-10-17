@@ -68,6 +68,7 @@
                                     data-name="{{ $service->name }}"
                                     data-category="{{ $service->category }}"
                                     data-description="{{ $service->description }}"
+                                    data-package-details="{{ $service->package_details }}"
                                     data-price="{{ $service->price }}"
                                     data-duration="{{ $service->duration_minutes }}"
                                     data-status="{{ $service->status }}"
@@ -114,6 +115,7 @@
                             @foreach($categories as $category)
                                 <option value="{{ $category }}">{{ $category }}</option>
                             @endforeach
+                            <option value="__new__">+ New category…</option>
                         </select>
                         <div class="form-text">Choose the category this service belongs to.</div>
                     </div>
@@ -139,6 +141,14 @@
                 <div class="mb-2">
                     <label class="form-label">Description</label>
                     <textarea name="description" id="svc-description" class="form-control" rows="2"></textarea>
+                </div>
+                {{-- Package inclusions: visible only for the Packages category
+                     (toggle on change + on modal open). Required there via the
+                     server rule; one inclusion per line. --}}
+                <div class="mb-2 d-none" id="svc-package-details-wrap">
+                    <label class="form-label" for="svc-package-details">Package details — what's included</label>
+                    <textarea name="package_details" id="svc-package-details" class="form-control" rows="4" placeholder="One inclusion per line"></textarea>
+                    <div class="form-text">Shown on the public Packages services. Enter one inclusion per line.</div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Badge <span class="text-muted">(optional)</span></label>
@@ -168,6 +178,33 @@
         </form>
     </div>
 </div>
+
+{{-- NEW CATEGORY MODAL (used by the service form's Category select):
+     creates the category via fetch so the service form keeps its typed
+     data; without fetch the plain POST runs and the endpoint redirects
+     back with a flash. --}}
+<div class="modal fade" id="newServiceCategoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ route('admin.service-categories.store') }}" id="newServiceCategoryForm" class="modal-content">
+            @csrf
+            <div class="modal-header">
+                <h5 class="modal-title">New category</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-danger mb-2 d-none" id="new-service-category-error"></p>
+                <div class="mb-2">
+                    <label class="form-label" for="new-service-category-name">Category name <span class="text-danger">*</span></label>
+                    <input name="name" id="new-service-category-name" class="form-control" maxlength="255" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-spa">Add Category</button>
+            </div>
+        </form>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -175,6 +212,19 @@
     (function () {
         const variantsWrap = document.getElementById('svc-variants');
         let variantIndex = 0;
+
+        // Package details are only relevant to the Packages category: the
+        // whole block is hidden (and un-required) for every other category.
+        function syncPackageDetails() {
+            const cat = document.getElementById('svc-category');
+            const wrap = document.getElementById('svc-package-details-wrap');
+            const details = document.getElementById('svc-package-details');
+            if (!cat || !wrap || !details) return;
+            const isPackages = cat.value === 'Packages';
+            wrap.classList.toggle('d-none', !isPackages);
+            details.required = isPackages;
+        }
+        document.getElementById('svc-category').addEventListener('change', syncPackageDetails);
 
         function addVariantRow(data) {
             data = data || {};
@@ -238,6 +288,7 @@
                 }
                 catSelect.value = currentCategory;
                 document.getElementById('svc-description').value = btn.dataset.description || '';
+                document.getElementById('svc-package-details').value = btn.dataset.packageDetails || '';
                 document.getElementById('svc-price').value = btn.dataset.price;
                 document.getElementById('svc-duration').value = btn.dataset.duration;
                 document.getElementById('svc-status').value = btn.dataset.status;
@@ -256,6 +307,7 @@
                 let variants = [];
                 try { variants = JSON.parse(btn.dataset.variants || '[]'); } catch (e) { variants = []; }
                 variants.forEach(addVariantRow);
+                syncPackageDetails();
             } else {
                 form.action = "{{ route('admin.services.store') }}";
                 methodHolder.innerHTML = '';
@@ -264,6 +316,7 @@
                 document.getElementById('svc-category').querySelectorAll('option[data-legacy]').forEach((o) => o.remove());
                 preview.style.display = 'none';
                 removeWrap.style.display = 'none';
+                syncPackageDetails();
             }
         });
     })();
@@ -293,6 +346,84 @@
             search.focus();
             try { search.setSelectionRange(search.value.length, search.value.length); } catch (e) { /* older browsers */ }
         }
+    })();
+</script>
+<script>
+    // "+ New category…" (last option of the service Category select): open the
+    // category modal instead of submitting that value, then create via fetch
+    // so the service form keeps everything already typed. The new option is
+    // appended (before the "+ New" option) and selected.
+    (function () {
+        const select = document.getElementById('svc-category');
+        const modal = document.getElementById('newServiceCategoryModal');
+        const form = document.getElementById('newServiceCategoryForm');
+        const errorEl = document.getElementById('new-service-category-error');
+        if (!select || !modal || !form) return;
+        let restoreValue = '';
+        let justCreated = false;
+
+        // Remember the pre-change value so cancelling out of the new
+        // category modal restores the service's original category.
+        select.addEventListener('focus', () => {
+            select.dataset.prev = select.value;
+        });
+        select.addEventListener('change', () => {
+            if (select.value !== '__new__') return;
+            restoreValue = select.dataset.prev || '';
+            justCreated = false;
+            select.value = restoreValue;
+            errorEl.textContent = '';
+            errorEl.classList.add('d-none');
+            form.reset();
+            new bootstrap.Modal(modal).show();
+        });
+
+        modal.addEventListener('hidden.bs.modal', () => {
+            // Dismissed without creating: put the original selection back.
+            if (!justCreated) select.value = restoreValue;
+        });
+
+        form.addEventListener('submit', (event) => {
+            // No fetch: let the plain POST run (redirect back + flash).
+            if (typeof fetch === 'undefined') return;
+            event.preventDefault();
+
+            const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            fetch(form.action, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' },
+                body: new FormData(form),
+            })
+                .then(async (response) => {
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        const message = (data.errors && (data.errors.name || [])[0])
+                            || 'Could not add this category.';
+                        throw new Error(message);
+                    }
+                    return data;
+                })
+                .then((category) => {
+                    let option = Array.from(select.options).find((o) => o.value === category.name);
+                    if (!option) {
+                        option = document.createElement('option');
+                        option.value = category.name;
+                        option.textContent = category.name;
+                        const plus = select.querySelector('option[value="__new__"]');
+                        select.insertBefore(option, plus);
+                    }
+                    select.value = category.name;
+                    justCreated = true;
+                    // Programmatic value change doesn't fire `change`; re-sync
+                    // the package-details visibility for the new category.
+                    select.dispatchEvent(new Event('change'));
+                    bootstrap.Modal.getInstance(modal).hide();
+                })
+                .catch((error) => {
+                    errorEl.textContent = error.message;
+                    errorEl.classList.remove('d-none');
+                });
+        });
     })();
 </script>
 @endpush

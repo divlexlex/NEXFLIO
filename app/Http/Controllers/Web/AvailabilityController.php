@@ -87,6 +87,16 @@ class AvailabilityController extends Controller
                 ->all();
         }
 
+        // Locked vs edit mode: a week that already has saved assignments
+        // opens read-only unless the manager asks to edit (?edit=1). A week
+        // with no roster yet, a copy-from prefill, or a failed save (old
+        // input present) opens directly in edit mode.
+        $rosterHasAssignments = StaffShiftAssignment::weekHasRoster($weekStart);
+        $rosterEditable = $request->boolean('edit')
+            || $copyFrom !== null
+            || ! $rosterHasAssignments
+            || (is_array($old) && $old !== []);
+
         $rosterStaff = $staff
             ->filter(fn ($member) => ($member->staffProfile?->employment_status ?? null) === 'active')
             ->map(fn ($member) => [
@@ -105,7 +115,8 @@ class AvailabilityController extends Controller
         return view('admin.availability.index', compact(
             'businessHours', 'staff', 'schedules', 'services', 'blockedSlots',
             'rosterWeekStart', 'rosterWeekEnd', 'rosterPrevWeek', 'rosterNextWeek',
-            'rosterWeekLabel', 'rosterAssignments', 'rosterStaff', 'rosterPositions'
+            'rosterWeekLabel', 'rosterAssignments', 'rosterStaff', 'rosterPositions',
+            'rosterHasAssignments', 'rosterEditable'
         ));
     }
 
@@ -262,7 +273,10 @@ class AvailabilityController extends Controller
             }
         });
 
-        return back()->with('success', 'Weekly roster saved for the week of '.$weekStart.'.');
+        return redirect()
+            ->route('admin.availability', ['week' => $weekStart])
+            ->withFragment('tab-staff')
+            ->with('success', 'Weekly roster saved for the week of '.$weekStart.'.');
     }
 
     // ─── Service Time Restrictions ────────────────────────────────────

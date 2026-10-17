@@ -84,8 +84,19 @@
             <strong>{{ $rosterWeekLabel }}</strong>
             <a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.availability', ['week' => $rosterNextWeek]) }}#tab-staff">Next ›</a>
             <a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.availability') }}#tab-staff">This week</a>
-            <a class="btn btn-sm btn-outline-secondary ms-auto" href="{{ route('admin.availability', ['week' => $rosterWeekStart, 'copy_from' => $rosterPrevWeek]) }}#tab-staff">Copy previous week</a>
+            <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+                @if($rosterEditable)
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.availability', ['week' => $rosterWeekStart, 'copy_from' => $rosterPrevWeek]) }}#tab-staff">Copy previous week</a>
+                    @if($rosterHasAssignments)
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.availability', ['week' => $rosterWeekStart]) }}#tab-staff">Cancel</a>
+                    @endif
+                    <button type="button" class="btn btn-sm btn-secondary" disabled><i class="bi bi-pencil me-1"></i>Edit</button>
+                @else
+                    <a class="btn btn-sm btn-spa" href="{{ route('admin.availability', ['week' => $rosterWeekStart, 'edit' => 1]) }}#tab-staff"><i class="bi bi-pencil me-1"></i>Edit</a>
+                @endif
+            </div>
         </div>
+        @if($rosterEditable)
         <form method="POST" action="{{ route('admin.availability.weekly-roster') }}">
             @csrf
             <input type="hidden" name="week_start" value="{{ $rosterWeekStart }}">
@@ -94,27 +105,67 @@
                     {{ $errors->first('assignments') }} {{ $errors->first('week_start') }}
                 </div>
             @endif
+        @endif
             <div class="card p-3 mb-3">
                 <h6 class="mb-3">{{ $rosterWeekLabel }}</h6>
                 <div class="table-responsive">
                     <table class="table align-middle mb-0">
                         <thead>
-                            <tr><th>Staff</th><th>Category</th><th>Start of shift</th><th>End of shift</th><th></th></tr>
+                            <tr>
+                                <th>Staff</th><th>Category</th><th>Start of shift</th><th>End of shift</th>
+                                @if($rosterEditable)<th></th>@endif
+                            </tr>
                         </thead>
-                        <tbody id="rosterBody"></tbody>
+                        <tbody id="rosterBody">
+                            @foreach($rosterAssignments as $row)
+                                <tr>
+                                    <td>
+                                        <span class="fw-semibold">{{ $row['name'] }}</span>
+                                        @if($rosterEditable)
+                                            <input type="hidden" name="assignments[{{ $loop->index }}][user_id]" value="{{ $row['user_id'] }}">
+                                        @endif
+                                    </td>
+                                    <td><span class="badge text-bg-light border">{{ $row['position'] }}</span></td>
+                                    <td>
+                                        @if($rosterEditable)
+                                            <input type="time" name="assignments[{{ $loop->index }}][start_time]" value="{{ $row['start'] }}" required class="form-control form-control-sm w-auto">
+                                        @else
+                                            <span class="roster-shift-time">{{ \Carbon\Carbon::parse($row['start'])->format('g:i A') }}</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @if($rosterEditable)
+                                            <input type="time" name="assignments[{{ $loop->index }}][end_time]" value="{{ $row['end'] }}" required class="form-control form-control-sm w-auto">
+                                        @else
+                                            <span class="roster-shift-time">{{ \Carbon\Carbon::parse($row['end'])->format('g:i A') }}</span>
+                                        @endif
+                                    </td>
+                                    @if($rosterEditable)
+                                        <td>
+                                            <button type="button" class="btn-close" style="font-size:.7rem" aria-label="Remove {{ $row['name'] }}" data-remove="{{ $row['user_id'] }}"></button>
+                                        </td>
+                                    @endif
+                                </tr>
+                            @endforeach
+                        </tbody>
                     </table>
                 </div>
-                <p id="rosterEmpty" class="text-muted small mb-0 mt-2" hidden>No staff assigned yet — everyone falls back to the standard schedule this week.</p>
-                <div class="mt-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="rosterAddBtn">+ Add staff</button>
-                </div>
+                <p id="rosterEmpty" class="text-muted small mb-0 mt-2" @if(count($rosterAssignments) > 0) hidden @endif>No staff assigned yet — everyone falls back to the standard schedule this week.</p>
+                @if($rosterEditable)
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="rosterAddBtn">+ Add staff</button>
+                    </div>
+                @endif
             </div>
             <div class="card p-3 mt-3">
                 <div class="small text-muted mb-1">Not assigned — not bookable this week</div>
                 <div id="rosterUnassigned" class="small"></div>
             </div>
-            <button class="btn btn-spa mt-3">Save Roster</button>
+            @if($rosterEditable)
+                <button class="btn btn-spa mt-3">Save Roster</button>
         </form>
+        @endif
+        @if($rosterEditable)
         {{-- Reusable "Add staff" floating box (modal) --}}
         <div id="rosterModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1050; align-items:center; justify-content:center; padding:1rem;">
             <div class="card" role="dialog" aria-modal="true" aria-labelledby="rosterModalTitle" style="width:100%; max-width:430px; max-height:85vh; display:flex; flex-direction:column; border-radius:.75rem;">
@@ -144,6 +195,7 @@
                 </div>
             </div>
         </div>
+        @endif
     </div>
 
     {{-- ── TAB 3: SERVICE HOURS ─────────────────────────────────────── --}}
@@ -283,6 +335,10 @@
         const unassignedEl = document.getElementById('rosterUnassigned');
         if (!unassignedEl) return;
 
+        // Locked (read-only) weeks render times as plain text; edit mode
+        // renders time inputs and the modal-driven picker.
+        const EDITABLE = @json($rosterEditable);
+
         // Single source of truth: the rows array below. The table (with its
         // assignments[i][..] inputs) renders from it; the modal and the
         // Not-assigned strip derive from the same state.
@@ -336,6 +392,17 @@
             return input;
         }
 
+        // "HH:MM" -> 12-hour display text, e.g. "14:00" -> "2:00 PM".
+        function fmt12(hhmm) {
+            const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || '');
+            if (!m) return hhmm || '';
+            let h = parseInt(m[1], 10);
+            const suffix = h >= 12 ? 'PM' : 'AM';
+            h = h % 12;
+            if (h === 0) h = 12;
+            return h + ':' + m[2] + ' ' + suffix;
+        }
+
         function renderRows() {
             tbody.innerHTML = '';
             rows.forEach((row, i) => {
@@ -346,11 +413,13 @@
                 name.className = 'fw-semibold';
                 name.textContent = row.name;
                 nameTd.appendChild(name);
-                const hidden = document.createElement('input');
-                hidden.type = 'hidden';
-                hidden.name = 'assignments[' + i + '][user_id]';
-                hidden.value = row.id;
-                nameTd.appendChild(hidden);
+                if (EDITABLE) {
+                    const hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = 'assignments[' + i + '][user_id]';
+                    hidden.value = row.id;
+                    nameTd.appendChild(hidden);
+                }
 
                 const catTd = document.createElement('td');
                 const pill = document.createElement('span');
@@ -359,24 +428,38 @@
                 catTd.appendChild(pill);
 
                 const startTd = document.createElement('td');
-                startTd.appendChild(makeTimeInput('assignments[' + i + '][start_time]', row.start));
                 const endTd = document.createElement('td');
-                endTd.appendChild(makeTimeInput('assignments[' + i + '][end_time]', row.end));
-
-                const rmTd = document.createElement('td');
-                const rm = document.createElement('button');
-                rm.type = 'button';
-                rm.className = 'btn-close';
-                rm.style.fontSize = '.7rem';
-                rm.setAttribute('aria-label', 'Remove ' + row.name);
-                rm.setAttribute('data-remove', row.id);
-                rmTd.appendChild(rm);
+                if (EDITABLE) {
+                    startTd.appendChild(makeTimeInput('assignments[' + i + '][start_time]', row.start));
+                    endTd.appendChild(makeTimeInput('assignments[' + i + '][end_time]', row.end));
+                } else {
+                    const startSpan = document.createElement('span');
+                    startSpan.className = 'roster-shift-time';
+                    startSpan.textContent = fmt12(row.start);
+                    startTd.appendChild(startSpan);
+                    const endSpan = document.createElement('span');
+                    endSpan.className = 'roster-shift-time';
+                    endSpan.textContent = fmt12(row.end);
+                    endTd.appendChild(endSpan);
+                }
 
                 tr.appendChild(nameTd);
                 tr.appendChild(catTd);
                 tr.appendChild(startTd);
                 tr.appendChild(endTd);
-                tr.appendChild(rmTd);
+
+                if (EDITABLE) {
+                    const rmTd = document.createElement('td');
+                    const rm = document.createElement('button');
+                    rm.type = 'button';
+                    rm.className = 'btn-close';
+                    rm.style.fontSize = '.7rem';
+                    rm.setAttribute('aria-label', 'Remove ' + row.name);
+                    rm.setAttribute('data-remove', row.id);
+                    rmTd.appendChild(rm);
+                    tr.appendChild(rmTd);
+                }
+
                 tbody.appendChild(tr);
             });
             emptyEl.hidden = rows.length > 0;
@@ -414,6 +497,7 @@
         }
 
         function renderAddButton() {
+            if (!addBtn) return;
             const noneLeft = unassignedIds().length === 0;
             addBtn.disabled = noneLeft;
             addBtn.classList.toggle('d-none', noneLeft);
@@ -425,7 +509,8 @@
             renderAddButton();
         }
 
-        // ── Modal ────────────────────────────────────────────────
+        // ── Modal (edit mode only) ───────────────────────────────
+        if (overlay) {
         function renderModalCount() {
             modalCount.textContent = pending.size + ' staff in roster';
         }
@@ -573,12 +658,13 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && isOpen()) closeModal();
         });
+        }
 
         syncAll();
 
-        // Keep the roster tab active when arriving with ?week / ?copy_from.
+        // Keep the roster tab active when arriving with ?week / ?copy_from / ?edit.
         const params = new URLSearchParams(window.location.search);
-        if (params.has('week') || params.has('copy_from')) {
+        if (params.has('week') || params.has('copy_from') || params.has('edit')) {
             const trigger = document.querySelector('[data-bs-target="#tab-staff"]');
             if (trigger && window.bootstrap && bootstrap.Tab) {
                 bootstrap.Tab.getOrCreateInstance(trigger).show();

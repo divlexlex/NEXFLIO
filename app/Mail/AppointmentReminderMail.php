@@ -33,7 +33,7 @@ class AppointmentReminderMail extends Mailable implements ShouldQueue
                 "Hi {$this->appointment->clientName()},",
                 "This is a friendly reminder of your {$service} appointment tomorrow, "
                     . $this->appointment->appointment_date->format('F j, Y')
-                    . " at {$this->appointment->start_time}"
+                    . ' at '.$this->appointment->startTimeLabel()
                     . ($this->appointment->personnel ? " with {$this->appointment->personnel->name}." : '.'),
                 'Please arrive a few minutes early so we can start on time.',
             ],

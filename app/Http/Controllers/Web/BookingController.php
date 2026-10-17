@@ -307,7 +307,7 @@ class BookingController extends Controller
             // records it — pending cash never counts as paid (see
             // Appointment::paymentState()).
             $paymentData = [
-                'amount' => $isCash ? $price : ($fee ?? $price),
+                'amount' => $isCash ? $price : $fee,
                 'method' => $method,
                 'status' => PaymentStatus::Pending,
             ];
@@ -328,15 +328,11 @@ class BookingController extends Controller
             $notifyTitle = 'Booking received';
             $notifyBody = "We received your Cash booking for {$appointment->displayServiceName()}. "
                 . 'The branch will confirm your booking — please pay ₱'.number_format($price, 2).' at the spa.';
-        } elseif ($fee !== null) {
+        } else {
             $notifyTitle = 'Booking received';
             $notifyBody = "We received your booking for {$appointment->displayServiceName()}. "
                 . 'Your reservation fee of ₱'.number_format($fee, 2).' is pending verification — '
                 . 'the ₱'.number_format($price - $fee, 2).' balance is payable at the branch.';
-        } else {
-            $notifyTitle = 'Booking received';
-            $notifyBody = "We received your booking for {$appointment->displayServiceName()}. "
-                . 'You will be notified once your payment is verified.';
         }
 
         $notificationService->notify(
@@ -610,7 +606,7 @@ class BookingController extends Controller
             // at the door; the row stays pending until recorded — pending
             // cash never counts as paid (see Appointment::paymentState()).
             $paymentData = [
-                'amount' => $isCash ? $price : ($fee ?? $price),
+                'amount' => $isCash ? $price : $fee,
                 'method' => $method,
                 'status' => PaymentStatus::Pending,
             ];
@@ -641,12 +637,9 @@ class BookingController extends Controller
             $isCash
                 ? "We received your Cash Home Service booking for {$appointment->displayServiceName()}. "
                     . 'The branch will confirm your booking — please pay ₱'.number_format($price, 2).' at the spa.'
-                : ($fee !== null
-                    ? "We received your Home Service booking for {$appointment->displayServiceName()}. "
-                        . 'Your reservation fee of ₱'.number_format($fee, 2).' is pending verification — '
-                        . 'the ₱'.number_format($price - $fee, 2).' balance is payable at the branch.'
-                    : "We received your Home Service booking for {$appointment->service->name}. "
-                        . 'You will be notified once your payment is verified.'),
+                : "We received your Home Service booking for {$appointment->displayServiceName()}. "
+                    . 'Your reservation fee of ₱'.number_format($fee, 2).' is pending verification — '
+                    . 'the ₱'.number_format($price - $fee, 2).' balance is payable at the branch.',
             new BookingReceivedMail($appointment),
             ['appointment_id' => $appointment->id]
         );
@@ -1045,11 +1038,11 @@ class BookingController extends Controller
 
     /**
      * Server-side price breakdown for the Review / Payment steps: the booked
-     * price, the reservation fee due now (null when no fee applies), and the
-     * balance payable at the branch. Display only — store() recomputes all
-     * of this from scratch.
+     * price, the reservation fee due now (always resolves — mapped tier,
+     * custom-label fallback, or the price rule), and the balance payable at
+     * the branch. Display only — store() recomputes all of this from scratch.
      *
-     * @return array{price: float, fee: float|null, balance: float|null}
+     * @return array{price: float, fee: float, balance: float}
      */
     private function feeQuote(Service $service, ?ServiceVariant $variant): array
     {
@@ -1059,7 +1052,7 @@ class BookingController extends Controller
         return [
             'price' => $price,
             'fee' => $fee,
-            'balance' => $fee !== null ? max(0, round($price - $fee, 2)) : null,
+            'balance' => max(0, round($price - $fee, 2)),
         ];
     }
 

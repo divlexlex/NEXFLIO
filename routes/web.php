@@ -28,6 +28,7 @@ use App\Http\Controllers\Web\ReceiptController;
 use App\Http\Controllers\Web\ReportController;
 use App\Http\Controllers\Web\ReviewController;
 use App\Http\Controllers\Web\ServiceController;
+use App\Http\Controllers\Web\ServiceCategoryController;
 use App\Http\Controllers\Web\ServicesController;
 use App\Http\Controllers\Web\StaffController;
 use App\Http\Controllers\Web\UploadedFileController;
@@ -232,6 +233,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
     Route::post('/services', [ServiceController::class, 'store'])->name('services.store');
     Route::patch('/services/{id}', [ServiceController::class, 'update'])->name('services.update');
     Route::delete('/services/{id}', [ServiceController::class, 'destroy'])->name('services.destroy');
+    // Service categories backing the page filter + service-form selects (see
+    // ServiceCategoryController) — same manager-only guard as service
+    // management via the group middleware.
+    Route::post('/service-categories', [ServiceCategoryController::class, 'store'])->name('service-categories.store');
 
     Route::get('/promos', [PromoController::class, 'index'])->name('promos');
     Route::get('/promos/create', [PromoController::class, 'create'])->name('promos.create');

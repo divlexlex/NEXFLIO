@@ -547,7 +547,7 @@ class AppointmentController extends Controller
                 'user_id' => $appointment->user_id,
                 'title' => 'Appointment updated',
                 'body' => "Your booking for {$appointment->service->name} was moved to "
-                    ."{$appointment->appointment_date->toDateString()} at {$appointment->start_time}.",
+                    ."{$appointment->appointment_date->toDateString()} at {$appointment->startTimeLabel()}.",
             ]);
         }
 

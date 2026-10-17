@@ -27,6 +27,7 @@ class BookingReceivedMail extends Mailable implements ShouldQueue
     public function content(): Content
     {
         $service = $this->appointment->service->name ?? 'your service';
+        $timeLabel = $this->appointment->startTimeLabel();
 
         $price = (float) ($this->appointment->booked_price ?? $this->appointment->service?->price ?? 0);
         $paidNow = (float) ($this->appointment->payment?->amount ?? 0);
@@ -42,7 +43,7 @@ class BookingReceivedMail extends Mailable implements ShouldQueue
                     "Hi {$this->appointment->clientName()},",
                     "Thank you for booking {$service} on "
                         . $this->appointment->appointment_date->format('F j, Y')
-                        . " at {$this->appointment->start_time}.",
+                        . " at {$timeLabel}.",
                     'Your booking is confirmed — please pay ₱'.number_format($price, 2)
                         . ' at the branch.',
                 ],
@@ -56,7 +57,7 @@ class BookingReceivedMail extends Mailable implements ShouldQueue
                     "Hi {$this->appointment->clientName()},",
                     "Thank you for booking {$service} on "
                         . $this->appointment->appointment_date->format('F j, Y')
-                        . " at {$this->appointment->start_time}.",
+                        . " at {$timeLabel}.",
                     'Our manager is verifying your reservation fee of ₱'.number_format($paidNow, 2)
                         . '. The remaining ₱'.number_format($price - $paidNow, 2)
                         . ' is payable at the branch.',
@@ -70,7 +71,7 @@ class BookingReceivedMail extends Mailable implements ShouldQueue
                 "Hi {$this->appointment->clientName()},",
                 "Thank you for booking {$service} on "
                     . $this->appointment->appointment_date->format('F j, Y')
-                    . " at {$this->appointment->start_time}.",
+                    . " at {$timeLabel}.",
                 'Our manager is verifying your proof of payment. You will get another '
                     . 'notification the moment your booking is confirmed.',
             ],
