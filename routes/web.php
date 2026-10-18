@@ -186,6 +186,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
     // zero-balance and Cancelled/No-Show bookings.
     Route::post('/appointments/{id}/branch-payment', [AppointmentController::class, 'recordBranchPayment'])->name('appointments.branch-payment');
     Route::post('/appointments/{id}/checkout', [AppointmentController::class, 'checkout'])->name('appointments.checkout');
+    // Services added to an existing appointment (same Appointment ID). The
+    // controller gates on status (Booked / In-Service only) and resolves the
+    // price server-side.
+    Route::post('/appointments/{appointment}/additional-services', [AppointmentController::class, 'storeAdditionalService'])->name('appointments.additional-services.store');
+    Route::delete('/appointments/{appointment}/additional-services/{added}', [AppointmentController::class, 'destroyAdditionalService'])->name('appointments.additional-services.destroy');
     Route::get('/appointments/{appointment}/receipt', [ReceiptController::class, 'admin'])->name('appointments.receipt');
 
     // Client-raised cancellation / reschedule request queue.

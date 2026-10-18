@@ -84,6 +84,11 @@
                                         </h3>
                                         <span class="nx-status-badge {{ $statusClass }}">{{ $appointment->status->label() }}</span>
                                     </div>
+                                    @if($appointment->addedServices->isNotEmpty())
+                                        <p class="small nx-text-secondary mb-1">
+                                            <i class="bi bi-plus-circle me-2"></i>{{ $appointment->addedServices->map(fn ($added) => $added->displayName())->implode(', ') }}
+                                        </p>
+                                    @endif
                                     <p class="small nx-text-secondary mb-1">
                                         <i class="bi bi-calendar3 me-2"></i>{{ $appointment->appointment_date->format('F j, Y') }}
                                         &middot; {{ \Illuminate\Support\Carbon::parse($appointment->start_time)->format('g:i A') }}

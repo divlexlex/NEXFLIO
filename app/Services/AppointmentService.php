@@ -277,7 +277,9 @@ class AppointmentService
      * Regular services: one row — staff rate × the service's listed price.
      * Packages: one row per included catalog service — each assigned tech
      * earns their rate × that inclusion's ORIGINAL price (package discounts
-     * never reduce commission). firstOrCreate keeps retries idempotent.
+     * never reduce commission). Additionally, every service ADDED to the
+     * appointment after booking pays its own commission. firstOrCreate keeps
+     * retries idempotent.
      */
     private function recordCommission(Appointment $appointment): void
     {
@@ -286,35 +288,87 @@ class AppointmentService
             'personnel.staffProfile',
             'personnelAssignments.position',
             'personnelAssignments.user.staffProfile',
+            'addedServices.service',
+            'addedServices.personnel.staffProfile',
         ]);
 
         if ($appointment->service?->requiresMultiStaff()
             && $appointment->personnelAssignments->isNotEmpty()) {
             $this->recordPackageCommissions($appointment);
+        } elseif ($appointment->personnel_id && $appointment->service) {
+            $servicePrice = (float) $appointment->service->price;
+            $rate = (float) ($appointment->personnel?->staffProfile?->commission_rate ?? 10.00);
 
-            return;
+            Commission::firstOrCreate(
+                [
+                    'appointment_id' => $appointment->id,
+                    'user_id' => $appointment->personnel_id,
+                    'included_service_id' => $appointment->service_id,
+                ],
+                [
+                    'service_price' => $servicePrice,
+                    'rate' => $rate,
+                    'amount' => round($servicePrice * $rate / 100, 2),
+                    'earned_at' => now(),
+                ]
+            );
         }
 
-        if (! $appointment->personnel_id || ! $appointment->service) {
-            return;
+        // Added services settle independently of the main line above.
+        $this->recordAddedServiceCommissions($appointment);
+    }
+
+    /**
+     * Pay for services added to the appointment after booking. The earner is
+     * the added row's personnel, falling back to the appointment's own
+     * personnel; rows with neither are skipped. Rate is the earner's profile
+     * rate (10% default) against the snapshot price stored on the row.
+     *
+     * When the same staff member was already paid for the same service as the
+     * main booking (or an earlier added row), the unique (appointment, user,
+     * service) key makes firstOrCreate return that row — we then increment its
+     * amount, so performing the same service twice in one visit pays twice.
+     * The increment runs at most once: Completed is terminal, so the
+     * surrounding transition can only reach this block a single time.
+     */
+    private function recordAddedServiceCommissions(Appointment $appointment): void
+    {
+        foreach ($appointment->addedServices as $row) {
+            $earnerId = $row->personnel_id ?: $appointment->personnel_id;
+
+            if (! $earnerId) {
+                continue;
+            }
+
+            $earner = ((int) $earnerId === (int) $appointment->personnel_id)
+                ? $appointment->personnel
+                : $row->personnel;
+
+            $rate = (float) ($earner?->staffProfile?->commission_rate ?? 10.00);
+            $servicePrice = (float) $row->price;
+            $amount = round($servicePrice * $rate / 100, 2);
+
+            $commission = Commission::firstOrCreate(
+                [
+                    'appointment_id' => $appointment->id,
+                    'user_id' => $earnerId,
+                    'included_service_id' => $row->service_id,
+                ],
+                [
+                    'service_price' => $servicePrice,
+                    'rate' => $rate,
+                    'amount' => $amount,
+                    'earned_at' => now(),
+                ]
+            );
+
+            if (! $commission->wasRecentlyCreated) {
+                // Commission rows are immutable via Eloquent (updating throws);
+                // a query-builder increment fires no model events but still
+                // stamps updated_at.
+                Commission::whereKey($commission->id)->increment('amount', $amount);
+            }
         }
-
-        $servicePrice = (float) $appointment->service->price;
-        $rate = (float) ($appointment->personnel?->staffProfile?->commission_rate ?? 10.00);
-
-        Commission::firstOrCreate(
-            [
-                'appointment_id' => $appointment->id,
-                'user_id' => $appointment->personnel_id,
-                'included_service_id' => $appointment->service_id,
-            ],
-            [
-                'service_price' => $servicePrice,
-                'rate' => $rate,
-                'amount' => round($servicePrice * $rate / 100, 2),
-                'earned_at' => now(),
-            ]
-        );
     }
 
     /**

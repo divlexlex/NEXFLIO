@@ -284,7 +284,7 @@
                     <input type="time" name="end_time" class="form-control form-control-sm">
                 </div>
                 <div class="col-auto">
-                    <label class="form-label small mb-0">Staff (optional)</label>
+                    <label class="form-label small mb-0">Staff</label>
                     <select name="personnel_id" class="form-select form-select-sm">
                         <option value="">All staff</option>
                         @foreach($staff as $s)

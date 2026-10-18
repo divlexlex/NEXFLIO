@@ -164,6 +164,7 @@ class ClientAccountController extends Controller
     {
         $appointments = Appointment::with([
             'service', 'personnel', 'address', 'payment', 'payments',
+            'addedServices.service',
             'pendingChangeRequest.requestedPersonnel:id,name',
             // Approved cancellation (if any) drives the cancelled-card
             // refund lines below (refund_decision + payment refund_status).

@@ -121,7 +121,7 @@ class WebPortalTest extends TestCase
         $this->actingAs($this->owner)->get('/admin/reports/financial')->assertOk();
     }
 
-    public function test_walk_in_creates_booked_appointment_with_verified_cash_payment(): void
+    public function test_walk_in_creates_booked_appointment_with_balance_due_and_no_payment(): void
     {
         // Weekdays open at 12:00 — use 13:00 so tomorrow always fits whether
         // the next calendar day is a weekday or weekend.
@@ -139,10 +139,13 @@ class WebPortalTest extends TestCase
         $appointment = Appointment::where('walk_in_name', 'Maria Santos')->firstOrFail();
         $this->assertNull($appointment->user_id);
         $this->assertSame(AppointmentStatus::Booked, $appointment->status);
-        $this->assertSame('cash', $appointment->payment->method);
-        $this->assertSame(PaymentStatus::Verified, $appointment->payment->status);
-        $this->assertSame($this->manager->id, $appointment->payment->verified_by);
-        $this->assertSame('600.00', (string) $appointment->payment->amount);
+        // Walk-ins now start with NO payment: the full price is owed, and the
+        // manager records collection later from the Payments page. Only a
+        // settled balance reveals check-out (see WalkInPaymentLifecycleTest).
+        $this->assertNull($appointment->payment);
+        $this->assertSame(0, $appointment->payments()->count());
+        $this->assertSame(0.0, $appointment->verifiedPaid());
+        $this->assertSame(600.0, $appointment->balanceDue());
     }
 
     public function test_web_payment_verification_matches_api_side_effects(): void

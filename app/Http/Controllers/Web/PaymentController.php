@@ -9,6 +9,8 @@ use App\Mail\RefundSentMail;
 use App\Models\Appointment;
 use App\Models\AppointmentChangeRequest;
 use App\Models\Payment;
+use App\Models\Service;
+use App\Models\User;
 use App\Services\AppointmentService;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
@@ -51,10 +53,50 @@ class PaymentController extends Controller
             $balance = 'all';
         }
 
+        // Source narrows cards to walk-ins (walk_in_name set) or online
+        // bookings (client account → walk_in_name null). Persisted like the
+        // other selects; search-style inputs never are.
+        $source = $request->query('source', $request->session()->get('filters.payments.source', 'all'));
+        if ($request->query('source') !== null) {
+            $request->session()->put('filters.payments.source', $source);
+        }
+        if (! in_array($source, ['all', 'walkin', 'online'], true)) {
+            $source = 'all';
+        }
+
+        // A Booked / In-Service appointment that has NO payment rows yet (a
+        // fresh walk-in) still needs money handling: it belongs on the
+        // Pending and All lists so its Record-payment form is reachable.
+        $awaitingBranchPayment = fn ($query) => $query->whereDoesntHave('payments')
+            ->whereIn('status', [
+                AppointmentStatus::Booked->value,
+                AppointmentStatus::InService->value,
+            ]);
+
+        // Walk-in bucketing differs from online (FIX B): a walk-in stays in
+        // the Pending tab while ANY balance remains, and only reaches
+        // Verified once the bill is fully settled. A 50% down payment
+        // recorded at add time does NOT move it to Verified. balanceDue() is
+        // derived (booked_price − verified money, floored at 0), so it is
+        // expressed as a correlated subquery here. Online cards keep the
+        // payment-status bucketing untouched.
+        $walkInOwes = fn ($query) => $query->whereNotNull('walk_in_name')->whereRaw(
+            'coalesce(appointments.booked_price, (select s.price from services s where s.id = appointments.service_id), 0)'
+            .' - (select coalesce(sum(p.amount), 0) from payments p where p.appointment_id = appointments.id and p.status = ?) > 0',
+            [PaymentStatus::Verified->value]
+        );
+        $walkInSettled = fn ($query) => $query->whereNotNull('walk_in_name')->whereRaw(
+            'coalesce(appointments.booked_price, (select s.price from services s where s.id = appointments.service_id), 0)'
+            .' - (select coalesce(sum(p.amount), 0) from payments p where p.appointment_id = appointments.id and p.status = ?) <= 0',
+            [PaymentStatus::Verified->value]
+        );
+
         $query = Appointment::with([
             'user', 'service', 'personnel',
             'payments' => fn ($query) => $query->orderBy('id'),
             'payments.verifier',
+            'addedServices.service:id,name',
+            'addedServices.personnel:id,name',
             // Latest-first approved cancellations for the card's refund
             // remark (see cancellationRefundRemark()) — avoids N+1.
             'changeRequests' => fn ($query) => $query
@@ -67,16 +109,40 @@ class PaymentController extends Controller
                 Payment::selectRaw('MAX(created_at)')->whereColumn('appointment_id', 'appointments.id'),
                 'last_payment_at'
             )
+            ->when($source === 'walkin', fn ($query) => $query->whereNotNull('walk_in_name'))
+            ->when($source === 'online', fn ($query) => $query->whereNull('walk_in_name'))
             ->orderByDesc('last_payment_at')
-            ->when($status === 'pending', fn ($query) => $query->whereHas(
-                'payments',
-                fn ($query) => $query->where('status', PaymentStatus::Pending->value)->where('method', '!=', 'cash')
-            ))
-            ->when($status === 'verified' || $status === 'rejected', fn ($query) => $query->whereHas(
+            ->when($status === 'pending', fn ($query) => $query->where(function ($query) use ($awaitingBranchPayment, $walkInOwes) {
+                // Online: a pending non-cash row, or a fresh Booked/In-Service
+                // with no rows (unchanged).
+                $query->where(function ($query) use ($awaitingBranchPayment) {
+                    $query->whereNull('walk_in_name')
+                        ->where(function ($query) use ($awaitingBranchPayment) {
+                            $query->whereHas('payments', fn ($query) => $query
+                                ->where('status', PaymentStatus::Pending->value)
+                                ->where('method', '!=', 'cash'))
+                                ->orWhere($awaitingBranchPayment);
+                        });
+                })
+                    // Walk-ins: still owing — a recorded DP does not clear them.
+                    ->orWhere($walkInOwes);
+            }))
+            ->when($status === 'verified', fn ($query) => $query->where(function ($query) use ($walkInSettled) {
+                // Online: any verified row (unchanged).
+                $query->where(function ($query) {
+                    $query->whereNull('walk_in_name')
+                        ->whereHas('payments', fn ($query) => $query->where('status', PaymentStatus::Verified->value));
+                })
+                    // Walk-ins: fully settled only.
+                    ->orWhere($walkInSettled);
+            }))
+            ->when($status === 'rejected', fn ($query) => $query->whereHas(
                 'payments',
                 fn ($query) => $query->where('status', $status)
             ))
-            ->when($status === 'all', fn ($query) => $query->whereHas('payments'))
+            ->when($status === 'all', fn ($query) => $query->where(function ($query) use ($awaitingBranchPayment) {
+                $query->whereHas('payments')->orWhere($awaitingBranchPayment);
+            }))
             // Refund remarks as filters — same stored signals as
             // cancellationRefundRemark(): an approved cancellation request
             // plus verified money paid. A stored refund_decision wins;
@@ -142,10 +208,47 @@ class PaymentController extends Controller
             );
         }
 
+        // Catalog + staff data for the shared add-service modal (identical
+        // shape to AppointmentController@index — same partial, same endpoints).
+        $services = Service::with('positions:id,name')
+            ->with('variants')
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
+        $personnel = User::where('role_id', User::ROLE_STAFF)
+            ->with('staffProfile:id,user_id,position')
+            ->whereHas('staffProfile', fn ($query) => $query->where('employment_status', 'active'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return view('admin.payments.index', [
             'appointments' => $appointments,
             'currentStatus' => $status,
             'currentBalance' => $balance,
+            'currentSource' => $source,
+            'services' => $services,
+            'servicesJson' => $services->map(fn (Service $service) => [
+                'id' => $service->id,
+                'name' => $service->name,
+                'category' => $service->category,
+                'duration_minutes' => $service->duration_minutes,
+                'is_package' => $service->requiresMultiStaff(),
+                'eligible_positions' => \App\Models\Position::namesForServiceCategory($service->category),
+                'positions' => $service->positions->map(fn ($position) => [
+                    'id' => $position->id,
+                    'name' => $position->name,
+                ])->values(),
+                'variants' => $service->variants->map(fn ($variant) => [
+                    'label' => $variant->label,
+                    'price' => (float) $variant->price,
+                ])->values(),
+            ])->values(),
+            'personnelJson' => $personnel->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'position' => $user->staffProfile?->position,
+            ])->values(),
             // Eligibility flags for the reject modal's toggles, keyed by
             // category — the modal JS only reads flags, never category keys.
             'rejectionFlags' => collect(config('payment.rejection_reasons', []))

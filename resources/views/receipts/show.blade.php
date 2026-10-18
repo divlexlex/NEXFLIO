@@ -22,6 +22,12 @@
         <span class="nx-receipt-label">Service</span>
         <span>{{ $appointment->service->name ?? 'Service' }}{{ $appointment->variant_label ? ' — '.$appointment->variant_label : '' }}</span>
     </div>
+    @foreach($appointment->addedServices as $added)
+        <div class="nx-receipt-row">
+            <span class="nx-receipt-label">Service</span>
+            <span>{{ $added->displayName() }}</span>
+        </div>
+    @endforeach
 
     @if($downPayment)
         <div class="nx-receipt-row">

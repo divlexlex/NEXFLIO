@@ -6,6 +6,7 @@ use App\Enums\AppointmentStatus;
 use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
+use App\Models\AppointmentAddedService;
 use App\Models\AppointmentChangeRequest;
 use App\Models\BusinessHours;
 use App\Models\LeaveRequest;
@@ -47,6 +48,7 @@ class AppointmentController extends Controller
             ->get(['id', 'name']);
 
         $services = Service::with('positions:id,name')
+            ->with('variants')
             ->where('status', 'active')
             ->orderBy('name')
             ->get();
@@ -72,14 +74,29 @@ class AppointmentController extends Controller
                 'id' => $service->id,
                 'name' => $service->name,
                 'category' => $service->category,
+                // The real price, so the walk-in extra rows can show it.
+                // Without this key the row builder rendered "₱NaN".
+                'price' => (float) $service->price,
                 'duration_minutes' => $service->duration_minutes,
-                'is_package' => $service->requiresMultiStaff(),
+                // What counts as a package — the server's own test plus the
+                // packages the public catalog already flags (the Head-Spa
+                // "Package …" services live in a normal category, so the
+                // category alone misses them) — and they are never offered as
+                // extra services.
+                'is_package' => $service->requiresMultiStaff()
+                    || $service->isPackageService()
+                    || in_array($service->name, \App\Support\ServiceCatalog::PACKAGE_SERVICE_NAMES, true),
                 // Positions that fulfil this service's category (Nail → Nail
                 // Technician, etc.). Empty → UI shows no staff options.
                 'eligible_positions' => \App\Models\Position::namesForServiceCategory($service->category),
                 'positions' => $service->positions->map(fn ($position) => [
                     'id' => $position->id,
                     'name' => $position->name,
+                ])->values(),
+                // Saleable tiers for the add-service modal's variant picker.
+                'variants' => $service->variants->map(fn ($variant) => [
+                    'label' => $variant->label,
+                    'price' => (float) $variant->price,
                 ])->values(),
             ])->values(),
             'businessHoursJson' => (object) $businessHoursJson,
@@ -212,6 +229,8 @@ class AppointmentController extends Controller
             'payment',
             'payments',
             'address',
+            'addedServices.service:id,name',
+            'addedServices.personnel:id,name',
         ])
             ->when($request->query('start'), fn ($query, $start) => $query->where('appointment_date', '>=', $start))
             ->when($request->query('end'), fn ($query, $end) => $query->where('appointment_date', '<=', $end))
@@ -337,6 +356,23 @@ class AppointmentController extends Controller
                     'paymentState' => $appointment->paymentState(),
                     'balanceDue' => $appointment->balanceDue(),
                     'notes' => $appointment->notes,
+                    // Services added to this appointment after booking. Only
+                    // Booked / In-Service appointments may add or remove them
+                    // (a Completed visit is a closed money record).
+                    'canAddServices' => in_array($appointment->status, [
+                        AppointmentStatus::Booked,
+                        AppointmentStatus::InService,
+                    ], true),
+                    'addedServices' => $appointment->addedServices->map(fn ($row) => [
+                        'id' => $row->id,
+                        'service' => $row->service?->name ?? 'Service',
+                        'variant' => $row->variant_label,
+                        'price' => (float) $row->price,
+                        'personnel' => $row->personnel?->name,
+                        // 'creation' avails read as part of the appointment's
+                        // services; 'payment' rows are the later "Added" line.
+                        'source' => $row->source,
+                    ])->values()->all(),
                     // Money decisions happen in Payments, not here: an
                     // Unverified booking with a still-pending payment offers
                     // NO status actions in the drawer (see verificationLocked
@@ -393,6 +429,19 @@ class AppointmentController extends Controller
             'appointment_date' => 'required|date|after_or_equal:today',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
+            // Optional extra REGULAR services on the same visit (the main row
+            // keeps today's behaviour — packages with per-role staff included).
+            'extras' => ['nullable', 'array'],
+            'extras.*.service_id' => [
+                'required',
+                Rule::exists('services', 'id')->where('status', 'active')->whereNull('deleted_at'),
+            ],
+            'extras.*.variant_label' => ['nullable', 'string', 'max:255'],
+            'extras.*.personnel_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
+            ],
         ];
 
         if ($isPackage) {
@@ -411,12 +460,74 @@ class AppointmentController extends Controller
 
         $validated = $request->validate($rules);
 
+        // Resolve each EXTRA service server-side: regular (non-package) only,
+        // price from the chosen variant when the service has variants (never a
+        // client-sent price), and the same staff-eligibility rule as the main
+        // service. A category with no linked positions has nobody eligible.
+        $extras = [];
+
+        foreach ($validated['extras'] ?? [] as $index => $row) {
+            $extra = Service::with(['variants', 'positions'])->find($row['service_id']);
+
+            if ($extra === null || $extra->requiresMultiStaff()) {
+                return back()
+                    ->withErrors(["extras.{$index}.service_id" => 'Packages cannot be added as extra services — pick a regular service.'])
+                    ->withInput();
+            }
+
+            if ($extra->variants->isNotEmpty()) {
+                $variant = $extra->variants->firstWhere('label', $row['variant_label'] ?? null);
+                if ($variant === null) {
+                    return back()
+                        ->withErrors(["extras.{$index}.variant_label" => 'Please choose a valid variant for this service.'])
+                        ->withInput();
+                }
+                $extraPrice = (float) $variant->price;
+                $extraVariantLabel = $variant->label;
+            } else {
+                $extraPrice = (float) $extra->price;
+                $extraVariantLabel = null;
+            }
+
+            $extraPersonnelId = $row['personnel_id'] ?? null;
+            $extraAllowed = \App\Models\Position::namesForServiceCategory($extra->category ?? '');
+
+            if ($extraAllowed === []) {
+                if ($extraPersonnelId !== null) {
+                    return back()
+                        ->withErrors(["extras.{$index}.personnel_id" => 'This service category has no eligible staff — leave the staff field empty.'])
+                        ->withInput();
+                }
+            } elseif ($extraPersonnelId !== null) {
+                $extraHolds = User::whereKey($extraPersonnelId)
+                    ->whereHas('staffProfile', fn ($query) => $query->whereIn('position', $extraAllowed))
+                    ->exists();
+                if (! $extraHolds) {
+                    return back()
+                        ->withErrors(["extras.{$index}.personnel_id" => 'That staff member does not offer this service category.'])
+                        ->withInput();
+                }
+            }
+
+            $extras[] = [
+                'service' => $extra,
+                'variant_label' => $extraVariantLabel,
+                'price' => $extraPrice,
+                'personnel_id' => $extraPersonnelId,
+            ];
+        }
+
+        $extrasTotal = array_sum(array_column($extras, 'price'));
+        // The visit ends after the main duration PLUS every extra's duration.
+        $totalDuration = (int) ($service?->duration_minutes ?? 0)
+            + array_sum(array_map(fn ($extra) => (int) $extra['service']->duration_minutes, $extras));
+
         // Walk-in-only closing (default finish-by 01:00 next morning). Do NOT
         // call BusinessHours::startFitsOnDate() here — that is the online rule.
         if ($service && ! WalkInHours::startFitsOnDate(
             $validated['appointment_date'],
             $validated['start_time'],
-            (int) $service->duration_minutes
+            $totalDuration
         )) {
             return back()
                 ->withErrors(['start_time' => 'That time is past walk-in closing. Please choose an earlier slot, or book for another day.'])
@@ -467,8 +578,8 @@ class AppointmentController extends Controller
             }
         }
 
-        DB::transaction(function () use ($request, $validated, $assignments, $personnelId, $service) {
-            $price = (float) ($service?->price ?? 0);
+        DB::transaction(function () use ($request, $validated, $assignments, $personnelId, $service, $extras, $extrasTotal) {
+            $price = (float) ($service?->price ?? 0) + $extrasTotal;
 
             $appointment = Appointment::create([
                 'user_id' => null,
@@ -480,9 +591,11 @@ class AppointmentController extends Controller
                 'start_time' => $validated['start_time'],
                 'notes' => $validated['notes'] ?? null,
                 'booked_price' => $price,
-                // Walk-ins start Booked (cash taken at the counter). The
-                // verified payment below records collection only — recognized
-                // revenue waits for status → Completed (see RevenueRecognitionService).
+                // Walk-ins start Booked with NO payment yet: the full amount
+                // is the balance. The manager records the collected payment in
+                // Payments afterwards, and only a settled balance reveals
+                // check-out. This is why a fresh walk-in never reads "Paid in
+                // full" — verifiedPaid() is 0, balanceDue() is the price.
                 'status' => AppointmentStatus::Booked,
             ]);
 
@@ -494,16 +607,22 @@ class AppointmentController extends Controller
                 $appointment->syncPersonnelAssignments($assignments);
             }
 
-            // Collection fact (cash at counter). Must stay Verified so
-            // verifiedPaid() / balanceDue() treat the walk-in as paid; it
-            // must NOT drive dashboard revenue until completion.
-            $appointment->payment()->create([
-                'amount' => $price,
-                'method' => 'cash',
-                'status' => PaymentStatus::Verified,
-                'verified_by' => $request->user()->id,
-                'verified_at' => now(),
-            ]);
+            // Each extra becomes an added-service row under the SAME
+            // Appointment ID; its server-resolved price is already folded
+            // into booked_price above. No payment is created (the walk-in
+            // payment lifecycle is unchanged).
+            foreach ($extras as $extra) {
+                $appointment->addedServices()->create([
+                    'service_id' => $extra['service']->id,
+                    'variant_label' => $extra['variant_label'],
+                    'price' => $extra['price'],
+                    'personnel_id' => $extra['personnel_id'],
+                    'added_by' => $request->user()->id,
+                    // Picked in the Walk-in Entry form → an "availed"
+                    // service of this appointment, not a later payment add.
+                    'source' => 'creation',
+                ]);
+            }
         });
 
         return back()->with('success', 'Walk-in appointment created.');
@@ -664,6 +783,145 @@ class AppointmentController extends Controller
         return back()->with('success', $balance > 0
             ? 'Checked out — ₱'.number_format((float) $validated['amount'], 2).' collected.'
             : 'Checked out — appointment completed.');
+    }
+
+    /**
+     * Add a regular (non-package) service to an existing appointment under
+     * the SAME Appointment ID. The catalog price (or the chosen variant's
+     * price) is snapshotted and booked_price is raised by it, so the balance,
+     * check-out, and completion revenue all follow. Only Booked / In-Service
+     * appointments accept additions; Unverified bookings must first be
+     * confirmed in Payments, finished visits are closed money records.
+     * (Extras chosen at walk-in CREATION are part of the original booking — a
+     * different path; the whole walk-in bill settles in Payments as before.)
+     */
+    public function storeAdditionalService(Request $request, Appointment $appointment)
+    {
+        if (! in_array($appointment->status, [AppointmentStatus::Booked, AppointmentStatus::InService], true)) {
+            return back()->with('error', 'Services can only be added to Booked or In-Service appointments.');
+        }
+
+        $validated = $request->validate([
+            'service_id' => [
+                'required',
+                Rule::exists('services', 'id')->where('status', 'active')->whereNull('deleted_at'),
+            ],
+            'variant_label' => ['nullable', 'string', 'max:255'],
+            'personnel_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
+            ],
+            // Optional 50% down payment collected at add time. Only honoured
+            // when the request explicitly carries record_dp (older/API posts
+            // without it behave exactly as before).
+            'record_dp' => ['nullable', 'boolean'],
+            'method' => ['sometimes', Rule::in(array_keys(config('payment.methods', [])))],
+        ]);
+
+        $service = Service::with(['variants', 'positions'])->find($validated['service_id']);
+
+        if ($service === null || $service->requiresMultiStaff()) {
+            return back()->with('error', 'Packages cannot be added as an additional service.');
+        }
+
+        // Price is always resolved server-side — a client-sent price is never
+        // trusted. Variant services require one of the service's own tiers.
+        if ($service->variants->isNotEmpty()) {
+            $variant = $service->variants->firstWhere('label', $validated['variant_label'] ?? null);
+            if ($variant === null) {
+                return back()->with('error', 'Please choose a valid variant for this service.');
+            }
+            $price = (float) $variant->price;
+            $variantLabel = $variant->label;
+        } else {
+            $price = (float) $service->price;
+            $variantLabel = null;
+        }
+
+        // Staff eligibility mirrors the walk-in rule: staff must offer a
+        // position linked to the added service's category. A category with no
+        // linked positions has nobody eligible, so no personnel may be set.
+        $allowed = \App\Models\Position::namesForServiceCategory($service->category ?? '');
+        $personnelId = $validated['personnel_id'] ?? null;
+
+        if ($allowed === []) {
+            if ($personnelId !== null) {
+                return back()->with('error', 'This service category has no eligible staff — leave the staff field empty.');
+            }
+        } elseif ($personnelId !== null) {
+            $holds = User::whereKey($personnelId)
+                ->whereHas('staffProfile', fn ($query) => $query->whereIn('position', $allowed))
+                ->exists();
+            if (! $holds) {
+                return back()->with('error', 'That staff member does not offer this service category.');
+            }
+        }
+
+        $recordDownPayment = $request->boolean('record_dp');
+
+        DB::transaction(function () use ($request, $appointment, $service, $variantLabel, $price, $personnelId, $recordDownPayment, $validated) {
+            $appointment->addedServices()->create([
+                'service_id' => $service->id,
+                'variant_label' => $variantLabel,
+                'price' => $price,
+                'personnel_id' => $personnelId,
+                'added_by' => $request->user()->id,
+                // Added from the Payments add flow → a distinct "Added" line.
+                'source' => 'payment',
+            ]);
+
+            // Raise the money accumulator; balanceDue() / check-out / revenue
+            // recognise the extra amount from here on.
+            $appointment->increment('booked_price', $price);
+
+            // 50% down payment collected now — a Verified kind='branch' row.
+            // booked_price already grew by the FULL price, so the balance
+            // keeps the remaining half.
+            if ($recordDownPayment) {
+                $appointment->payments()->create([
+                    'kind' => 'branch',
+                    'amount' => round($price * 0.5, 2),
+                    'method' => $validated['method'] ?? 'cash',
+                    'status' => PaymentStatus::Verified,
+                    'verified_by' => $request->user()->id,
+                    'verified_at' => now(),
+                ]);
+            }
+        });
+
+        return back()->with('success', 'Service added to this appointment.');
+    }
+
+    /**
+     * Remove a previously added service. Refused when the removal would drop
+     * the appointment total below money already collected (verifiedPaid), so
+     * the books can never go negative. Same Booked / In-Service gate as
+     * adding.
+     */
+    public function destroyAdditionalService(Request $request, Appointment $appointment, AppointmentAddedService $added)
+    {
+        if ($added->appointment_id !== $appointment->id) {
+            abort(404);
+        }
+
+        if (! in_array($appointment->status, [AppointmentStatus::Booked, AppointmentStatus::InService], true)) {
+            return back()->with('error', 'Services can only be removed from Booked or In-Service appointments.');
+        }
+
+        $price = (float) $added->price;
+        $remaining = round((float) $appointment->booked_price - $price, 2);
+
+        if ($remaining + 0.001 < $appointment->verifiedPaid()) {
+            return back()->with('error', 'Cannot remove this service — it would drop the total below the amount already collected.');
+        }
+
+        DB::transaction(function () use ($appointment, $added, $price) {
+            $added->delete();
+            $appointment->decrement('booked_price', $price);
+        });
+
+        return back()->with('success', 'Service removed from this appointment.');
     }
 
     /**

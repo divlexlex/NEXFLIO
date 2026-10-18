@@ -19,7 +19,7 @@ class ReceiptController extends Controller
     /** Client view — own appointments only (others 404). */
     public function client(Request $request, $id)
     {
-        $appointment = Appointment::with(['service', 'payments'])
+        $appointment = Appointment::with(['service', 'payments', 'addedServices.service'])
             ->where('user_id', $request->user()->id)
             ->findOrFail($id);
 
@@ -35,7 +35,7 @@ class ReceiptController extends Controller
     /** Admin/Manager view — any appointment (admin role middleware applies). */
     public function admin(Request $request, $id)
     {
-        $appointment = Appointment::with(['service', 'payments'])->findOrFail($id);
+        $appointment = Appointment::with(['service', 'payments', 'addedServices.service'])->findOrFail($id);
 
         if ($appointment->status !== AppointmentStatus::Completed) {
             return back()->withErrors([

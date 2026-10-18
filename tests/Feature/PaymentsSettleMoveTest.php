@@ -179,7 +179,7 @@ class PaymentsSettleMoveTest extends TestCase
         $this->actingAs($this->manager)
             ->get(route('admin.payments', ['status' => 'pending']))
             ->assertOk()
-            ->assertDontSee('Manicure');
+            ->assertDontSee($appointment->referenceCode(), false);
 
         // Manager confirms the Cash request from the Appointments side.
         $this->actingAs($this->manager)->patch(
@@ -196,11 +196,12 @@ class PaymentsSettleMoveTest extends TestCase
         $this->actingAs($this->manager)
             ->get(route('admin.payments', ['status' => 'pending']))
             ->assertOk()
-            ->assertDontSee('Manicure');
+            ->assertDontSee($appointment->referenceCode(), false);
 
         $this->actingAs($this->manager)
             ->get(route('admin.payments', ['status' => 'all']))
             ->assertOk()
+            ->assertSee($appointment->referenceCode(), false)
             ->assertSee('Record branch payment')
             ->assertSee('value="179.00"', false);
 
@@ -262,21 +263,21 @@ class PaymentsSettleMoveTest extends TestCase
         $this->actingAs($this->manager)
             ->get(route('admin.payments', ['status' => 'all', 'balance' => 'due']))
             ->assertOk()
-            ->assertSee('Package SAM')
+            ->assertSee($sam->referenceCode(), false)
             ->assertSee('value="3899.00"', false)
-            ->assertDontSee('Manicure');
+            ->assertDontSee($settled->referenceCode(), false);
 
         $this->actingAs($this->manager)
             ->get(route('admin.payments', ['status' => 'all', 'balance' => 'paid']))
             ->assertOk()
-            ->assertSee('Manicure')
-            ->assertDontSee('Package SAM');
+            ->assertSee($settled->referenceCode(), false)
+            ->assertDontSee($sam->referenceCode(), false);
 
         // Both dropdowns reflect the active filters.
         $html = $this->actingAs($this->manager)
             ->get(route('admin.payments', ['status' => 'verified', 'balance' => 'due']))
             ->assertOk()
-            ->assertSee('Package SAM')
+            ->assertSee($sam->referenceCode(), false)
             ->getContent();
 
         $this->assertMatchesRegularExpression('/<option value="verified"[^>]*selected/', $html);

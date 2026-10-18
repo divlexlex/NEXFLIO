@@ -187,13 +187,27 @@
         </div>
 
         <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-hash me-1"></i>Appointment ID</span><span class="fw-semibold" id="dw-refcode">–</span></div>
-        <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-scissors me-1"></i>Service</span><span><span id="dw-service">–</span><br><span class="small text-muted" id="dw-servicemeta"></span></span></div>
+        <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-scissors me-1"></i>Service</span><span><span id="dw-service">–</span><br><span class="small text-muted" id="dw-servicemeta"></span><span class="d-flex flex-column gap-1 mt-1" id="dw-availed-list"></span></span></div>
         <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-tag me-1"></i>Type</span><span id="dw-type">–</span></div>
         <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-calendar3 me-1"></i>When</span><span><span id="dw-date">–</span><br><span class="small text-muted" id="dw-time"></span></span></div>
         <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-person-badge me-1"></i>Staff</span><span id="dw-staff">–</span></div>
         <div class="nx-drawer-row"><span class="nx-drawer-label"><i class="bi bi-flag me-1"></i>Status</span><span class="badge text-bg-light border" id="dw-status">–</span></div>
         <div class="nx-drawer-row" id="dw-payment-row"><span class="nx-drawer-label"><i class="bi bi-cash-coin me-1"></i>Payment</span><span><span id="dw-payment">–</span> <a href="#" target="_blank" class="ms-1 small d-none" id="dw-proof">View proof <i class="bi bi-box-arrow-up-right"></i></a><br><span class="small text-muted" id="dw-paystate"></span></span></div>
         <div class="nx-drawer-row" id="dw-notes-row"><span class="nx-drawer-label"><i class="bi bi-sticky me-1"></i>Notes</span><span class="small" id="dw-notes"></span></div>
+
+        {{-- Services added to this same appointment AFTER booking (same
+             Appointment ID), READ-ONLY here. Creation-time avails live under
+             Service above; this row lists only the ones added later from the
+             Payments add flow, so it stays hidden until at least one exists.
+             Their prices are already folded into the Balance due shown below.
+             Removing is still offered while the appointment is Booked or
+             In-Service (Completed is a closed money record). --}}
+        <div class="nx-drawer-row d-none" id="dw-added-row">
+            <span class="nx-drawer-label"><i class="bi bi-plus-slash-minus me-1"></i>Additional services</span>
+            <span class="small">
+                <span class="d-flex flex-column gap-1" id="dw-added-list"></span>
+            </span>
+        </div>
 
         {{-- Money decisions happen in Payments: for an Unverified booking
              with a pending payment the drawer offers no status actions —
@@ -231,6 +245,11 @@
             @csrf @method('PATCH')
             <input type="hidden" name="status" id="dw-status-target">
             <input type="hidden" name="rejection_reason" id="dw-reason">
+        </form>
+
+        {{-- Hidden DELETE form the per-row Remove buttons submit --}}
+        <form method="POST" id="dw-removeServiceForm" class="d-none">
+            @csrf @method('DELETE')
         </form>
     </div>
 </div>
@@ -304,7 +323,8 @@
             </div>
             <div class="modal-body">
                 <p class="text-muted small">
-                    Cash is collected on the spot, so the booking is created already verified.
+                    Walk-ins start as Booked with the full amount as balance — record the payment
+                    in Payments when the client pays; check-out appears once the balance is settled.
                 </p>
                 <div class="mb-2">
                     <label class="form-label">Client name</label>
@@ -330,6 +350,19 @@
                     <select name="personnel_id" id="walkin-personnel" class="form-select" required></select>
                 </div>
                 <div id="walkin-staff-package" class="d-none"></div>
+                {{-- Avail services on the same visit: repeatable regular
+                     services (active, non-package) with an optional variant
+                     and staff pick. Their durations add to the main service's
+                     when the closing-time check runs. --}}
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label mb-0">Avail services <span class="text-muted">(add 1 or more service)</span></label>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="walkin-extra-add">
+                            <i class="bi bi-plus-lg me-1"></i>Add another service
+                        </button>
+                    </div>
+                    <div id="walkin-extras" class="mt-2"></div>
+                </div>
                 <div class="row">
                     <div class="col mb-2">
                         <label class="form-label">Date</label>
@@ -544,6 +577,112 @@
             syncWalkInStaff();
         })();
 
+        // Walk-in EXTRA services: repeatable REGULAR (active, non-package)
+        // rows under the main service. Each row offers the service, a variant
+        // select only when that service has variants, and an optional staff
+        // select filtered to the service category (disabled when the category
+        // has no linked positions). Packages stay a MAIN-row concern.
+        (function () {
+            const wrap = document.getElementById('walkin-extras');
+            const addBtn = document.getElementById('walkin-extra-add');
+            const servicesCatalog = @json($servicesJson);
+            if (!wrap || !addBtn) return;
+
+            const regularServices = servicesCatalog.filter((s) => !s.is_package);
+            let nextIndex = 0;
+
+            function serviceOptions(selectedId) {
+                return regularServices.map((s) => {
+                    const selected = String(s.id) === String(selectedId) ? ' selected' : '';
+                    return '<option value="' + s.id + '"' + selected + '>' + esc(s.name) +
+                        ' — ₱' + Number(s.price).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</option>';
+                }).join('');
+            }
+
+            // Resync a row's variant + staff controls to its chosen service.
+            function syncRow(row) {
+                const serviceSelect = row.querySelector('[data-extra-service]');
+                const variantWrap = row.querySelector('[data-extra-variant-wrap]');
+                const variantSelect = row.querySelector('[data-extra-variant]');
+                const personnelSelect = row.querySelector('[data-extra-personnel]');
+                const service = regularServices.find((s) => String(s.id) === String(serviceSelect.value));
+
+                const variants = (service && service.variants) || [];
+                if (!variants.length) {
+                    variantWrap.classList.add('d-none');
+                    variantSelect.innerHTML = '';
+                    variantSelect.required = false;
+                } else {
+                    variantWrap.classList.remove('d-none');
+                    variantSelect.required = true;
+                    variantSelect.innerHTML = variants.map((v) =>
+                        '<option value="' + esc(v.label) + '">' + esc(v.label) +
+                        ' — ₱' + Number(v.price).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</option>'
+                    ).join('');
+                }
+
+                const names = (service && service.eligible_positions) || [];
+                if (!names.length) {
+                    // No linked positions → nobody eligible; stays null.
+                    personnelSelect.innerHTML = '<option value="">No eligible staff</option>';
+                    personnelSelect.disabled = true;
+                } else {
+                    personnelSelect.disabled = false;
+                    personnelSelect.innerHTML = '<option value="">No specific staff</option>' +
+                        staffForEligiblePositions(names).map((s) =>
+                            '<option value="' + s.id + '">' + esc(s.name) + (s.position ? ' (' + esc(s.position) + ')' : '') + '</option>'
+                        ).join('');
+                }
+            }
+
+            function buildRow() {
+                const index = nextIndex++;
+                const row = document.createElement('div');
+                row.className = 'walkin-extra border rounded p-2 mb-2';
+                row.setAttribute('data-extra-row', '');
+                row.innerHTML =
+                    '<div class="d-flex justify-content-between align-items-center mb-1">' +
+                        '<span class="small text-muted">Extra service</span>' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" data-extra-remove>&times;</button>' +
+                    '</div>' +
+                    '<div class="mb-2">' +
+                        '<label class="form-label small mb-1">Service</label>' +
+                        '<select name="extras[' + index + '][service_id]" class="form-select form-select-sm" data-extra-service required>' +
+                            serviceOptions(regularServices[0] && regularServices[0].id) +
+                        '</select>' +
+                    '</div>' +
+                    '<div class="mb-2 d-none" data-extra-variant-wrap>' +
+                        '<label class="form-label small mb-1">Variant</label>' +
+                        '<select name="extras[' + index + '][variant_label]" class="form-select form-select-sm" data-extra-variant></select>' +
+                    '</div>' +
+                    '<div>' +
+                        '<label class="form-label small mb-1">Staff <span class="text-muted">(optional)</span></label>' +
+                        '<select name="extras[' + index + '][personnel_id]" class="form-select form-select-sm" data-extra-personnel></select>' +
+                    '</div>';
+                syncRow(row);
+                return row;
+            }
+
+            addBtn.addEventListener('click', () => {
+                wrap.appendChild(buildRow());
+                wrap.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            wrap.addEventListener('change', (event) => {
+                const row = event.target.closest('[data-extra-row]');
+                if (row && event.target.matches('[data-extra-service]')) {
+                    syncRow(row);
+                }
+            });
+
+            wrap.addEventListener('click', (event) => {
+                const removeBtn = event.target.closest('[data-extra-remove]');
+                if (!removeBtn) return;
+                removeBtn.closest('[data-extra-row]').remove();
+                wrap.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        })();
+
         // Walk-in ONLY: warn BEFORE submit when the start would finish after
         // the configured walk-in close (default 01:00 next morning). Mirrors
         // App\Support\WalkInHours — not BusinessHours::startFitsOnDate(),
@@ -589,6 +728,19 @@
                 submitBtn.disabled = false;
             }
 
+            // Minutes added by every extra-service row chosen on the visit;
+            // the closing check judges main + extras together.
+            function extraDurationMinutes() {
+                const container = document.getElementById('walkin-extras');
+                if (!container) return 0;
+                let total = 0;
+                container.querySelectorAll('[data-extra-service]').forEach((select) => {
+                    const extra = nxServices.find((s) => String(s.id) === String(select.value));
+                    total += Number((extra && extra.duration_minutes) || 0);
+                });
+                return total;
+            }
+
             function validateWalkinTime() {
                 // Neutral until there is a date, time and service to judge —
                 // the inputs' own `required` attributes handle the empties.
@@ -598,7 +750,7 @@
                 }
 
                 const service = nxServices.find((s) => String(s.id) === String(serviceSelect.value));
-                const duration = Number((service && service.duration_minutes) || 0);
+                const duration = Number((service && service.duration_minutes) || 0) + extraDurationMinutes();
 
                 // Parse YYYY-MM-DD by hand — never new Date(value), whose
                 // timezone behavior can shift the weekday.
@@ -640,6 +792,9 @@
 
             document.getElementById('walkInModal')?.addEventListener('shown.bs.modal', validateWalkinTime);
             serviceSelect.addEventListener('change', validateWalkinTime);
+            // Adding / removing / switching an extra row also changes the
+            // visit's total duration — the extras block bubbles a change event.
+            document.getElementById('walkin-extras')?.addEventListener('change', validateWalkinTime);
             dateInput.addEventListener('change', validateWalkinTime);
             timeInput.addEventListener('change', validateWalkinTime);
             timeInput.addEventListener('input', validateWalkinTime);
@@ -698,6 +853,50 @@
             const notesRow = document.getElementById('dw-notes-row');
             if (p.notes) { notesRow.classList.remove('d-none'); document.getElementById('dw-notes').textContent = p.notes; }
             else { notesRow.classList.add('d-none'); }
+
+            // Avail services: creation-time picks read as part of the
+            // appointment's services (under Service above); services added
+            // later from Payments are the separate "Additional services"
+            // row, hidden until at least one exists. Both are read-only
+            // here; Remove stays available while the appointment can still
+            // be modified (Booked / In-Service).
+            const availedList = document.getElementById('dw-availed-list');
+            const addedList = document.getElementById('dw-added-list');
+            const addedRow = document.getElementById('dw-added-row');
+            const addedRows = p.addedServices || [];
+            const creationRows = addedRows.filter((row) => (row.source || 'payment') === 'creation');
+            const paymentRows = addedRows.filter((row) => (row.source || 'payment') !== 'creation');
+
+            function addedLine(row) {
+                const line = document.createElement('div');
+                line.className = 'd-flex justify-content-between align-items-start gap-2';
+                const label = row.service + (row.variant ? ' (' + row.variant + ')' : '');
+                line.innerHTML =
+                    '<span>' + esc(label) +
+                    ' · ₱' + Number(row.price).toLocaleString(undefined, { minimumFractionDigits: 2 }) +
+                    '<br><span class="text-muted">' + esc(row.personnel || '—') + '</span></span>';
+                if (p.canAddServices) {
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'btn btn-sm btn-outline-danger py-0 px-1';
+                    removeBtn.textContent = 'Remove';
+                    removeBtn.addEventListener('click', () => {
+                        if (!confirm('Remove ' + label + ' from this appointment?')) return;
+                        const form = document.getElementById('dw-removeServiceForm');
+                        form.action = statusBase + '/' + event.id + '/additional-services/' + row.id;
+                        form.submit();
+                    });
+                    line.appendChild(removeBtn);
+                }
+                return line;
+            }
+
+            availedList.innerHTML = '';
+            creationRows.forEach((row) => availedList.appendChild(addedLine(row)));
+
+            addedList.innerHTML = '';
+            paymentRows.forEach((row) => addedList.appendChild(addedLine(row)));
+            addedRow.classList.toggle('d-none', paymentRows.length === 0);
 
             // No-personnel warning: only when nobody is assigned and the
             // appointment is still actionable (not terminal).

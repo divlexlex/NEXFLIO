@@ -58,6 +58,16 @@ class Appointment extends Model
     }
 
     /**
+     * Extra services added after booking, under the same Appointment ID.
+     * Their prices are already folded into booked_price; this relation is for
+     * display (drawer, receipt, My Bookings) and commission accrual.
+     */
+    public function addedServices()
+    {
+        return $this->hasMany(AppointmentAddedService::class);
+    }
+
+    /**
      * Packages-only: one row per required staff position. Empty for regular
      * services that only use personnel_id.
      */

@@ -77,8 +77,11 @@ class RevenueRecognitionTest extends TestCase
         $appointment = $this->createWalkIn();
 
         $this->assertSame(AppointmentStatus::Booked, $appointment->status);
-        $this->assertSame(PaymentStatus::Verified, $appointment->payment->status);
-        $this->assertSame('500.00', (string) $appointment->payment->amount);
+        // Walk-ins now start with NO payment — the booking has a balance but
+        // no recognized revenue until the visit completes.
+        $this->assertNull($appointment->payment);
+        $this->assertSame(0.0, $appointment->verifiedPaid());
+        $this->assertSame(500.0, $appointment->balanceDue());
         $this->assertNull($appointment->completed_at);
         $this->assertEquals($before, $this->revenue->sumBetween());
         $this->assertEquals(0.0, $this->revenue->amountFor($appointment->fresh()));
@@ -148,8 +151,9 @@ class RevenueRecognitionTest extends TestCase
 
         $appointment->refresh();
         $this->assertSame(AppointmentStatus::Cancelled, $appointment->status);
-        // Cash collection row is preserved (collection ≠ recognition).
-        $this->assertSame(PaymentStatus::Verified, $appointment->payment->status);
+        // No money was ever collected — walk-ins start unpaid — and cancelling
+        // still recognizes nothing.
+        $this->assertNull($appointment->payment);
         $this->assertEquals($before, $this->revenue->sumBetween());
         $this->assertEquals(0.0, $this->revenue->amountFor($appointment));
     }

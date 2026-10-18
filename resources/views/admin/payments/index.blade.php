@@ -14,6 +14,16 @@
             @endforeach
         </select>
     </div>
+    {{-- Source filter — walk-ins (walk_in_name set) vs online bookings, kept
+         alongside the other selects. Persisted like status/balance. --}}
+    <div>
+        <label class="form-label small text-muted mb-0" for="source-filter">Source</label>
+        <select name="source" id="source-filter" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+            @foreach(['all' => 'All sources', 'walkin' => 'Walk-ins', 'online' => 'Online'] as $value => $label)
+                <option value="{{ $value }}" @selected($currentSource === $value)>{{ $label }}</option>
+            @endforeach
+        </select>
+    </div>
     {{-- Balance filter — narrows the active tab's cards by the appointment's
          derived balanceDue(), via query params so it survives reloads and tab
          switches (see PaymentController@index). --}}
@@ -32,12 +42,19 @@
         @php($balanceDue = $appointment->balanceDue())
         @php($pendingPayment = $appointment->payments->first(fn ($p) => $p->status->value === 'pending'))
         {{-- Header badge from the payment state: Paid in full / Cancelled /
-             Pending verification (Pending tab) / Booked (active, owing). --}}
-        @php($badge = $balanceDue <= 0 ? ['Paid in full', 'success'] : ($appointment->status->value === 'cancelled' ? ['Cancelled', 'danger'] : (($currentStatus === 'pending' || $appointment->status->value === 'unverified') ? ['Pending verification', 'warning'] : ['Booked', 'primary'])))
+             Pending verification (has a pending online payment) / Booked
+             (active, owing). A fresh walk-in has no payment row at all, so it
+             reads Booked rather than Pending verification. --}}
+        @php($badge = $balanceDue <= 0 ? ['Paid in full', 'success'] : ($appointment->status->value === 'cancelled' ? ['Cancelled', 'danger'] : ((($pendingPayment && $pendingPayment->method !== 'cash') || $appointment->status->value === 'unverified') ? ['Pending verification', 'warning'] : ['Booked', 'primary'])))
         <div class="col-md-6 col-xl-4">
             <div class="card p-3 h-100 d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-start mb-2">
-                    <strong>{{ $appointment->clientName() ?? '—' }}</strong>
+                    <strong>
+                        {{ $appointment->clientName() ?? '—' }}
+                        @if($appointment->walk_in_name !== null)
+                            <span class="badge text-bg-secondary ms-1">Walk-in</span>
+                        @endif
+                    </strong>
                     <span>
                         @php($refundRemark = $appointment->cancellationRefundRemark())
                         @if($refundRemark === 'refund')
@@ -48,8 +65,34 @@
                         <span class="badge text-bg-{{ $badge[1] }}">{{ $badge[0] }}</span>
                     </span>
                 </div>
+                {{-- ONE list of what the customer availed under this single
+                     Appointment ID: the main service, then each added service,
+                     each with its price. Creation-time avails are part of the
+                     appointment's services (no tag, no down-payment line); only
+                     services added later from the Payments flow carry the
+                     "Added" tag and their recorded 50% down payment. The
+                     balance already sums them all via booked_price. --}}
+                <div class="small mb-2" data-card-services>
+                    <div class="d-flex justify-content-between gap-2">
+                        <span>{{ $appointment->displayServiceName() }}</span>
+                        <span class="text-muted text-nowrap">₱{{ number_format((float) ($appointment->service?->price ?? 0), 2) }}</span>
+                    </div>
+                    @foreach($appointment->addedServices as $added)
+                        <div class="d-flex justify-content-between gap-2">
+                            <span>
+                                {{ $added->displayName() }}
+                                @if($added->isPayment())
+                                    <span class="badge text-bg-secondary ms-1">Added</span>
+                                    {{-- Recorded 50% down payment for this added
+                                         service (display only). --}}
+                                    <span class="d-block text-muted">Down payment (50%): ₱{{ number_format(round((float) $added->price * 0.5, 2), 2) }}</span>
+                                @endif
+                            </span>
+                            <span class="text-muted text-nowrap">₱{{ number_format($added->price, 2) }}</span>
+                        </div>
+                    @endforeach
+                </div>
                 <div class="small text-muted">
-                    {{ $appointment->displayServiceName() }} ·
                     {{ $appointment->appointment_date?->format('M j') }}
                     {{ \Carbon\Carbon::parse($appointment->start_time)->format('g:i A') }}
                 </div>
@@ -62,6 +105,20 @@
                     <div class="text-muted">Paid at branch ₱{{ number_format($appointment->paidAtBranch(), 2) }}</div>
                     <div class="fw-bold">Balance due ₱{{ number_format($balanceDue, 2) }}</div>
                 </div>
+
+                {{-- Add another service. Booked or In-Service appointments
+                     accept additions — see storeAdditionalService. Opens the
+                     SAME shared modal; the balance reacts to the raised
+                     booked_price on reload, and the modal's 50% down payment
+                     applies to this added service. --}}
+                @if(in_array($appointment->status->value, ['booked', 'in-service'], true))
+                    <button type="button" class="btn btn-sm btn-outline-secondary mb-2"
+                            data-bs-toggle="modal" data-bs-target="#addedServiceModal"
+                            data-appointment-id="{{ $appointment->id }}"
+                            data-personnel-id="{{ $appointment->personnel_id }}">
+                        <i class="bi bi-plus-lg me-1"></i>Add service
+                    </button>
+                @endif
 
                 @foreach($appointment->payments as $payment)
                     <div class="border-top py-2 small">
@@ -265,6 +322,9 @@
 </div>
 
 <div class="mt-3">{{ $appointments->links() }}</div>
+
+{{-- SHARED ADD-SERVICE MODAL (same partial the Appointments drawer uses) --}}
+@include('admin.partials.added-service-modal')
 
 {{-- REJECT MODAL --}}
 <div class="modal fade" id="rejectModal" tabindex="-1">
