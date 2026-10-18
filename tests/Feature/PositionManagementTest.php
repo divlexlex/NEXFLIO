@@ -238,4 +238,34 @@ class PositionManagementTest extends TestCase
         // … the unlinked custom position joins no pool and breaks nothing.
         $this->assertStringNotContainsString('Uma Unlinked', $html);
     }
+
+    public function test_package_booking_eligibility_uses_selected_employee_categories(): void
+    {
+        $facialId = Position::where('name', 'Facial Technician')->value('id');
+        $massageId = Position::where('name', 'Massage Technician')->value('id');
+
+        $package = Service::create([
+            'name' => 'Position Test Package',
+            'category' => 'Packages',
+            'description' => 'Test',
+            'package_details' => "Facial\nMassage",
+            'price' => 1500,
+            'duration_minutes' => 90,
+            'status' => 'active',
+            'service_location_type' => 'branch',
+        ]);
+        $package->positions()->sync([$facialId, $massageId]);
+
+        $facialStaff = $this->makeStaff('Faye', 'Facial', 'Facial Technician');
+        $massageStaff = $this->makeStaff('Maya', 'Massage', 'Massage Technician');
+        $nailStaff = $this->makeStaff('Nora', 'Nails', 'Nail Technician');
+
+        $html = $this->actingAs($this->client)->get(route('account.booking.branch.schedule', [
+            'service' => $package->id, 'date' => now()->addDay()->toDateString(), 'personnel' => 'any',
+        ]))->assertOk()->getContent();
+
+        $this->assertStringContainsString('Faye Facial', $html);
+        $this->assertStringContainsString('Maya Massage', $html);
+        $this->assertStringNotContainsString('Nora Nails', $html);
+    }
 }

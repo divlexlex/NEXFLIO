@@ -39,14 +39,19 @@ class PackageDetailsFeeFallbackTest extends TestCase
 
     private function servicePayload(array $overrides = []): array
     {
-        return array_merge([
+        // Packages require at least one catering position; Facial Technician
+        // is seeded by PositionSeeder and is a safe default for store tests.
+        $defaults = [
             'name' => 'Nx Package Service',
             'category' => 'Packages',
             'description' => 'Test',
             'price' => 500,
             'duration_minutes' => 60,
             'status' => 'active',
-        ], $overrides);
+            'position_ids' => [\App\Models\Position::where('name', 'Facial Technician')->value('id')],
+        ];
+
+        return array_merge($defaults, $overrides);
     }
 
     private function makeService(array $overrides = []): Service
@@ -104,10 +109,13 @@ class PackageDetailsFeeFallbackTest extends TestCase
         $this->assertStringContainsString('<div class="mb-2 d-none" id="svc-package-details-wrap">', $html);
         $this->assertStringContainsString('id="svc-package-details"', $html);
         $this->assertStringContainsString('id="svc-package-picker"', $html);
+        $this->assertStringContainsString('id="svc-package-positions"', $html);
         $this->assertStringContainsString('Build from offered services', $html);
+        $this->assertStringContainsString('Employee categories that will cater this package', $html);
         $this->assertStringContainsString('syncPackageDetails', $html);
         $this->assertStringContainsString("cat.value === 'Packages'", $html);
         $this->assertStringContainsString('data-package-details=', $html);
+        $this->assertStringContainsString('data-position-ids=', $html);
     }
 
     public function test_admin_can_create_package_from_offered_service_names(): void
@@ -131,6 +139,41 @@ class PackageDetailsFeeFallbackTest extends TestCase
         $this->assertSame($details, $package->package_details);
         $this->assertSame('1198.00', (string) $package->price);
         $this->assertSame(105, $package->duration_minutes);
+    }
+
+    public function test_packages_require_at_least_one_employee_category(): void
+    {
+        $this->actingAs($this->owner)->post(
+            route('admin.services.store'),
+            $this->servicePayload([
+                'name' => 'No Positions Package',
+                'package_details' => 'Something included',
+                'position_ids' => [],
+            ])
+        )->assertSessionHasErrors('position_ids');
+
+        $this->assertDatabaseMissing('services', ['name' => 'No Positions Package']);
+    }
+
+    public function test_package_persists_multiple_employee_categories(): void
+    {
+        $facialId = \App\Models\Position::where('name', 'Facial Technician')->value('id');
+        $massageId = \App\Models\Position::where('name', 'Massage Technician')->value('id');
+
+        $this->actingAs($this->owner)->post(
+            route('admin.services.store'),
+            $this->servicePayload([
+                'name' => 'Multi Position Package',
+                'package_details' => "Facial\nMassage",
+                'position_ids' => [$facialId, $massageId],
+            ])
+        )->assertRedirect()->assertSessionHasNoErrors();
+
+        $package = Service::where('name', 'Multi Position Package')->firstOrFail();
+        $this->assertEqualsCanonicalizing(
+            ['Facial Technician', 'Massage Technician'],
+            $package->positions()->pluck('name')->all()
+        );
     }
 
     public function test_public_services_page_renders_package_inclusions(): void

@@ -111,7 +111,7 @@ class BookingController extends Controller
 
     public function serviceShow($id)
     {
-        $service = Service::bookableAtBranch()->with('variants')->findOrFail($id);
+        $service = Service::bookableAtBranch()->with(['variants', 'positions'])->findOrFail($id);
 
         return view('account.booking.service-detail', [
             'service' => $service,
@@ -819,13 +819,20 @@ class BookingController extends Controller
     {
         $dayOfWeek = (int) Carbon::parse($date)->dayOfWeek; // 0=Sun
 
-        // Map service category to staff positions for filtering, driven by
-        // the positions table (see App\Models\Position): a category WITH
-        // linked positions shows only staff holding one of them; a category
+        // Staff filter: Packages use the explicit multi-position list on the
+        // service (Facial + Massage packages need both techs). Everything
+        // else still maps category → positions via the positions table; a
+        // category WITH linked positions shows only those staff, a category
         // with NONE keeps the no-filter behaviour below.
-        $positionNames = $service?->category
-            ? Position::namesForServiceCategory($service->category)
-            : [];
+        if ($service?->category === 'Packages') {
+            $positionNames = $service->relationLoaded('positions')
+                ? $service->positions->pluck('name')->all()
+                : $service->positions()->pluck('positions.name')->all();
+        } else {
+            $positionNames = $service?->category
+                ? Position::namesForServiceCategory($service->category)
+                : [];
+        }
 
         $weekStart = StaffShiftAssignment::weekStartOf($date);
         $rosterWeek = StaffShiftAssignment::weekHasRoster($weekStart);

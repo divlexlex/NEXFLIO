@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Concerns\HandlesImageUpload;
 use App\Http\Controllers\Controller;
+use App\Models\Position;
 use App\Models\Service;
 use App\Models\ServiceVariant;
 use App\Support\ServiceCatalog;
@@ -32,7 +33,7 @@ class ServiceController extends Controller
             'status' => trim((string) $request->query('status', '')),
         ];
 
-        $services = Service::with('variants')
+        $services = Service::with(['variants', 'positions'])
             ->when($filters['q'] !== '', fn ($query) => $query->where('name', 'like', '%'.$filters['q'].'%'))
             ->when($filters['category'] !== '', fn ($query) => $query->where('category', $filters['category']))
             ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
@@ -57,6 +58,18 @@ class ServiceController extends Controller
             ])
             ->values();
 
+        // Staff roles a package can require (id + name + the service
+        // category they fulfil — used to auto-suggest from inclusions).
+        $positions = Position::query()
+            ->orderBy('id')
+            ->get(['id', 'name', 'service_category'])
+            ->map(fn (Position $position) => [
+                'id' => $position->id,
+                'name' => $position->name,
+                'service_category' => $position->service_category,
+            ])
+            ->values();
+
         return view('admin.services.index', [
             'services' => $services,
             'filters' => $filters,
@@ -65,20 +78,24 @@ class ServiceController extends Controller
             'statuses' => Service::query()->distinct()->orderBy('status')->pluck('status')->all(),
             'totalServices' => Service::count(),
             'offerableServices' => $offerableServices,
+            'positions' => $positions,
         ]);
     }
 
     public function store(Request $request)
     {
-        $validated = $this->applyImage($request, null, $this->validated($request), 'services');
+        $validated = $this->validated($request);
+        $positionIds = $this->pullPositionIds($validated);
+        $validated = $this->applyImage($request, null, $validated, 'services');
 
         $this->validateVariants($request);
         $this->assertVariantLabelsUnique($request);
 
-        DB::transaction(function () use ($request, $validated) {
+        DB::transaction(function () use ($request, $validated, $positionIds) {
             $service = Service::create($validated);
 
             $this->syncVariants($request, $service);
+            $this->syncPositions($service, $positionIds);
         });
 
         return back()->with('success', 'Service added.');
@@ -89,15 +106,17 @@ class ServiceController extends Controller
         $service = Service::findOrFail($id);
 
         $validated = $this->validated($request, $service);
+        $positionIds = $this->pullPositionIds($validated);
 
         $this->validateVariants($request);
         $this->assertVariantLabelsUnique($request, $service);
 
-        DB::transaction(function () use ($request, $service, $validated) {
+        DB::transaction(function () use ($request, $service, $validated, $positionIds) {
             // Retiring a service via the Status field keeps it out of new bookings while preserving history.
             $service->update($this->applyImage($request, $service, $validated, 'services'));
 
             $this->syncVariants($request, $service);
+            $this->syncPositions($service, $positionIds);
         });
 
         return back()->with('success', 'Service updated.');
@@ -129,12 +148,40 @@ class ServiceController extends Controller
             // category: required there, optional everywhere else. Stored
             // exactly as typed (one inclusion per line).
             'package_details' => ['nullable', 'string', 'required_if:category,Packages'],
+            // Packages must name at least one staff position that can cater
+            // them (Facial + Massage packages need both techs, etc.).
+            'position_ids' => ['nullable', 'array', 'required_if:category,Packages', 'min:1'],
+            'position_ids.*' => ['integer', 'distinct', 'exists:positions,id'],
             'price' => 'required|numeric|min:0',
             'duration_minutes' => 'required|integer|min:5',
             'status' => ['required', Rule::in(['active', 'inactive', 'suspended'])],
             'badge' => 'nullable|string|max:50',
             'image' => 'nullable|image|max:4096',
         ]);
+    }
+
+    /**
+     * position_ids is not a services column — pull it out before create/update
+     * and return the id list (empty for non-Packages).
+     *
+     * @param  array<string, mixed>  $validated
+     * @return list<int>
+     */
+    private function pullPositionIds(array &$validated): array
+    {
+        $ids = array_values(array_map('intval', $validated['position_ids'] ?? []));
+        unset($validated['position_ids']);
+
+        if (($validated['category'] ?? null) !== 'Packages') {
+            return [];
+        }
+
+        return $ids;
+    }
+
+    private function syncPositions(Service $service, array $positionIds): void
+    {
+        $service->positions()->sync($positionIds);
     }
 
     /**

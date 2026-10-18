@@ -63,4 +63,14 @@ class Service extends Model
     {
         return $this->hasMany(ServiceVariant::class)->orderBy('sort')->orderBy('id');
     }
+
+    /**
+     * Staff positions that can cater this service. Used for Packages that
+     * span multiple service categories; regular services leave this empty
+     * and keep the category→position filter on App\Models\Position.
+     */
+    public function positions()
+    {
+        return $this->belongsToMany(Position::class, 'service_positions')->withTimestamps();
+    }
 }

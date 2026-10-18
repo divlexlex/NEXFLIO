@@ -36,4 +36,10 @@ class Position extends Model
             ->pluck('name')
             ->all();
     }
+
+    /** Packages (and any future multi-position services) that list this role. */
+    public function services()
+    {
+        return $this->belongsToMany(Service::class, 'service_positions')->withTimestamps();
+    }
 }

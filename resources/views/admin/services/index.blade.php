@@ -69,6 +69,7 @@
                                     data-category="{{ $service->category }}"
                                     data-description="{{ $service->description }}"
                                     data-package-details="{{ $service->package_details }}"
+                                    data-position-ids="{{ $service->positions->pluck('id')->values()->toJson() }}"
                                     data-price="{{ $service->price }}"
                                     data-duration="{{ $service->duration_minutes }}"
                                     data-status="{{ $service->status }}"
@@ -164,6 +165,16 @@
                     <label class="form-label" for="svc-package-details">Package details — what's included</label>
                     <textarea name="package_details" id="svc-package-details" class="form-control" rows="4" placeholder="One inclusion per line"></textarea>
                     <div class="form-text">Shown on the public Packages services. Filled from selected services, or type custom lines.</div>
+
+                    <label class="form-label mt-3" for="svc-package-positions">Employee categories that will cater this package</label>
+                    <div class="form-text mt-0 mb-2">
+                        Select every staff position that can deliver the included services (e.g. Facial Technician and Massage Technician). At least one is required.
+                    </div>
+                    <div id="svc-package-positions" class="border rounded p-2"
+                         data-positions='@json($positions)'>
+                        {{-- Checkboxes rendered by JS from data-positions. --}}
+                    </div>
+                    <div class="invalid-feedback d-none" id="svc-package-positions-error">Select at least one employee category.</div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Badge <span class="text-muted">(optional)</span></label>
@@ -234,8 +245,15 @@
         let syncDetailsFromPicker = true;
 
         const picker = document.getElementById('svc-package-picker');
+        const positionsWrap = document.getElementById('svc-package-positions');
         let offerable = [];
+        let positionCatalog = [];
+        // When true, ticking included services also checks matching staff
+        // positions (by service_category). Cleared after the admin manually
+        // toggles a position so their choice is not overwritten.
+        let syncPositionsFromServices = true;
         try { offerable = JSON.parse(picker?.dataset.offerable || '[]'); } catch (e) { offerable = []; }
+        try { positionCatalog = JSON.parse(positionsWrap?.dataset.positions || '[]'); } catch (e) { positionCatalog = []; }
 
         function selectedOfferables() {
             if (!picker) return [];
@@ -273,13 +291,56 @@
             document.getElementById('svc-duration').value = Math.max(5, mins);
         }
 
+        function suggestPositionsFromServices() {
+            if (!syncPositionsFromServices || !positionsWrap) return;
+            const categories = new Set(
+                selectedOfferables().map((s) => s.category).filter(Boolean)
+            );
+            positionsWrap.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+                const position = positionCatalog.find((p) => String(p.id) === cb.value);
+                const match = position?.service_category && categories.has(position.service_category);
+                cb.checked = Boolean(match);
+            });
+        }
+
         function onPickerChange() {
             writeDetailsFromSelection();
             updateSelectionSummary();
+            suggestPositionsFromServices();
             // Creating a package: keep price/duration aligned with the
             // selection. Editing: only update the summary — use the button
             // to apply totals so existing package pricing is not overwritten.
             if (!editingServiceId) applySelectedTotals();
+        }
+
+        function renderPackagePositions(preselectedIds) {
+            if (!positionsWrap) return;
+            const selected = new Set((preselectedIds || []).map(String));
+
+            if (!positionCatalog.length) {
+                positionsWrap.innerHTML = '<p class="small text-muted mb-0">No staff positions yet. Add them on the Employees page first.</p>';
+                return;
+            }
+
+            positionsWrap.innerHTML = '';
+            positionCatalog.forEach((position) => {
+                const id = 'pkg-position-' + position.id;
+                const wrap = document.createElement('div');
+                wrap.className = 'form-check';
+                const catHint = position.service_category
+                    ? ' <span class="text-muted">(' + position.service_category + ')</span>'
+                    : '';
+                wrap.innerHTML =
+                    '<input class="form-check-input" type="checkbox" name="position_ids[]" value="' + position.id + '" id="' + id + '">' +
+                    '<label class="form-check-label small" for="' + id + '">' + position.name + catHint + '</label>';
+                const cb = wrap.querySelector('input');
+                if (selected.has(String(position.id))) cb.checked = true;
+                cb.addEventListener('change', () => {
+                    // Manual override — stop auto-suggest from fighting the admin.
+                    syncPositionsFromServices = false;
+                });
+                positionsWrap.appendChild(wrap);
+            });
         }
 
         function renderPackagePicker(preselectedNames) {
@@ -325,8 +386,8 @@
             updateSelectionSummary();
         }
 
-        // Package details are only relevant to the Packages category: the
-        // whole block is hidden (and un-required) for every other category.
+        // Package details / positions are only relevant to the Packages
+        // category: the whole block is hidden for every other category.
         function syncPackageDetails() {
             const cat = document.getElementById('svc-category');
             const wrap = document.getElementById('svc-package-details-wrap');
@@ -339,6 +400,16 @@
             // that started on another category) builds the checklist once.
             if (isPackages && picker && !picker.querySelector('.form-check')) {
                 renderPackagePicker([]);
+            }
+            if (isPackages && positionsWrap && !positionsWrap.querySelector('.form-check')) {
+                renderPackagePositions([]);
+            }
+            // Disable position inputs when hidden so they are not submitted
+            // for regular (non-Packages) services.
+            if (positionsWrap) {
+                positionsWrap.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+                    cb.disabled = !isPackages;
+                });
             }
         }
         document.getElementById('svc-category').addEventListener('change', syncPackageDetails);
@@ -397,6 +468,7 @@
 
             variantsWrap.innerHTML = '';
             syncDetailsFromPicker = true;
+            syncPositionsFromServices = true;
 
             if (btn.dataset.mode === 'edit') {
                 editingServiceId = btn.dataset.id;
@@ -442,7 +514,14 @@
                     offerable.some((s) => s.name.trim().toLowerCase() === line.toLowerCase())
                 );
                 syncDetailsFromPicker = matched.length === preselected.length && preselected.length > 0;
+
+                let positionIds = [];
+                try { positionIds = JSON.parse(btn.dataset.positionIds || '[]'); } catch (e) { positionIds = []; }
+                // Saved positions win over auto-suggest while editing.
+                syncPositionsFromServices = positionIds.length === 0;
+
                 renderPackagePicker(preselected);
+                renderPackagePositions(positionIds);
                 syncPackageDetails();
             } else {
                 editingServiceId = null;
@@ -454,6 +533,7 @@
                 preview.style.display = 'none';
                 removeWrap.style.display = 'none';
                 renderPackagePicker([]);
+                renderPackagePositions([]);
                 syncPackageDetails();
             }
         });
