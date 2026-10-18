@@ -7,6 +7,7 @@ use App\Models\Appointment;
 use App\Models\BusinessHours;
 use App\Models\Service;
 use App\Models\User;
+use App\Support\ServiceCapacity;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -70,6 +71,11 @@ class StoreAppointmentRequest extends FormRequest
                     'start_time',
                     'That time is past shop closing. Please choose an earlier slot, or book for another day.'
                 );
+            }
+
+            if ($service && $date && $time && ! $validator->errors()->has('start_time')
+                && ! ServiceCapacity::hasCapacity($service, $date, $time, $this->integer('guests') ?: null)) {
+                $validator->errors()->add('start_time', ServiceCapacity::denialMessage($service));
             }
         });
     }

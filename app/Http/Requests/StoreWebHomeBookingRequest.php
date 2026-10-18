@@ -9,6 +9,7 @@ use App\Models\BusinessHours;
 use App\Models\Service;
 use App\Models\User;
 use App\Support\PackageStaffSelection;
+use App\Support\ServiceCapacity;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -152,6 +153,7 @@ class StoreWebHomeBookingRequest extends FormRequest
             }
 
             $this->validateWithinBusinessHours($validator);
+            $this->validateServiceCapacity($validator);
         });
     }
 
@@ -178,6 +180,21 @@ class StoreWebHomeBookingRequest extends FormRequest
                 'start_time',
                 'That time is past shop closing. Please choose an earlier slot, or book for another day.'
             );
+        }
+    }
+
+    private function validateServiceCapacity(Validator $validator): void
+    {
+        $service = $this->resolveService();
+        $date = $this->input('appointment_date');
+        $time = $this->input('start_time');
+        if (! $service || ! $date || ! $time || $validator->errors()->has('start_time')) {
+            return;
+        }
+
+        $guests = $this->integer('guests') ?: null;
+        if (! ServiceCapacity::hasCapacity($service, $date, $time, $guests)) {
+            $validator->errors()->add('start_time', ServiceCapacity::denialMessage($service));
         }
     }
 

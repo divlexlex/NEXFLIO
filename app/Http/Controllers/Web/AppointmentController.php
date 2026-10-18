@@ -11,6 +11,7 @@ use App\Models\BusinessHours;
 use App\Models\LeaveRequest;
 use App\Models\Notification;
 use App\Models\Service;
+use App\Support\ServiceCapacity;
 use App\Models\StaffShiftAssignment;
 use App\Models\User;
 use App\Services\AppointmentService;
@@ -399,6 +400,16 @@ class AppointmentController extends Controller
         )) {
             return back()
                 ->withErrors(['start_time' => 'That time is past shop closing. Please choose an earlier slot, or book for another day.'])
+                ->withInput();
+        }
+
+        if ($service && ! ServiceCapacity::hasCapacity(
+            $service,
+            $validated['appointment_date'],
+            $validated['start_time']
+        )) {
+            return back()
+                ->withErrors(['start_time' => ServiceCapacity::denialMessage($service)])
                 ->withInput();
         }
 

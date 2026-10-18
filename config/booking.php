@@ -59,4 +59,33 @@ return [
         'other' => 'Other (specify)',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Concurrent Capacity (branch resources)
+    |--------------------------------------------------------------------------
+    |
+    | How many clients may occupy the same resource pool at overlapping times.
+    | Enforced when building the booking slot grid and on every store path
+    | (web branch/home, API, walk-in). Categories listed under one pool share
+    | that pool's limit (Facial + Aesthetics share the single esthetics room).
+    |
+    */
+    'concurrent_capacity' => [
+        'massage' => [
+            'label' => 'massage beds',
+            'limit' => 2,
+            'categories' => ['Massage'],
+        ],
+        'head_spa' => [
+            'label' => 'head spa beds',
+            'limit' => 4,
+            'categories' => ['Head Spa'],
+        ],
+        'esthetics' => [
+            'label' => 'esthetics rooms',
+            'limit' => 1,
+            'categories' => ['Facial', 'Aesthetics'],
+        ],
+    ],
+
 ];

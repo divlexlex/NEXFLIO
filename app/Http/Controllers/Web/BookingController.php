@@ -22,6 +22,7 @@ use App\Models\User;
 use App\Services\NotificationService;
 use App\Support\PackageStaffSelection;
 use App\Support\ReservationFee;
+use App\Support\ServiceCapacity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -839,6 +840,7 @@ class BookingController extends Controller
         $personnelParam = $request->query('personnel'); // null | 'any' | numeric id
         $staffSelection = PackageStaffSelection::fromRequest($request, $service);
         $eligibleByPosition = collect();
+        $capacityGuests = $variant?->guests;
 
         if ($isMultiStaff) {
             foreach ($service->positions as $position) {
@@ -855,8 +857,8 @@ class BookingController extends Controller
             if (PackageStaffSelection::isComplete($service, $staffSelection)) {
                 $concrete = PackageStaffSelection::concreteIds($staffSelection);
                 $slots = $concrete === []
-                    ? $this->buildSlotGrid($service, $date, 'any', $eligibleIds)
-                    : $this->buildSlotGridForStaff($service, $date, $concrete);
+                    ? $this->buildSlotGrid($service, $date, 'any', $eligibleIds, $capacityGuests)
+                    : $this->buildSlotGridForStaff($service, $date, $concrete, $capacityGuests);
             }
 
             // Carry a sentinel so downstream steps that still read `personnel`
@@ -873,7 +875,7 @@ class BookingController extends Controller
 
             $slots = [];
             if ($personnelParam) {
-                $slots = $this->buildSlotGrid($service, $date, $personnelParam, $eligibleIds);
+                $slots = $this->buildSlotGrid($service, $date, $personnelParam, $eligibleIds, $capacityGuests);
             }
         }
 
@@ -898,11 +900,11 @@ class BookingController extends Controller
      *
      * @param  list<int>  $userIds
      */
-    private function buildSlotGridForStaff(Service $service, string $date, array $userIds): array
+    private function buildSlotGridForStaff(Service $service, string $date, array $userIds, ?int $guests = null): array
     {
         $grids = [];
         foreach ($userIds as $userId) {
-            $grids[] = collect($this->buildSlotGrid($service, $date, (string) $userId, collect($userIds)))
+            $grids[] = collect($this->buildSlotGrid($service, $date, (string) $userId, collect($userIds), $guests))
                 ->keyBy('time');
         }
 
@@ -1005,7 +1007,7 @@ class BookingController extends Controller
      *
      * Past times are dropped when $date is today.
      */
-    private function buildSlotGrid(Service $service, string $date, string $personnelParam, $eligibleIds): array
+    private function buildSlotGrid(Service $service, string $date, string $personnelParam, $eligibleIds, ?int $guests = null): array
     {
         $duration = $service->duration_minutes ?: 30;
         $dayOfWeek = (int) Carbon::parse($date)->dayOfWeek;
@@ -1169,6 +1171,12 @@ class BookingController extends Controller
             $available = $personnelParam === 'any'
                 ? $candidateIds->contains(fn ($pid) => ! in_array($label, $taken->get($pid, []), true))
                 : ! in_array($label, $taken->get((int) $personnelParam, []), true);
+
+            // Resource beds/rooms (massage 2, head spa 4, esthetics 1):
+            // hide the slot when the service's pool is already full.
+            if ($available && ! ServiceCapacity::hasCapacity($service, $date, $label, $guests)) {
+                $available = false;
+            }
 
             $slots[] = ['time' => $label, 'available' => $available];
         }
