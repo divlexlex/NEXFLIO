@@ -544,10 +544,10 @@
             syncWalkInStaff();
         })();
 
-        // Walk-in: warn BEFORE submit when the chosen start time is outside the
-        // shop's same-day window. This mirrors BusinessHours::windowForDay() +
-        // slotStartAllowed() exactly — it is a pre-submit mirror only; the
-        // server re-checks every booking on submit.
+        // Walk-in ONLY: warn BEFORE submit when the start would finish after
+        // the configured walk-in close (default 01:00 next morning). Mirrors
+        // App\Support\WalkInHours — not BusinessHours::startFitsOnDate(),
+        // which remains the online booking rule.
         (function () {
             const dateInput = document.getElementById('walkin-date');
             const timeInput = document.getElementById('walkin-time');
@@ -558,6 +558,7 @@
 
             const nxBusinessHours = @json($businessHoursJson);
             const nxServices = @json($servicesJson);
+            const nxWalkInCloseAt = @json($walkInCloseAt);
 
             function minutesOf(hhmm) {
                 const parts = String(hhmm).split(':');
@@ -608,25 +609,29 @@
                 ).getDay();
 
                 const hours = nxBusinessHours[weekday];
-                if (!hours || !hours.is_open) {
+                if (!hours || !hours.is_open || !hours.open) {
                     setInvalid('The shop is closed on that day. Please choose another day.');
                     return;
                 }
 
                 const openMin = minutesOf(hours.open);
-                const closeMin = minutesOf(hours.close);
+                const closeMin = minutesOf(nxWalkInCloseAt);
                 const effectiveClose = closeMin <= openMin ? closeMin + 1440 : closeMin;
-                const startMin = minutesOf(timeInput.value);
+                let startMin = minutesOf(timeInput.value);
+                // Overnight extension: 00:00–(close-1) maps past midnight.
+                if (effectiveClose > 1440 && startMin < closeMin) {
+                    startMin += 1440;
+                }
 
                 if (startMin < openMin) {
                     setInvalid('That time is before shop opening. Please choose a later slot.');
                     return;
                 }
-                if (startMin >= 1440 || (startMin + duration) > effectiveClose) {
+                if ((startMin + duration) > effectiveClose) {
                     const endMin = startMin + duration;
                     setInvalid("That slot won't fit — this service would end at " + fmt(endMin)
                         + ", past the " + fmt(effectiveClose)
-                        + " closing. Please choose an earlier slot, or book for another day.");
+                        + " walk-in closing. Please choose an earlier slot, or book for another day.");
                     return;
                 }
 

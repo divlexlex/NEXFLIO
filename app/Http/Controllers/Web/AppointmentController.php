@@ -11,10 +11,11 @@ use App\Models\BusinessHours;
 use App\Models\LeaveRequest;
 use App\Models\Notification;
 use App\Models\Service;
-use App\Support\ServiceCapacity;
 use App\Models\StaffShiftAssignment;
 use App\Models\User;
 use App\Services\AppointmentService;
+use App\Support\ServiceCapacity;
+use App\Support\WalkInHours;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
@@ -50,9 +51,9 @@ class AppointmentController extends Controller
             ->orderBy('name')
             ->get();
 
-        // Walk-in closing guard: the modal mirrors BusinessHours::windowForDay()
-        // + slotStartAllowed() client-side, so hand it each day's window. A day
-        // with no row counts as closed.
+        // Walk-in closing guard: modal uses each day's OPEN from BusinessHours
+        // plus the walk-in-only close (config booking.walk_in.close_at). Online
+        // booking still uses BusinessHours close_at — do not conflate the two.
         $hoursByDay = BusinessHours::all()->keyBy('day_of_week');
         $businessHoursJson = [];
         for ($day = 0; $day <= 6; $day++) {
@@ -82,6 +83,7 @@ class AppointmentController extends Controller
                 ])->values(),
             ])->values(),
             'businessHoursJson' => (object) $businessHoursJson,
+            'walkInCloseAt' => WalkInHours::closeAt(),
             'personnel' => $personnel,
             'personnelJson' => $personnel->map(fn (User $user) => [
                 'id' => $user->id,
@@ -409,20 +411,29 @@ class AppointmentController extends Controller
 
         $validated = $request->validate($rules);
 
-        if ($service && ! BusinessHours::startFitsOnDate(
+        // Walk-in-only closing (default finish-by 01:00 next morning). Do NOT
+        // call BusinessHours::startFitsOnDate() here — that is the online rule.
+        if ($service && ! WalkInHours::startFitsOnDate(
             $validated['appointment_date'],
             $validated['start_time'],
             (int) $service->duration_minutes
         )) {
             return back()
-                ->withErrors(['start_time' => 'That time is past shop closing. Please choose an earlier slot, or book for another day.'])
+                ->withErrors(['start_time' => 'That time is past walk-in closing. Please choose an earlier slot, or book for another day.'])
                 ->withInput();
         }
+
+        $walkInStartMinute = $service
+            ? WalkInHours::startMinuteOnDate($validated['appointment_date'], $validated['start_time'])
+            : null;
 
         if ($service && ! ServiceCapacity::hasCapacity(
             $service,
             $validated['appointment_date'],
-            $validated['start_time']
+            $validated['start_time'],
+            null,
+            null,
+            $walkInStartMinute
         )) {
             return back()
                 ->withErrors(['start_time' => ServiceCapacity::denialMessage($service)])

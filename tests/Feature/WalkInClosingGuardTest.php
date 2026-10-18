@@ -6,18 +6,16 @@ use App\Models\Appointment;
 use App\Models\BusinessHours;
 use App\Models\Service;
 use App\Models\User;
+use App\Support\WalkInHours;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
- * Admin Walk-in Entry closing guard.
+ * Admin Walk-in Entry closing guard (walk-in-only rule).
  *
- * The modal now warns before submit (a client-side mirror of
- * BusinessHours::windowForDay() + slotStartAllowed()), and the validation
- * `$errors` banner on the Appointments page auto-dismisses like every other
- * flash banner. Neither change alters the server rule — these tests pin the
- * server behavior and the data plumbing the modal script depends on.
+ * The modal mirrors App\Support\WalkInHours client-side; the server re-checks
+ * on submit. Online bookings still use BusinessHours::startFitsOnDate().
  */
 class WalkInClosingGuardTest extends TestCase
 {
@@ -41,8 +39,7 @@ class WalkInClosingGuardTest extends TestCase
         $this->staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
 
         // Massage service → the seeded staff is a Massage Technician, so the
-        // category-eligibility check passes. 60 minutes keeps the arithmetic
-        // simple against the 09:00–18:00 window set below.
+        // category-eligibility check passes.
         $this->service = Service::create([
             'name' => 'Guard Massage',
             'category' => 'Massage',
@@ -52,16 +49,18 @@ class WalkInClosingGuardTest extends TestCase
             'service_location_type' => 'branch',
         ]);
 
-        // Pin the target day's window so "past closing" is deterministic:
-        // 09:00–18:00, same-day (close > open, no overnight rollover).
+        // Open noon; shop BusinessHours close is irrelevant to walk-in finish
+        // cutoff (config walk_in.close_at, default 01:00).
         $this->date = now()->addDay()->toDateString();
         BusinessHours::where('day_of_week', Carbon::parse($this->date)->dayOfWeek)
-            ->update(['open_at' => '09:00:00', 'close_at' => '18:00:00', 'is_open' => true]);
+            ->update(['open_at' => '12:00:00', 'close_at' => '22:00:00', 'is_open' => true]);
+
+        config(['booking.walk_in.close_at' => '01:00']);
     }
 
     public function test_walk_in_past_closing_is_refused_and_index_shows_dismissible_banner(): void
     {
-        // 17:30 + 60 min = 18:30 — the service would run past the 18:00 close.
+        // 12:01 AM + 60 min = 1:01 AM — past the 1:00 AM walk-in close.
         $response = $this->actingAs($this->manager)
             ->from(route('admin.appointments'))
             ->post(route('admin.appointments.walk-in'), [
@@ -69,12 +68,12 @@ class WalkInClosingGuardTest extends TestCase
                 'service_id' => $this->service->id,
                 'personnel_id' => $this->staff->id,
                 'appointment_date' => $this->date,
-                'start_time' => '17:30',
+                'start_time' => '00:01',
             ]);
 
         $response->assertRedirect(route('admin.appointments'))
             ->assertSessionHasErrors([
-                'start_time' => 'That time is past shop closing. Please choose an earlier slot, or book for another day.',
+                'start_time' => 'That time is past walk-in closing. Please choose an earlier slot, or book for another day.',
             ]);
 
         $this->assertSame(0, Appointment::count());
@@ -89,7 +88,7 @@ class WalkInClosingGuardTest extends TestCase
                 'service_id' => $this->service->id,
                 'personnel_id' => $this->staff->id,
                 'appointment_date' => $this->date,
-                'start_time' => '17:30',
+                'start_time' => '00:01',
             ])
             ->assertOk()
             ->getContent();
@@ -97,7 +96,7 @@ class WalkInClosingGuardTest extends TestCase
         $this->assertStringContainsString('alert alert-danger alert-dismissible', $html);
         $this->assertStringContainsString('data-nx-flash', $html);
         $this->assertStringContainsString(
-            'That time is past shop closing. Please choose an earlier slot, or book for another day.',
+            'That time is past walk-in closing. Please choose an earlier slot, or book for another day.',
             $html
         );
     }
@@ -108,19 +107,20 @@ class WalkInClosingGuardTest extends TestCase
             ->get(route('admin.appointments'))
             ->assertOk()
             ->assertSee('nxBusinessHours', false)
+            ->assertSee('nxWalkInCloseAt', false)
             ->assertSee('"duration_minutes"', false);
     }
 
     public function test_walk_in_inside_the_window_is_created(): void
     {
-        // 09:00 + 60 min = 10:00 — comfortably inside 09:00–18:00.
+        // 12:00 PM + 60 min — inside open → walk-in close.
         $this->actingAs($this->manager)
             ->post(route('admin.appointments.walk-in'), [
                 'walk_in_name' => 'On Time Guest',
                 'service_id' => $this->service->id,
                 'personnel_id' => $this->staff->id,
                 'appointment_date' => $this->date,
-                'start_time' => '09:00',
+                'start_time' => '12:00',
             ])->assertSessionHasNoErrors()->assertRedirect();
 
         $this->assertSame(1, Appointment::count());
@@ -128,5 +128,21 @@ class WalkInClosingGuardTest extends TestCase
         $appointment = Appointment::firstOrFail();
         $this->assertSame('On Time Guest', $appointment->walk_in_name);
         $this->assertNull($appointment->user_id);
+    }
+
+    public function test_walk_in_allows_finish_at_configured_close(): void
+    {
+        $this->assertTrue(WalkInHours::startFitsOnDate($this->date, '00:00', 60));
+
+        $this->actingAs($this->manager)
+            ->post(route('admin.appointments.walk-in'), [
+                'walk_in_name' => 'Last Slot Guest',
+                'service_id' => $this->service->id,
+                'personnel_id' => $this->staff->id,
+                'appointment_date' => $this->date,
+                'start_time' => '00:00',
+            ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertDatabaseHas('appointments', ['walk_in_name' => 'Last Slot Guest']);
     }
 }

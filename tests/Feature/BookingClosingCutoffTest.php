@@ -73,14 +73,18 @@ class BookingClosingCutoffTest extends TestCase
         $this->assertSame(0, Appointment::count());
     }
 
-    public function test_walk_in_rejects_start_past_closing_for_today(): void
+    public function test_walk_in_rejects_start_past_walk_in_closing_for_today(): void
     {
+        // Walk-ins use config booking.walk_in.close_at (default 01:00), not
+        // the 10:00 PM shop close. 00:30 + 60 min = 01:30 → past walk-in close.
+        config(['booking.walk_in.close_at' => '01:00']);
+
         $this->actingAs($this->manager)->post(route('admin.appointments.walk-in'), [
             'walk_in_name' => 'Late Guest',
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
             'appointment_date' => now()->toDateString(),
-            'start_time' => '22:30',
+            'start_time' => '00:30',
         ])->assertSessionHasErrors('start_time');
 
         $this->assertSame(0, Appointment::count());

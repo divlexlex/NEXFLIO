@@ -88,4 +88,22 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Walk-in Closing Time
+    |--------------------------------------------------------------------------
+    |
+    | Latest clock time a counter walk-in service may finish, relative to the
+    | appointment date. When this is at or before that day's open (default
+    | 01:00 with a noon/morning open), it means the following calendar
+    | morning — so a 2-hour massage may start at 11:00 PM and end at 1:00 AM.
+    |
+    | ONLINE bookings ignore this entirely; they still use
+    | BusinessHours::startFitsOnDate() / the shop close_at columns.
+    |
+    */
+    'walk_in' => [
+        'close_at' => env('WALK_IN_CLOSE_AT', '01:00'),
+    ],
+
 ];

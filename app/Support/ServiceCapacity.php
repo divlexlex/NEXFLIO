@@ -76,7 +76,8 @@ class ServiceCapacity
         string $date,
         string $startTime,
         ?int $guests = null,
-        ?int $excludeAppointmentId = null
+        ?int $excludeAppointmentId = null,
+        ?int $startMinute = null
     ): bool {
         $pools = static::poolsForService($service);
         if ($pools === []) {
@@ -84,7 +85,9 @@ class ServiceCapacity
         }
 
         $duration = max(1, (int) ($service->duration_minutes ?: 30));
-        $startMinute = static::minutesOf($startTime);
+        // Optional override lets walk-in overnight starts (00:00 → 1440) share
+        // this check without changing online callers' clock parsing.
+        $startMinute ??= static::minutesOf($startTime);
         $seats = static::seatsNeeded($guests);
 
         foreach ($pools as $poolKey) {
