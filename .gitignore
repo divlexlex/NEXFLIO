@@ -27,3 +27,11 @@ Homestead.yaml
 Thumbs.db
 .claude/
 nexflio_prod.sql
+# Local-only test — never commit
+tests/Feature/TempMailFlowTest.php
+
+# .env copies — never commit
+*.env
+.env.*
+!.env.example
+*env*.txt
