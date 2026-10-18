@@ -3,11 +3,10 @@
 namespace App\Http\Controllers\Web;
 
 use App\Enums\AppointmentStatus;
-use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Commission;
-use App\Models\Payment;
+use App\Services\RevenueRecognitionService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -19,6 +18,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class ReportController extends Controller
 {
+    public function __construct(
+        private readonly RevenueRecognitionService $revenue,
+    ) {
+    }
+
     public function financial()
     {
         return view('admin.reports.financial', $this->buildReport());
@@ -49,13 +53,13 @@ class ReportController extends Controller
             fputcsv($out, []);
 
             fputcsv($out, ['Summary']);
-            fputcsv($out, ['Verified Revenue (YTD)', $data['yearRevenue']]);
+            fputcsv($out, ['Recognized Revenue (YTD)', $data['yearRevenue']]);
             fputcsv($out, ['Commissions Accrued (YTD)', $data['yearCommissions']]);
             fputcsv($out, ['Net of Commissions', round($data['yearRevenue'] - $data['yearCommissions'], 2)]);
             fputcsv($out, []);
 
             fputcsv($out, ['Monthly Revenue (last 12 months)']);
-            fputcsv($out, ['Month', 'Verified Revenue']);
+            fputcsv($out, ['Month', 'Recognized Revenue']);
             foreach ($data['months'] as $month) {
                 fputcsv($out, [$month['label'], $month['revenue']]);
             }
@@ -78,35 +82,22 @@ class ReportController extends Controller
      */
     private function buildReport(): array
     {
-        // Twelve months of verified revenue, grouped in PHP for portability.
-        $start = now()->startOfMonth()->subMonths(11);
-        $payments = Payment::where('status', PaymentStatus::Verified)
-            ->where('verified_at', '>=', $start)
-            ->get(['amount', 'verified_at']);
+        $months = $this->revenue->monthlyTotals(12);
 
-        $months = [];
-        for ($i = 0; $i < 12; $i++) {
-            $monthStart = $start->copy()->addMonths($i);
-            $monthEnd = $monthStart->copy()->endOfMonth();
-            $months[] = [
-                'label' => $monthStart->format('M Y'),
-                'revenue' => round((float) $payments
-                    ->filter(fn ($payment) => $payment->verified_at !== null
-                        && $payment->verified_at->between($monthStart, $monthEnd))
-                    ->sum('amount'), 2),
-            ];
-        }
-
+        // Top services: completed this calendar year, dated by completion.
         $completedThisYear = Appointment::with('service:id,name,price')
             ->where('status', AppointmentStatus::Completed)
-            ->whereYear('appointment_date', now()->year)
+            ->whereNotNull('completed_at')
+            ->whereYear('completed_at', now()->year)
             ->get();
 
         $topServices = $completedThisYear
             ->groupBy(fn ($appointment) => $appointment->service->name ?? 'Unknown')
             ->map(fn ($group) => [
                 'count' => $group->count(),
-                'revenue' => round((float) $group->sum(fn ($a) => (float) ($a->service->price ?? 0)), 2),
+                'revenue' => round((float) $group->sum(
+                    fn ($appointment) => (float) ($appointment->booked_price ?? $appointment->service->price ?? 0)
+                ), 2),
             ])
             ->sortByDesc('revenue')
             ->take(10);
@@ -114,9 +105,7 @@ class ReportController extends Controller
         return [
             'months' => $months,
             'topServices' => $topServices,
-            'yearRevenue' => round((float) Payment::where('status', PaymentStatus::Verified)
-                ->whereYear('verified_at', now()->year)
-                ->sum('amount'), 2),
+            'yearRevenue' => $this->revenue->sumForYear((int) now()->year),
             'yearCommissions' => round((float) Commission::whereYear('earned_at', now()->year)
                 ->sum('amount'), 2),
             'year' => now()->year,

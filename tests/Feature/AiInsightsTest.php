@@ -89,15 +89,20 @@ class AiInsightsTest extends TestCase
         ?string $walkInName = null,
         ?string $walkInPhone = null,
     ): Appointment {
+        $when = now()->copy()->subDays($daysAgo);
+
         return Appointment::create([
             'user_id' => $client?->id,
             'walk_in_name' => $walkInName,
             'walk_in_phone' => $walkInPhone,
             'service_id' => $service->id,
             'booked_price' => $booked,
-            'appointment_date' => now()->copy()->subDays($daysAgo)->toDateTimeString(),
+            'appointment_date' => $when->toDateTimeString(),
             'start_time' => $time,
             'status' => $status,
+            'completed_at' => $status === AppointmentStatus::Completed
+                ? $when->toDateTimeString()
+                : null,
         ]);
     }
 
@@ -130,14 +135,13 @@ class AiInsightsTest extends TestCase
         $a7 = $this->makeAppointment($this->facial, $this->clientC, 50, '15:00', AppointmentStatus::Completed, 500.00); // Sun
         $a8 = $this->makeAppointment($this->massage, $this->clientB, 45, '09:00', AppointmentStatus::Completed, 1000.00); // Fri
 
-        // Verified money, last 30 days: Massage 1000+800+600 = 2400, Facial 500.
+        // Verified money still exists on Booked a5 — must NOT appear in
+        // recognized revenue_by_category. Completed only: Massage 1800, Facial 500.
         $this->verifiedPayment($a1, 1000.00, 5);
         $this->verifiedPayment($a2, 800.00, 9);
         $this->verifiedPayment($a3, 500.00, 3);
         $this->verifiedPayment($a5, 600.00, 2);
 
-        // Verified outside the 30-day window and a never-verified row, both
-        // of which must be ignored by the category rollup.
         $this->verifiedPayment($a6, 1000.00, 40);
         Payment::create([
             'appointment_id' => $a4->id,
@@ -322,9 +326,10 @@ class AiInsightsTest extends TestCase
             $this->assertArrayHasKey($key, $metrics);
         }
 
-        // revenue_by_category_last_30_days: Massage 1000+800+600, Facial 500.
+        // Recognized revenue only (Completed): Massage 1000+800, Facial 500.
+        // Booked a5's verified ₱600 must not count.
         $this->assertEquals(
-            ['Massage' => 2400.0, 'Facial' => 500.0],
+            ['Massage' => 1800.0, 'Facial' => 500.0],
             $metrics['revenue_by_category_last_30_days']
         );
 

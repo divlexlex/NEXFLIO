@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\PaymentStatus;
 use App\Models\Appointment;
 use App\Models\Commission;
 use App\Models\Payment;
@@ -168,14 +167,14 @@ class FreshStartAppointments extends Command
         $this->line('Payments total: '.Payment::withTrashed()->count());
         $this->line('Commissions total: '.Commission::count());
 
-        // Same definitions as ReportController::financial().
-        $yearRevenue = round((float) Payment::where('status', PaymentStatus::Verified)
-            ->whereYear('verified_at', now()->year)
-            ->sum('amount'), 2);
+        // Same definitions as ReportController::financial() — recognized
+        // (Completed) revenue, not the verified-payments collection ledger.
+        $yearRevenue = app(\App\Services\RevenueRecognitionService::class)
+            ->sumForYear((int) now()->year);
         $yearCommissions = round((float) Commission::whereYear('earned_at', now()->year)
             ->sum('amount'), 2);
 
-        $this->line('Verified payments sum (YTD): '.$yearRevenue);
+        $this->line('Recognized revenue sum (YTD): '.$yearRevenue);
         $this->line('Commissions sum (YTD): '.$yearCommissions);
     }
 }

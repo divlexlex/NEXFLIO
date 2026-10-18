@@ -31,7 +31,7 @@ class FinancialReportExportTest extends TestCase
         $response->assertHeader('content-type', 'text/csv; charset=UTF-8');
         $this->assertStringContainsString('financial-report-'.now()->year.'.csv', $response->headers->get('content-disposition'));
         $body = $response->streamedContent();
-        $this->assertStringContainsString('Verified Revenue (YTD)', $body);
+        $this->assertStringContainsString('Recognized Revenue (YTD)', $body);
         $this->assertStringContainsString('Monthly Revenue', $body);
         $this->assertStringContainsString('Top Services by Revenue', $body);
     }
