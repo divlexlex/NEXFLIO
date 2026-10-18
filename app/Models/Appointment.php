@@ -85,6 +85,17 @@ class Appointment extends Model
         $this->update(['personnel_id' => $primary ?: null]);
     }
 
+    /**
+     * True when "today" (app timezone) is the appointment's calendar date.
+     * Used to gate Start service — not early, not late, same day only.
+     */
+    public function isOnAppointmentDay(?\Illuminate\Support\Carbon $now = null): bool
+    {
+        $now ??= now();
+
+        return $this->appointment_date->toDateString() === $now->toDateString();
+    }
+
     /** Human-readable staff line for package (and single) bookings. */
     public function personnelDisplayLabel(): string
     {

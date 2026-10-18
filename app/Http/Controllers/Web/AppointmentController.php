@@ -334,7 +334,7 @@ class AppointmentController extends Controller
                             ['to' => 'cancelled', 'label' => 'Reject / Cancel', 'style' => 'outline-danger', 'reason' => true],
                         ],
                         AppointmentStatus::Booked => array_merge(
-                            $this->isFullyStaffed($appointment) ? [
+                            ($this->isFullyStaffed($appointment) && $appointment->isOnAppointmentDay()) ? [
                                 ['to' => 'in-service', 'label' => 'Start service', 'style' => 'primary'],
                             ] : [],
                             [

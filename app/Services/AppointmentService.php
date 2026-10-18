@@ -71,6 +71,14 @@ class AppointmentService
             ]);
         }
 
+        // Start service only on the appointment's calendar day — not early,
+        // not the day after. Time-of-day is still free; the date must match.
+        if ($target === AppointmentStatus::InService && ! $appointment->isOnAppointmentDay()) {
+            throw ValidationException::withMessages([
+                'status' => 'Service can only be started on the appointment date ('.$appointment->appointment_date->toDateString().').',
+            ]);
+        }
+
         // Verifying or rejecting payment is a manager decision; everything
         // after that is open to the assigned staff member as well.
         $verificationStep = $current === AppointmentStatus::Unverified;

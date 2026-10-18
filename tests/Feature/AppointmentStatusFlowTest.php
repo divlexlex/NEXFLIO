@@ -56,7 +56,7 @@ class AppointmentStatusFlowTest extends TestCase
         $response = $this->actingAs($this->client, 'sanctum')->postJson('/api/appointments', [
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
-            'appointment_date' => now()->addDay()->toDateString(),
+            'appointment_date' => now()->toDateString(),
             'start_time' => '10:00',
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ]);
@@ -183,7 +183,7 @@ class AppointmentStatusFlowTest extends TestCase
         $this->actingAs($this->client, 'sanctum')->postJson('/api/appointments', [
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
-            'appointment_date' => now()->addDay()->toDateString(),
+            'appointment_date' => now()->toDateString(),
             'start_time' => '10:00',
             'payment_proof' => UploadedFile::fake()->image('proof2.jpg'),
         ])->assertStatus(422);

@@ -65,7 +65,7 @@ class AppointmentCheckoutTest extends TestCase
             'user_id' => $this->client->id,
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
-            'appointment_date' => now()->addDay()->toDateString(),
+            'appointment_date' => now()->toDateString(),
             'start_time' => '10:00',
             'status' => $status,
             'booked_price' => $bookedPrice,

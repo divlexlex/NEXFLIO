@@ -51,7 +51,7 @@ class CancellationRequestFlowTest extends TestCase
             'user_id' => $this->client->id,
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
-            'appointment_date' => now()->addDays(3)->toDateString(),
+            'appointment_date' => now()->toDateString(),
             'start_time' => '10:00',
             'status' => $status,
             'booked_price' => 800,
