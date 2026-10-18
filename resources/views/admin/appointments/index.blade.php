@@ -458,16 +458,16 @@
         calendar.render();
 
         // Shared: staff who offer positions linked to a service category
-        // (Facial → Facial Technician, etc.). No linked positions → all staff.
+        // (Facial → Facial Technician, etc.). No linked positions or no
+        // matching employees → empty list (never fall back to all staff).
         const staffCatalog = @json($personnelJson);
         function staffForEligiblePositions(eligiblePositions) {
             const names = eligiblePositions || [];
             // Strict filter only — never keep a previously selected staff
             // member who does not offer this service category (e.g. a Massage
             // Tech left over after switching to Gel Manicure / Nails).
-            return names.length
-                ? staffCatalog.filter((s) => names.includes(s.position))
-                : staffCatalog.slice();
+            if (!names.length) return [];
+            return staffCatalog.filter((s) => names.includes(s.position));
         }
         function fillStaffSelect(select, staff, selectedId, emptyLabel) {
             if (!select) return;

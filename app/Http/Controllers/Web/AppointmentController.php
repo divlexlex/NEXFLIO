@@ -59,7 +59,7 @@ class AppointmentController extends Controller
                 'category' => $service->category,
                 'is_package' => $service->requiresMultiStaff(),
                 // Positions that fulfil this service's category (Nail → Nail
-                // Technician, etc.). Empty means no category filter yet.
+                // Technician, etc.). Empty → UI shows no staff options.
                 'eligible_positions' => \App\Models\Position::namesForServiceCategory($service->category),
                 'positions' => $service->positions->map(fn ($position) => [
                     'id' => $position->id,
@@ -426,17 +426,17 @@ class AppointmentController extends Controller
             $personnelId = collect($assignments)->filter()->first();
         } elseif ($personnelId && $service) {
             // Single service: staff must offer a position linked to this
-            // service category (Facial → Facial Technician, etc.).
+            // service category (Facial → Facial Technician, etc.). No linked
+            // positions means nobody is eligible — reject rather than accept any staff.
             $allowed = \App\Models\Position::namesForServiceCategory($service->category);
-            if ($allowed !== []) {
-                $holds = User::whereKey($personnelId)
+            $holds = $allowed !== []
+                && User::whereKey($personnelId)
                     ->whereHas('staffProfile', fn ($query) => $query->whereIn('position', $allowed))
                     ->exists();
-                if (! $holds) {
-                    return back()
-                        ->withErrors(['personnel_id' => 'That staff member does not offer this service category.'])
-                        ->withInput();
-                }
+            if (! $holds) {
+                return back()
+                    ->withErrors(['personnel_id' => 'That staff member does not offer this service category.'])
+                    ->withInput();
             }
         }
 
@@ -716,6 +716,15 @@ class AppointmentController extends Controller
                     Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
                 ],
             ]);
+
+            $allowed = \App\Models\Position::namesForServiceCategory($appointment->service?->category ?? '');
+            $holds = $allowed !== []
+                && User::whereKey($validated['personnel_id'])
+                    ->whereHas('staffProfile', fn ($query) => $query->whereIn('position', $allowed))
+                    ->exists();
+            if (! $holds) {
+                return back()->withErrors(['personnel_id' => 'That staff member does not offer this service category.']);
+            }
 
             $appointment->update(['personnel_id' => $validated['personnel_id']]);
             $label = User::find($validated['personnel_id'])?->name ?? 'a staff member';

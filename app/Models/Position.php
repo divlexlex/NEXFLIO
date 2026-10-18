@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Model;
  * the fixed App\Enums\Position list as the source of truth). The `name` is
  * what staff_profiles.position stores; `service_category` (nullable) links
  * the position to the service category it can fulfil for booking
- * personnel eligibility — unlinked positions impose no category filter.
+ * personnel eligibility. Categories with no linked positions have no
+ * eligible staff in admin pickers.
  */
 class Position extends Model
 {
@@ -23,8 +24,8 @@ class Position extends Model
 
     /**
      * Position names fulfilling a service category, id-ordered (classic
-     * positions first). Empty when nothing is linked — callers keep their
-     * no-filter behaviour in that case.
+     * positions first). Empty when nothing is linked — admin staff pickers
+     * treat that as “no eligible employees” (empty dropdown).
      *
      * @return string[]
      */
