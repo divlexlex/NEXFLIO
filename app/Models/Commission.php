@@ -5,15 +5,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Immutable earnings ledger — one row per completed appointment, priced at
- * completion time. Never edited; the unique appointment_id constraint makes
- * creation idempotent.
+ * Immutable earnings ledger — priced at completion time. Regular bookings
+ * write one row; Packages write one row per included service / assigned
+ * tech. Never edited; the unique (appointment, user, included_service)
+ * constraint makes creation idempotent.
  */
 class Commission extends Model
 {
     protected $fillable = [
         'user_id',
         'appointment_id',
+        'included_service_id',
         'service_price',
         'rate',
         'amount',
@@ -49,5 +51,11 @@ class Commission extends Model
     public function appointment()
     {
         return $this->belongsTo(Appointment::class);
+    }
+
+    /** The included catalog service whose original price drove this row (packages). */
+    public function includedService()
+    {
+        return $this->belongsTo(Service::class, 'included_service_id');
     }
 }

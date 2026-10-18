@@ -90,4 +90,38 @@ class Service extends Model
             ? $this->positions->isNotEmpty()
             : $this->positions()->exists();
     }
+
+    /**
+     * Catalog services named in package_details (one inclusion per line),
+     * in the order they were entered. Used for package commission so each
+     * tech is paid against the original listed price, not the package total.
+     *
+     * @return \Illuminate\Support\Collection<int, self>
+     */
+    public function packageComponentServices()
+    {
+        if (! $this->isPackageService() || ! filled($this->package_details)) {
+            return collect();
+        }
+
+        $names = collect(preg_split('/\r\n|\r|\n/', (string) $this->package_details))
+            ->map(fn ($line) => trim($line))
+            ->filter()
+            ->values();
+
+        if ($names->isEmpty()) {
+            return collect();
+        }
+
+        $byName = static::query()
+            ->whereIn('name', $names->all())
+            ->where('category', '!=', 'Packages')
+            ->get()
+            ->keyBy(fn (self $service) => mb_strtolower($service->name));
+
+        return $names
+            ->map(fn (string $name) => $byName->get(mb_strtolower($name)))
+            ->filter()
+            ->values();
+    }
 }

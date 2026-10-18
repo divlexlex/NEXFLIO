@@ -9,6 +9,8 @@ use App\Mail\PaymentVerifiedMail;
 use App\Models\Appointment;
 use App\Models\AppointmentChangeRequest;
 use App\Models\Commission;
+use App\Models\Position;
+use App\Models\Service;
 use App\Models\StockMovement;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -241,25 +243,94 @@ class AppointmentService
     }
 
     /**
-     * Commission = the staff member's rate (default 10%) of the service's
-     * listed price, locked in at completion time. firstOrCreate + the unique
-     * appointment_id constraint keep this idempotent under retries.
+     * Commission locked in at completion time.
+     *
+     * Regular services: one row — staff rate × the service's listed price.
+     * Packages: one row per included catalog service — each assigned tech
+     * earns their rate × that inclusion's ORIGINAL price (package discounts
+     * never reduce commission). firstOrCreate keeps retries idempotent.
      */
     private function recordCommission(Appointment $appointment): void
     {
+        $appointment->loadMissing([
+            'service',
+            'personnel.staffProfile',
+            'personnelAssignments.position',
+            'personnelAssignments.user.staffProfile',
+        ]);
+
+        if ($appointment->service?->requiresMultiStaff()
+            && $appointment->personnelAssignments->isNotEmpty()) {
+            $this->recordPackageCommissions($appointment);
+
+            return;
+        }
+
+        if (! $appointment->personnel_id || ! $appointment->service) {
+            return;
+        }
+
         $servicePrice = (float) $appointment->service->price;
         $rate = (float) ($appointment->personnel?->staffProfile?->commission_rate ?? 10.00);
 
         Commission::firstOrCreate(
-            ['appointment_id' => $appointment->id],
             [
+                'appointment_id' => $appointment->id,
                 'user_id' => $appointment->personnel_id,
+                'included_service_id' => $appointment->service_id,
+            ],
+            [
                 'service_price' => $servicePrice,
                 'rate' => $rate,
                 'amount' => round($servicePrice * $rate / 100, 2),
                 'earned_at' => now(),
             ]
         );
+    }
+
+    /**
+     * Pay each package tech against their inclusion's catalog price.
+     * Example: Manicure ₱300 + Massage ₱700 sold as a ₱900 package →
+     * nail tech ₱30 and massage tech ₱70 at 10%, not a split of ₱900.
+     */
+    private function recordPackageCommissions(Appointment $appointment): void
+    {
+        /** @var Service $package */
+        $package = $appointment->service;
+
+        foreach ($package->packageComponentServices() as $component) {
+            $positionNames = Position::namesForServiceCategory($component->category);
+            if ($positionNames === []) {
+                continue;
+            }
+
+            $assignment = $appointment->personnelAssignments->first(
+                fn ($row) => $row->user_id
+                    && $row->position
+                    && in_array($row->position->name, $positionNames, true)
+            );
+
+            if ($assignment === null) {
+                continue;
+            }
+
+            $rate = (float) ($assignment->user?->staffProfile?->commission_rate ?? 10.00);
+            $servicePrice = (float) $component->price;
+
+            Commission::firstOrCreate(
+                [
+                    'appointment_id' => $appointment->id,
+                    'user_id' => $assignment->user_id,
+                    'included_service_id' => $component->id,
+                ],
+                [
+                    'service_price' => $servicePrice,
+                    'rate' => $rate,
+                    'amount' => round($servicePrice * $rate / 100, 2),
+                    'earned_at' => now(),
+                ]
+            );
+        }
     }
 
     /**
