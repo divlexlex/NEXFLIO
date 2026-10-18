@@ -20,6 +20,7 @@ use App\Models\StaffSchedule;
 use App\Models\StaffShiftAssignment;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Support\PackageStaffSelection;
 use App\Support\ReservationFee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -133,34 +134,7 @@ class BookingController extends Controller
         $date = $request->query('date') ?: now()->toDateString();
         $date = $this->clampDate($date);
 
-        $personnelParam = $request->query('personnel'); // null | 'any' | numeric id
-
-        $eligiblePersonnel = $this->eligiblePersonnel($date, $service);
-        $eligibleIds = $eligiblePersonnel->pluck('id');
-
-        // Drop a previously-picked personnel that's no longer eligible for
-        // the (possibly changed) date, rather than silently keeping a stale
-        // selection.
-        if ($personnelParam && $personnelParam !== 'any' && ! $eligibleIds->contains((int) $personnelParam)) {
-            $personnelParam = null;
-        }
-
-        $slots = [];
-        if ($personnelParam) {
-            $slots = $this->buildSlotGrid($service, $date, $personnelParam, $eligibleIds);
-        }
-
-        return view('account.booking.schedule', [
-            'service' => $service,
-            'variant' => $variant,
-            'date' => $date,
-            'minDate' => $this->minDate(),
-            'maxDate' => now()->addDays(self::BOOKING_WINDOW_DAYS)->toDateString(),
-            'personnelParam' => $personnelParam,
-            'eligiblePersonnel' => $eligiblePersonnel,
-            'slots' => $slots,
-            'selectedTime' => $request->query('time'),
-        ]);
+        return view('account.booking.schedule', $this->scheduleViewData($request, $service, $date, $variant));
     }
 
     public function details(Request $request)
@@ -180,13 +154,16 @@ class BookingController extends Controller
             return $scheduleError;
         }
 
+        $staff = PackageStaffSelection::fromRequest($request, $service);
+
         return view('account.booking.details', [
             'service' => $service,
             'variant' => $variant,
             'date' => $request->query('date'),
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
-            'personnelLabel' => $this->personnelLabel($request->query('personnel')),
+            'staff' => $staff,
+            'personnelLabel' => $this->personnelLabelFor($service, $request),
             'client' => Auth::user(),
             'notes' => $request->query('notes'),
         ]);
@@ -209,13 +186,16 @@ class BookingController extends Controller
             return $scheduleError;
         }
 
+        $staff = PackageStaffSelection::fromRequest($request, $service);
+
         return view('account.booking.review', [
             'service' => $service,
             'variant' => $variant,
             'date' => $request->query('date'),
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
-            'personnelLabel' => $this->personnelLabel($request->query('personnel')),
+            'staff' => $staff,
+            'personnelLabel' => $this->personnelLabelFor($service, $request),
             'notes' => $request->query('notes'),
             'client' => Auth::user(),
             // Packages (services with variants) never offer Cash — the
@@ -242,12 +222,15 @@ class BookingController extends Controller
             return $scheduleError;
         }
 
+        $staff = PackageStaffSelection::fromRequest($request, $service);
+
         return view('account.booking.payment', [
             'service' => $service,
             'variant' => $variant,
             'date' => $request->query('date'),
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
+            'staff' => $staff,
             'notes' => $request->query('notes'),
             // Packages (services with variants) never offer Cash — the
             // reservation fee must be paid online with proof.
@@ -263,7 +246,7 @@ class BookingController extends Controller
         // Package tier (when the service has variants) resolved server-side
         // from the DB — the browser only ever sends an id. A service without
         // variants bills its listed price exactly as before.
-        $service = Service::with('variants')->findOrFail($validated['service_id']);
+        $service = Service::with(['variants', 'positions'])->findOrFail($validated['service_id']);
         $variant = isset($validated['variant_id'])
             ? $service->variants->firstWhere('id', (int) $validated['variant_id'])
             : null;
@@ -275,8 +258,9 @@ class BookingController extends Controller
         $method = $validated['method'] ?? 'gcash';
         $isCash = $method === 'cash';
         $fee = ReservationFee::for($service, $variant?->label);
+        $packageAssignments = $validated['package_assignments'] ?? null;
 
-        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee) {
+        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee, $packageAssignments) {
             $appointment = Appointment::create([
                 'user_id' => $request->user()->id,
                 'service_id' => $validated['service_id'],
@@ -298,6 +282,10 @@ class BookingController extends Controller
             // Client-facing Appointment ID, assigned here (the id only
             // exists post-insert) and saved in the same transaction.
             $appointment->update(['reference_code' => $appointment->referenceCode()]);
+
+            if (is_array($packageAssignments)) {
+                $appointment->syncPersonnelAssignments($packageAssignments);
+            }
 
             // Online + fee => only the down payment is charged now (the
             // balance settles at the branch). Cash => the full booked price
@@ -431,31 +419,10 @@ class BookingController extends Controller
         $date = $request->query('date') ?: now()->toDateString();
         $date = $this->clampDate($date);
 
-        $personnelParam = $request->query('personnel');
-
-        $eligiblePersonnel = $this->eligiblePersonnel($date, $service);
-        $eligibleIds = $eligiblePersonnel->pluck('id');
-
-        if ($personnelParam && $personnelParam !== 'any' && ! $eligibleIds->contains((int) $personnelParam)) {
-            $personnelParam = null;
-        }
-
-        $slots = [];
-        if ($personnelParam) {
-            $slots = $this->buildSlotGrid($service, $date, $personnelParam, $eligibleIds);
-        }
-
-        return view('account.booking.home.schedule', [
-            'service' => $service,
-            'address' => $this->addressFieldsFromRequest($request),
-            'date' => $date,
-            'minDate' => $this->minDate(),
-            'maxDate' => now()->addDays(self::BOOKING_WINDOW_DAYS)->toDateString(),
-            'personnelParam' => $personnelParam,
-            'eligiblePersonnel' => $eligiblePersonnel,
-            'slots' => $slots,
-            'selectedTime' => $request->query('time'),
-        ]);
+        return view('account.booking.home.schedule', array_merge(
+            $this->scheduleViewData($request, $service, $date),
+            ['address' => $this->addressFieldsFromRequest($request)]
+        ));
     }
 
     public function homeDetails(Request $request)
@@ -475,13 +442,16 @@ class BookingController extends Controller
             return $scheduleError;
         }
 
+        $staff = PackageStaffSelection::fromRequest($request, $service);
+
         return view('account.booking.home.details', [
             'service' => $service,
             'address' => $this->addressFieldsFromRequest($request),
             'date' => $request->query('date'),
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
-            'personnelLabel' => $this->personnelLabel($request->query('personnel')),
+            'staff' => $staff,
+            'personnelLabel' => $this->personnelLabelFor($service, $request),
             'client' => Auth::user(),
             'notes' => $request->query('notes'),
         ]);
@@ -504,13 +474,16 @@ class BookingController extends Controller
             return $scheduleError;
         }
 
+        $staff = PackageStaffSelection::fromRequest($request, $service);
+
         return view('account.booking.home.review', [
             'service' => $service,
             'address' => $this->addressFieldsFromRequest($request),
             'date' => $request->query('date'),
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
-            'personnelLabel' => $this->personnelLabel($request->query('personnel')),
+            'staff' => $staff,
+            'personnelLabel' => $this->personnelLabelFor($service, $request),
             'notes' => $request->query('notes'),
             'client' => Auth::user(),
             // Packages (services with variants) never offer Cash — the
@@ -537,12 +510,15 @@ class BookingController extends Controller
             return $scheduleError;
         }
 
+        $staff = PackageStaffSelection::fromRequest($request, $service);
+
         return view('account.booking.home.payment', [
             'service' => $service,
             'address' => $this->addressFieldsFromRequest($request),
             'date' => $request->query('date'),
             'time' => $request->query('time'),
             'personnel' => $request->query('personnel'),
+            'staff' => $staff,
             'notes' => $request->query('notes'),
             // Packages (services with variants) never offer Cash — the
             // reservation fee must be paid online with proof.
@@ -566,7 +542,7 @@ class BookingController extends Controller
         // service has variants), otherwise the price rule — capped at the
         // booked price. Cash skips the fee entirely: the full booked price
         // is payable at the door.
-        $service = Service::with('variants')->findOrFail($validated['service_id']);
+        $service = Service::with(['variants', 'positions'])->findOrFail($validated['service_id']);
         $variant = isset($validated['variant_id'])
             ? $service->variants->firstWhere('id', (int) $validated['variant_id'])
             : null;
@@ -575,8 +551,9 @@ class BookingController extends Controller
         $method = $validated['method'] ?? 'gcash';
         $isCash = $method === 'cash';
         $fee = ReservationFee::for($service, $variant?->label);
+        $packageAssignments = $validated['package_assignments'] ?? null;
 
-        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee) {
+        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee, $packageAssignments) {
             $appointment = Appointment::create([
                 'user_id' => $request->user()->id,
                 'service_id' => $validated['service_id'],
@@ -598,6 +575,10 @@ class BookingController extends Controller
             // Client-facing Appointment ID, assigned here (the id only
             // exists post-insert) and saved in the same transaction.
             $appointment->update(['reference_code' => $appointment->referenceCode()]);
+
+            if (is_array($packageAssignments)) {
+                $appointment->syncPersonnelAssignments($packageAssignments);
+            }
 
             // Online + fee => only the down payment is charged now (the
             // balance settles later). Cash => the full booked price is owed
@@ -661,7 +642,8 @@ class BookingController extends Controller
     {
         $id = $request->query('service');
         $service = $id
-            ? Service::where('status', 'active')
+            ? Service::with(['variants', 'positions'])
+                ->where('status', 'active')
                 ->whereIn('service_location_type', $allowedLocationTypes)
                 ->find($id)
             : null;
@@ -719,32 +701,59 @@ class BookingController extends Controller
         $date = $request->query('date');
         $time = $request->query('time');
         $personnel = $request->query('personnel');
+        $serviceId = $request->query('service');
+        $service = $serviceId
+            ? Service::with('positions')->find($serviceId)
+            : null;
 
         try {
             $request->validate([
                 'date' => 'required|date|after_or_equal:tomorrow',
                 'time' => 'required|date_format:H:i',
-                'personnel' => 'required',
             ], [], [
-                'date' => 'date', 'time' => 'time', 'personnel' => 'personnel',
+                'date' => 'date', 'time' => 'time',
             ]);
 
-            if ($personnel !== 'any') {
-                $serviceId = $request->query('service');
-                $service = $serviceId ? Service::find($serviceId) : null;
-                $eligible = $this->eligiblePersonnel($date, $service)->pluck('id');
-                if (! $eligible->contains((int) $personnel)) {
+            if ($service?->requiresMultiStaff()) {
+                $staff = PackageStaffSelection::fromRequest($request, $service);
+                if (! PackageStaffSelection::isComplete($service, $staff)) {
                     throw ValidationException::withMessages([
-                        'personnel' => 'That personnel selection is no longer available for this date.',
+                        'staff' => 'Please choose Spa Personnel for every role in this package.',
                     ]);
+                }
+
+                foreach ($staff as $positionId => $value) {
+                    if ($value === 'any') {
+                        continue;
+                    }
+                    $eligible = $this->eligiblePersonnel($date, $service, [$service->positions->firstWhere('id', $positionId)?->name])
+                        ->pluck('id');
+                    if (! $eligible->contains((int) $value)) {
+                        throw ValidationException::withMessages([
+                            'staff' => 'That personnel selection is no longer available for this date.',
+                        ]);
+                    }
+                }
+            } else {
+                $request->validate([
+                    'personnel' => 'required',
+                ], [], ['personnel' => 'personnel']);
+
+                if ($personnel !== 'any') {
+                    $eligible = $this->eligiblePersonnel($date, $service)->pluck('id');
+                    if (! $eligible->contains((int) $personnel)) {
+                        throw ValidationException::withMessages([
+                            'personnel' => 'That personnel selection is no longer available for this date.',
+                        ]);
+                    }
                 }
             }
         } catch (ValidationException $e) {
             return redirect()
-                ->route($scheduleRoute, $this->carryAddress($request, [
+                ->route($scheduleRoute, $this->carryAddress($request, array_merge([
                     'service' => $request->query('service'),
                     'variant' => $request->query('variant'),
-                ]))
+                ], $request->query('staff') ? ['staff' => $request->query('staff')] : [])))
                 ->withErrors($e->errors());
         }
 
@@ -815,7 +824,112 @@ class BookingController extends Controller
      * eligible; otherwise the legacy staff_schedules fallback applies
      * exactly as before.
      */
-    private function eligiblePersonnel(string $date, ?Service $service = null)
+    /**
+     * Shared schedule payload for Branch + Home. Packages get one staff
+     * picker per required position; regular services keep the flat list.
+     *
+     * @return array<string, mixed>
+     */
+    private function scheduleViewData(Request $request, Service $service, string $date, ?ServiceVariant $variant = null): array
+    {
+        $eligiblePersonnel = $this->eligiblePersonnel($date, $service);
+        $eligibleIds = $eligiblePersonnel->pluck('id');
+        $isMultiStaff = $service->requiresMultiStaff();
+
+        $personnelParam = $request->query('personnel'); // null | 'any' | numeric id
+        $staffSelection = PackageStaffSelection::fromRequest($request, $service);
+        $eligibleByPosition = collect();
+
+        if ($isMultiStaff) {
+            foreach ($service->positions as $position) {
+                $pool = $this->eligiblePersonnel($date, $service, [$position->name]);
+                $eligibleByPosition->put($position->id, $pool);
+
+                $pick = $staffSelection[$position->id] ?? null;
+                if ($pick && $pick !== 'any' && ! $pool->contains('id', (int) $pick)) {
+                    unset($staffSelection[$position->id]);
+                }
+            }
+
+            $slots = [];
+            if (PackageStaffSelection::isComplete($service, $staffSelection)) {
+                $concrete = PackageStaffSelection::concreteIds($staffSelection);
+                $slots = $concrete === []
+                    ? $this->buildSlotGrid($service, $date, 'any', $eligibleIds)
+                    : $this->buildSlotGridForStaff($service, $date, $concrete);
+            }
+
+            // Carry a sentinel so downstream steps that still read `personnel`
+            // (legacy links) treat a complete package pick as ready.
+            $personnelParam = PackageStaffSelection::isComplete($service, $staffSelection)
+                ? (PackageStaffSelection::primaryPersonnelId($staffSelection) !== null
+                    ? (string) PackageStaffSelection::primaryPersonnelId($staffSelection)
+                    : 'any')
+                : null;
+        } else {
+            if ($personnelParam && $personnelParam !== 'any' && ! $eligibleIds->contains((int) $personnelParam)) {
+                $personnelParam = null;
+            }
+
+            $slots = [];
+            if ($personnelParam) {
+                $slots = $this->buildSlotGrid($service, $date, $personnelParam, $eligibleIds);
+            }
+        }
+
+        return [
+            'service' => $service,
+            'variant' => $variant,
+            'date' => $date,
+            'minDate' => $this->minDate(),
+            'maxDate' => now()->addDays(self::BOOKING_WINDOW_DAYS)->toDateString(),
+            'personnelParam' => $personnelParam,
+            'staffSelection' => $staffSelection,
+            'isMultiStaff' => $isMultiStaff,
+            'eligiblePersonnel' => $eligiblePersonnel,
+            'eligibleByPosition' => $eligibleByPosition,
+            'slots' => $slots,
+            'selectedTime' => $request->query('time'),
+        ];
+    }
+
+    /**
+     * Slot grid where EVERY listed staff id must be free (package multi-pick).
+     *
+     * @param  list<int>  $userIds
+     */
+    private function buildSlotGridForStaff(Service $service, string $date, array $userIds): array
+    {
+        $grids = [];
+        foreach ($userIds as $userId) {
+            $grids[] = collect($this->buildSlotGrid($service, $date, (string) $userId, collect($userIds)))
+                ->keyBy('time');
+        }
+
+        $first = $grids[0] ?? collect();
+
+        return $first->map(function (array $slot, string $time) use ($grids) {
+            $available = collect($grids)->every(
+                fn ($grid) => (bool) ($grid->get($time)['available'] ?? false)
+            );
+
+            return ['time' => $time, 'available' => $available];
+        })->values()->all();
+    }
+
+    private function personnelLabelFor(Service $service, Request $request): string
+    {
+        if ($service->requiresMultiStaff()) {
+            return PackageStaffSelection::label(
+                PackageStaffSelection::fromRequest($request, $service),
+                $service->positions
+            );
+        }
+
+        return $this->personnelLabel($request->query('personnel'));
+    }
+
+    private function eligiblePersonnel(string $date, ?Service $service = null, ?array $positionNames = null)
     {
         $dayOfWeek = (int) Carbon::parse($date)->dayOfWeek; // 0=Sun
 
@@ -824,15 +938,20 @@ class BookingController extends Controller
         // else still maps category → positions via the positions table; a
         // category WITH linked positions shows only those staff, a category
         // with NONE keeps the no-filter behaviour below.
-        if ($service?->category === 'Packages') {
-            $positionNames = $service->relationLoaded('positions')
-                ? $service->positions->pluck('name')->all()
-                : $service->positions()->pluck('positions.name')->all();
-        } else {
-            $positionNames = $service?->category
-                ? Position::namesForServiceCategory($service->category)
-                : [];
+        // Callers can pass $positionNames to narrow to one role (package UI).
+        if ($positionNames === null) {
+            if ($service?->category === 'Packages') {
+                $positionNames = $service->relationLoaded('positions')
+                    ? $service->positions->pluck('name')->all()
+                    : $service->positions()->pluck('positions.name')->all();
+            } else {
+                $positionNames = $service?->category
+                    ? Position::namesForServiceCategory($service->category)
+                    : [];
+            }
         }
+
+        $positionNames = array_values(array_filter($positionNames));
 
         $weekStart = StaffShiftAssignment::weekStartOf($date);
         $rosterWeek = StaffShiftAssignment::weekHasRoster($weekStart);
@@ -974,13 +1093,34 @@ class BookingController extends Controller
                 'end' => (int) Carbon::parse($b->end_time)->hour * 60 + (int) Carbon::parse($b->end_time)->minute,
             ]);
 
-        $taken = Appointment::query()
-            ->whereIn('personnel_id', $candidateIds)
+        // Busy from the legacy personnel_id column OR any package
+        // appointment_personnel row pointing at the same staff.
+        $takenRows = Appointment::query()
             ->whereDate('appointment_date', $date)
             ->whereNotIn('status', [AppointmentStatus::Cancelled->value, AppointmentStatus::NoShow->value])
-            ->get(['personnel_id', 'start_time'])
-            ->groupBy('personnel_id')
-            ->map(fn ($rows) => $rows->pluck('start_time')->map(fn ($t) => substr($t, 0, 5))->all());
+            ->where(function ($query) use ($candidateIds) {
+                $query->whereIn('personnel_id', $candidateIds)
+                    ->orWhereHas('personnelAssignments', function ($assignments) use ($candidateIds) {
+                        $assignments->whereIn('user_id', $candidateIds);
+                    });
+            })
+            ->with(['personnelAssignments' => fn ($query) => $query->whereIn('user_id', $candidateIds)])
+            ->get(['id', 'personnel_id', 'start_time']);
+
+        $taken = collect();
+        foreach ($takenRows as $row) {
+            $time = substr((string) $row->start_time, 0, 5);
+            $ids = collect([$row->personnel_id])
+                ->merge($row->personnelAssignments->pluck('user_id'))
+                ->filter()
+                ->unique();
+            foreach ($ids as $pid) {
+                if (! $candidateIds->contains($pid)) {
+                    continue;
+                }
+                $taken[$pid] = array_values(array_unique(array_merge($taken->get($pid, []), [$time])));
+            }
+        }
 
         $now = now();
         $isToday = $date === $now->toDateString();

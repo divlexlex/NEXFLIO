@@ -64,6 +64,9 @@
                         <input type="hidden" name="appointment_date" value="{{ $date }}">
                         <input type="hidden" name="start_time" value="{{ $time }}">
                         <input type="hidden" name="personnel_id" value="{{ $personnel }}">
+                        @foreach(($staff ?? []) as $positionId => $value)
+                            <input type="hidden" name="staff[{{ $positionId }}]" value="{{ $value }}">
+                        @endforeach
                         @if($notes)<input type="hidden" name="notes" value="{{ $notes }}">@endif
 
                         <label class="form-label" for="pay-method">Payment method</label>

@@ -96,7 +96,7 @@
                     </div>
 
                     <form method="GET" action="{{ route('account.booking.home.payment') }}" class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'address' => $address])
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? [], 'notes' => $notes, 'address' => $address])
                         <a href="{{ route('account.booking.home.details', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel], $address)) }}" class="nx-btn nx-btn-outline">
                             <i class="bi bi-arrow-left me-1"></i>Back
                         </a>

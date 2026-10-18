@@ -73,4 +73,21 @@ class Service extends Model
     {
         return $this->belongsToMany(Position::class, 'service_positions')->withTimestamps();
     }
+
+    /** Packages-category services that declare one or more catering roles. */
+    public function isPackageService(): bool
+    {
+        return $this->category === 'Packages';
+    }
+
+    public function requiresMultiStaff(): bool
+    {
+        if (! $this->isPackageService()) {
+            return false;
+        }
+
+        return $this->relationLoaded('positions')
+            ? $this->positions->isNotEmpty()
+            : $this->positions()->exists();
+    }
 }

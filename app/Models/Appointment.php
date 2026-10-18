@@ -56,6 +56,55 @@ class Appointment extends Model
     }
 
     /**
+     * Packages-only: one row per required staff position. Empty for regular
+     * services that only use personnel_id.
+     */
+    public function personnelAssignments()
+    {
+        return $this->hasMany(AppointmentPersonnel::class);
+    }
+
+    /**
+     * Sync the package staff roster and keep personnel_id as the first
+     * concrete assignee (legacy calendar / staff views still read it).
+     *
+     * @param  array<int, int|null>  $assignments  position_id => user_id|null
+     */
+    public function syncPersonnelAssignments(array $assignments): void
+    {
+        $this->personnelAssignments()->delete();
+
+        foreach ($assignments as $positionId => $userId) {
+            $this->personnelAssignments()->create([
+                'position_id' => (int) $positionId,
+                'user_id' => $userId,
+            ]);
+        }
+
+        $primary = collect($assignments)->filter()->first();
+        $this->update(['personnel_id' => $primary ?: null]);
+    }
+
+    /** Human-readable staff line for package (and single) bookings. */
+    public function personnelDisplayLabel(): string
+    {
+        $this->loadMissing(['personnelAssignments.position', 'personnelAssignments.user', 'personnel']);
+
+        if ($this->personnelAssignments->isNotEmpty()) {
+            return $this->personnelAssignments
+                ->map(function (AppointmentPersonnel $row) {
+                    $role = $row->position?->name ?? 'Staff';
+                    $name = $row->user?->name ?? 'Unassigned';
+
+                    return "{$role}: {$name}";
+                })
+                ->implode(' · ');
+        }
+
+        return $this->personnel?->name ?? 'No preferred personnel';
+    }
+
+    /**
      * The booking-time (primary) payment row — always the FIRST payment on
      * the appointment (oldestOfMany), never a later settlement, partial
      * receipt, or top-up. Every "primary payment" read in the codebase goes

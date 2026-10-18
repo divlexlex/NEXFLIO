@@ -39,7 +39,7 @@
                     <hr class="my-4" style="border-color: var(--nx-border);">
 
                     <form method="GET" action="{{ route('account.booking.home.review') }}">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'address' => $address])
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? [], 'address' => $address])
 
                         @if($service->variants->isEmpty())
                             <p class="small nx-text-secondary mt-2 mb-3">

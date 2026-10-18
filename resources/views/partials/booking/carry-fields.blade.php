@@ -14,6 +14,11 @@
 @if(!empty($date))<input type="hidden" name="date" value="{{ $date }}">@endif
 @if(!empty($time))<input type="hidden" name="time" value="{{ $time }}">@endif
 @if(!empty($personnel))<input type="hidden" name="personnel" value="{{ $personnel }}">@endif
+@if(!empty($staff) && is_array($staff))
+    @foreach($staff as $positionId => $value)
+        <input type="hidden" name="staff[{{ $positionId }}]" value="{{ $value }}">
+    @endforeach
+@endif
 @if(!empty($notes))<input type="hidden" name="notes" value="{{ $notes }}">@endif
 @if(!empty($guests))<input type="hidden" name="guests" value="{{ $guests }}">@endif
 @if(!empty($address))

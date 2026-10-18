@@ -79,7 +79,7 @@
                     </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Spa Personnel</span>
-                        <span class="nx-review-value">{{ $appointment->personnel->name ?? 'No preferred personnel' }}</span>
+                        <span class="nx-review-value">{{ $appointment->personnelDisplayLabel() }}</span>
                     </div>
                     @if($appointment->address)
                         <div class="nx-review-row">

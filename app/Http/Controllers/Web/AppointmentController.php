@@ -37,13 +37,36 @@ class AppointmentController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        $personnel = User::where('role_id', User::ROLE_STAFF)
+            ->with('staffProfile:id,user_id,position')
+            ->whereHas('staffProfile', fn ($query) => $query->where('employment_status', 'active'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $services = Service::with('positions:id,name')
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
         return view('admin.appointments.index', [
             'appointments' => $appointments,
-            'services' => Service::where('status', 'active')->orderBy('name')->get(),
-            'personnel' => User::where('role_id', User::ROLE_STAFF)
-                ->whereHas('staffProfile', fn ($query) => $query->where('employment_status', 'active'))
-                ->orderBy('name')
-                ->get(),
+            'services' => $services,
+            'servicesJson' => $services->map(fn (Service $service) => [
+                'id' => $service->id,
+                'name' => $service->name,
+                'category' => $service->category,
+                'is_package' => $service->requiresMultiStaff(),
+                'positions' => $service->positions->map(fn ($position) => [
+                    'id' => $position->id,
+                    'name' => $position->name,
+                ])->values(),
+            ])->values(),
+            'personnel' => $personnel,
+            'personnelJson' => $personnel->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'position' => $user->staffProfile?->position,
+            ])->values(),
             'statuses' => AppointmentStatus::cases(),
             'currentStatus' => $statusFilter,
         ]);
@@ -158,8 +181,11 @@ class AppointmentController extends Controller
         $appointments = Appointment::with([
             'user:id,name',
             'user.clientProfile:id,user_id,mobile_number',
-            'service:id,name,duration_minutes,price',
+            'service:id,name,duration_minutes,price,category',
+            'service.positions:id,name',
             'personnel:id,name',
+            'personnelAssignments.position:id,name',
+            'personnelAssignments.user:id,name',
             'payment',
             'payments',
             'address',
@@ -258,8 +284,18 @@ class AppointmentController extends Controller
                     'dateLabel' => $appointment->appointment_date->format('M j, Y (D)'),
                     'timeLabel' => Carbon::parse($start)->format('g:i A')
                         .' – '.Carbon::parse($start)->addMinutes($duration)->format('g:i A'),
-                    'personnel' => $appointment->personnel->name ?? null,
+                    'personnel' => $appointment->personnelDisplayLabel(),
                     'personnelId' => $appointment->personnel_id,
+                    'isPackage' => $appointment->service?->isPackageService() ?? false,
+                    'packageStaff' => $appointment->personnelAssignments->map(fn ($row) => [
+                        'position_id' => $row->position_id,
+                        'position_name' => $row->position?->name,
+                        'user_id' => $row->user_id,
+                    ])->values()->all(),
+                    'requiredPositions' => $appointment->service?->positions->map(fn ($position) => [
+                        'id' => $position->id,
+                        'name' => $position->name,
+                    ])->values()->all() ?? [],
                     'status' => $appointment->status->value,
                     'statusLabel' => $appointment->status->label(),
                     'isTerminal' => $appointment->status->isTerminal(),
@@ -291,7 +327,7 @@ class AppointmentController extends Controller
                             ['to' => 'cancelled', 'label' => 'Reject / Cancel', 'style' => 'outline-danger', 'reason' => true],
                         ],
                         AppointmentStatus::Booked => array_merge(
-                            $appointment->personnel_id ? [
+                            $this->isFullyStaffed($appointment) ? [
                                 ['to' => 'in-service', 'label' => 'Start service', 'style' => 'primary'],
                             ] : [],
                             [
@@ -317,29 +353,57 @@ class AppointmentController extends Controller
      */
     public function storeWalkIn(Request $request)
     {
-        $validated = $request->validate([
+        $service = Service::with('positions')->find($request->input('service_id'));
+        $isPackage = $service?->requiresMultiStaff() ?? false;
+
+        $rules = [
             'walk_in_name' => 'required|string|max:255',
             'walk_in_phone' => 'nullable|string|max:30',
             'service_id' => [
                 'required',
                 Rule::exists('services', 'id')->where('status', 'active')->whereNull('deleted_at'),
             ],
-            'personnel_id' => [
-                'required',
-                Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
-            ],
             'appointment_date' => 'required|date|after_or_equal:today',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
-        ]);
+        ];
 
-        DB::transaction(function () use ($request, $validated) {
+        if ($isPackage) {
+            $rules['staff'] = ['required', 'array'];
+            $rules['staff.*'] = [
+                'required',
+                'integer',
+                Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
+            ];
+        } else {
+            $rules['personnel_id'] = [
+                'required',
+                Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
+            ];
+        }
+
+        $validated = $request->validate($rules);
+
+        $assignments = [];
+        $personnelId = $validated['personnel_id'] ?? null;
+
+        if ($isPackage) {
+            foreach ($service->positions as $position) {
+                if (! isset($validated['staff'][$position->id])) {
+                    return back()->withErrors(['staff' => 'Assign a staff member for every package role.'])->withInput();
+                }
+                $assignments[$position->id] = (int) $validated['staff'][$position->id];
+            }
+            $personnelId = collect($assignments)->filter()->first();
+        }
+
+        DB::transaction(function () use ($request, $validated, $assignments, $personnelId) {
             $appointment = Appointment::create([
                 'user_id' => null,
                 'walk_in_name' => $validated['walk_in_name'],
                 'walk_in_phone' => $validated['walk_in_phone'] ?? null,
                 'service_id' => $validated['service_id'],
-                'personnel_id' => $validated['personnel_id'],
+                'personnel_id' => $personnelId,
                 'appointment_date' => $validated['appointment_date'],
                 'start_time' => $validated['start_time'],
                 'notes' => $validated['notes'] ?? null,
@@ -349,6 +413,10 @@ class AppointmentController extends Controller
             // Client-facing Appointment ID, assigned here (the id only
             // exists post-insert) and saved in the same transaction.
             $appointment->update(['reference_code' => $appointment->referenceCode()]);
+
+            if ($assignments !== []) {
+                $appointment->syncPersonnelAssignments($assignments);
+            }
 
             $appointment->payment()->create([
                 'amount' => $appointment->service->price,
@@ -560,30 +628,65 @@ class AppointmentController extends Controller
      */
     public function assignPersonnel(Request $request, $id)
     {
-        $appointment = Appointment::with('service')->findOrFail($id);
+        $appointment = Appointment::with(['service.positions', 'personnelAssignments'])->findOrFail($id);
 
         if ($appointment->status->isTerminal()) {
             return back()->withErrors(['assign' => 'Cannot assign staff to a finished appointment.']);
         }
 
-        $validated = $request->validate([
-            'personnel_id' => [
-                'required',
-                Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
-            ],
-        ]);
+        // Packages: one required staff id per position. Regular bookings keep
+        // the single personnel_id field.
+        if ($appointment->service?->requiresMultiStaff()) {
+            $positionIds = $appointment->service->positions->pluck('id')->all();
+            $validated = $request->validate([
+                'staff' => ['required', 'array'],
+                'staff.*' => [
+                    'required',
+                    'integer',
+                    Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
+                ],
+            ]);
 
-        $appointment->update(['personnel_id' => $validated['personnel_id']]);
+            $assignments = [];
+            foreach ($positionIds as $positionId) {
+                if (! isset($validated['staff'][$positionId])) {
+                    return back()->withErrors(['assign' => 'Assign a staff member for every package role.']);
+                }
+                $assignments[$positionId] = (int) $validated['staff'][$positionId];
+            }
+
+            $appointment->syncPersonnelAssignments($assignments);
+            $label = $appointment->fresh(['personnelAssignments.position', 'personnelAssignments.user'])->personnelDisplayLabel();
+        } else {
+            $validated = $request->validate([
+                'personnel_id' => [
+                    'required',
+                    Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
+                ],
+            ]);
+
+            $appointment->update(['personnel_id' => $validated['personnel_id']]);
+            $label = User::find($validated['personnel_id'])?->name ?? 'a staff member';
+        }
 
         if ($appointment->user_id !== null) {
-            $staffName = User::find($validated['personnel_id'])?->name ?? 'a staff member';
             Notification::create([
                 'user_id' => $appointment->user_id,
                 'title' => 'Staff assigned',
-                'body' => "{$staffName} has been assigned to your {$appointment->service->name} booking.",
+                'body' => "{$label} has been assigned to your {$appointment->service->name} booking.",
             ]);
         }
 
         return back()->with('success', 'Staff assigned to appointment.');
+    }
+
+    /** Packages need every role filled; regular bookings need personnel_id. */
+    private function isFullyStaffed(Appointment $appointment): bool
+    {
+        if ($appointment->personnelAssignments->isNotEmpty()) {
+            return $appointment->personnelAssignments->every(fn ($row) => $row->user_id !== null);
+        }
+
+        return $appointment->personnel_id !== null;
     }
 }

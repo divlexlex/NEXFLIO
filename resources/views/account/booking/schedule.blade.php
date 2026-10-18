@@ -67,33 +67,26 @@
                         <input type="hidden" name="service" value="{{ $service->id }}">
                         @if($variant)<input type="hidden" name="variant" value="{{ $variant->id }}">@endif
                         <input type="hidden" name="date" value="{{ $date }}">
-                        <label class="form-label nx-eyebrow">Preferred Spa Personnel</label>
-
-                        @if($eligiblePersonnel->isEmpty())
-                            <div class="alert alert-warning mb-0">No Spa Personnel are available on this date. Please choose a different date.</div>
-                        @else
-                            <div class="row g-2">
-                                <div class="col-sm-6 col-lg-4">
-                                    <label class="nx-select-card d-flex align-items-center gap-2 {{ $personnelParam === 'any' ? 'is-selected' : '' }}">
-                                        <input type="radio" name="personnel" value="any" {{ $personnelParam === 'any' ? 'checked' : '' }} onchange="document.getElementById('personnelForm').submit()">
-                                        <span>No preferred personnel<br><small class="nx-text-secondary">Manager will assign staff</small></span>
-                                    </label>
-                                </div>
-                                @foreach($eligiblePersonnel as $person)
-                                    <div class="col-sm-6 col-lg-4">
-                                        <label class="nx-select-card d-flex align-items-center gap-2 {{ (string) $personnelParam === (string) $person->id ? 'is-selected' : '' }}">
-                                            <input type="radio" name="personnel" value="{{ $person->id }}" {{ (string) $personnelParam === (string) $person->id ? 'checked' : '' }} onchange="document.getElementById('personnelForm').submit()">
-                                            <span>{{ $person->name }}</span>
-                                        </label>
-                                    </div>
-                                @endforeach
-                            </div>
-                        @endif
+                        @include('partials.booking.personnel-picker')
                     </form>
 
                     <hr class="my-4" style="border-color: var(--nx-border);">
 
                     {{-- TIME --}}
+                    @php
+                        $slotQuery = array_filter([
+                            'service' => $service->id,
+                            'variant' => $variant?->id,
+                            'date' => $date,
+                            'personnel' => $isMultiStaff ? null : $personnelParam,
+                            'time' => null,
+                        ]);
+                        if ($isMultiStaff) {
+                            foreach ($staffSelection as $positionId => $value) {
+                                $slotQuery['staff'][$positionId] = $value;
+                            }
+                        }
+                    @endphp
                     <label class="form-label nx-eyebrow">Time</label>
                     @if(!$personnelParam)
                         <p class="nx-text-secondary small mb-0">Choose Spa Personnel above to see available times.</p>
@@ -106,7 +99,7 @@
                             @foreach($slots as $slot)
                                 @if($slot['available'])
                                     <a class="nx-slot-btn {{ $selectedTime === $slot['time'] ? 'is-selected' : '' }}"
-                                       href="{{ route('account.booking.branch.details', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'personnel' => $personnelParam, 'time' => $slot['time']])) }}">
+                                       href="{{ route('account.booking.branch.details', array_filter(array_merge($slotQuery, ['time' => $slot['time']]))) }}">
                                         {{ \Illuminate\Support\Carbon::parse($slot['time'])->format('g:i A') }}
                                     </a>
                                 @endif

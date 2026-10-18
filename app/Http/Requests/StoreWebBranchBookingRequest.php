@@ -5,7 +5,9 @@ namespace App\Http\Requests;
 use App\Enums\AppointmentStatus;
 use App\Enums\ServiceLocationType;
 use App\Models\Appointment;
+use App\Models\Service;
 use App\Models\User;
+use App\Support\PackageStaffSelection;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -37,6 +39,21 @@ class StoreWebBranchBookingRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $service = $this->resolveService();
+
+        // Packages: staff[position_id] = user_id|"any" → concrete assignments
+        // + a primary personnel_id for the legacy column.
+        if ($service?->requiresMultiStaff()) {
+            $selection = PackageStaffSelection::fromRequest($this, $service);
+            $this->merge([
+                'staff' => $selection,
+                'package_assignments' => PackageStaffSelection::toAssignments($selection),
+                'personnel_id' => PackageStaffSelection::primaryPersonnelId($selection),
+            ]);
+
+            return;
+        }
+
         if ($this->input('personnel_id') !== 'any') {
             return;
         }
@@ -60,6 +77,9 @@ class StoreWebBranchBookingRequest extends FormRequest
                 'nullable',
                 Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
             ],
+            'staff' => ['nullable', 'array'],
+            'staff.*' => ['nullable'],
+            'package_assignments' => ['nullable', 'array'],
             'variant_id' => [
                 'nullable',
                 Rule::exists('service_variants', 'id')->where('service_id', $this->input('service_id')),
@@ -90,24 +110,30 @@ class StoreWebBranchBookingRequest extends FormRequest
         $validator->after(function (Validator $validator) {
             $this->validateVariantChoice($validator);
             $this->validatePackageCash($validator);
+            $this->validatePackageStaff($validator);
 
             if ($validator->errors()->isNotEmpty()) {
                 return;
             }
 
-            // Skip double-booking check when personnel is unassigned (no preference)
-            if (! $this->integer('personnel_id')) {
+            $staffIds = $this->collisionStaffIds();
+            if ($staffIds === []) {
                 return;
             }
 
             $taken = Appointment::query()
-                ->where('personnel_id', $this->integer('personnel_id'))
                 ->whereDate('appointment_date', $this->input('appointment_date'))
                 ->where('start_time', $this->input('start_time'))
                 ->whereNotIn('status', [
                     AppointmentStatus::Cancelled->value,
                     AppointmentStatus::NoShow->value,
                 ])
+                ->where(function ($query) use ($staffIds) {
+                    $query->whereIn('personnel_id', $staffIds)
+                        ->orWhereHas('personnelAssignments', function ($assignments) use ($staffIds) {
+                            $assignments->whereIn('user_id', $staffIds);
+                        });
+                })
                 ->exists();
 
             if ($taken) {
@@ -117,6 +143,41 @@ class StoreWebBranchBookingRequest extends FormRequest
                 );
             }
         });
+    }
+
+    private function resolveService(): ?Service
+    {
+        $serviceId = $this->integer('service_id');
+
+        return $serviceId
+            ? Service::with(['variants', 'positions'])->find($serviceId)
+            : null;
+    }
+
+    private function validatePackageStaff(Validator $validator): void
+    {
+        $service = $this->resolveService();
+        if (! $service?->requiresMultiStaff()) {
+            return;
+        }
+
+        $selection = $this->input('staff', []);
+        if (! is_array($selection) || ! PackageStaffSelection::isComplete($service, $selection)) {
+            $validator->errors()->add('staff', 'Please choose Spa Personnel for every role in this package.');
+        }
+    }
+
+    /** @return list<int> */
+    private function collisionStaffIds(): array
+    {
+        $assignments = $this->input('package_assignments');
+        if (is_array($assignments)) {
+            return collect($assignments)->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+        }
+
+        $personnelId = $this->integer('personnel_id');
+
+        return $personnelId ? [$personnelId] : [];
     }
 
     /**

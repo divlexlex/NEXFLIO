@@ -33,7 +33,7 @@
                     <hr class="my-4" style="border-color: var(--nx-border);">
 
                     <form method="GET" action="{{ route('account.booking.branch.review') }}">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel])
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? []])
 
                         @if($variant === null)
                             <p class="small nx-text-secondary mt-2 mb-3">

@@ -313,7 +313,7 @@
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Service</label>
-                    <select name="service_id" class="form-select" required>
+                    <select name="service_id" id="walkin-service" class="form-select" required>
                         @foreach($services as $service)
                             <option value="{{ $service->id }}">
                                 {{ $service->name }} — ₱{{ number_format($service->price, 2) }}
@@ -321,14 +321,15 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="mb-2">
+                <div class="mb-2" id="walkin-staff-single">
                     <label class="form-label">Staff</label>
-                    <select name="personnel_id" class="form-select" required>
+                    <select name="personnel_id" id="walkin-personnel" class="form-select" required>
                         @foreach($personnel as $member)
                             <option value="{{ $member->id }}">{{ $member->name }}</option>
                         @endforeach
                     </select>
                 </div>
+                <div id="walkin-staff-package" class="d-none"></div>
                 <div class="row">
                     <div class="col mb-2">
                         <label class="form-label">Date</label>
@@ -409,14 +410,15 @@
                 <p class="text-muted small">
                     Assign a staff member to this appointment. The client will be notified.
                 </p>
-                <div class="mb-2">
+                <div class="mb-2" id="assign-single-wrap">
                     <label class="form-label">Staff</label>
-                    <select name="personnel_id" id="assign-personnel" class="form-select" required>
+                    <select name="personnel_id" id="assign-personnel" class="form-select">
                         @foreach($personnel as $member)
                             <option value="{{ $member->id }}">{{ $member->name }}</option>
                         @endforeach
                     </select>
                 </div>
+                <div id="assign-package-wrap" class="d-none"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -455,6 +457,57 @@
             },
         });
         calendar.render();
+
+        // Walk-in: Packages show one staff select per required role; regular
+        // services keep the single Staff dropdown.
+        (function () {
+            const serviceSelect = document.getElementById('walkin-service');
+            const singleWrap = document.getElementById('walkin-staff-single');
+            const packageWrap = document.getElementById('walkin-staff-package');
+            const singleSelect = document.getElementById('walkin-personnel');
+            const servicesCatalog = @json($servicesJson);
+            const staffCatalog = @json($personnelJson);
+            if (!serviceSelect || !singleWrap || !packageWrap || !singleSelect) return;
+
+            function syncWalkInStaff() {
+                const service = servicesCatalog.find((s) => String(s.id) === String(serviceSelect.value));
+                const isPackage = Boolean(service?.is_package && (service.positions || []).length);
+
+                if (!isPackage) {
+                    packageWrap.classList.add('d-none');
+                    packageWrap.innerHTML = '';
+                    singleWrap.classList.remove('d-none');
+                    singleSelect.disabled = false;
+                    singleSelect.required = true;
+                    return;
+                }
+
+                singleWrap.classList.add('d-none');
+                singleSelect.disabled = true;
+                singleSelect.required = false;
+                packageWrap.classList.remove('d-none');
+                packageWrap.innerHTML = '<p class="small text-muted mb-2">This package needs one staff member per role.</p>';
+
+                (service.positions || []).forEach((position) => {
+                    const wrap = document.createElement('div');
+                    wrap.className = 'mb-2';
+                    const options = staffCatalog
+                        .filter((s) => !position.name || !s.position || s.position === position.name)
+                        .map((s) => '<option value="' + s.id + '">' + s.name + '</option>')
+                        .join('');
+                    wrap.innerHTML =
+                        '<label class="form-label">' + position.name + '</label>' +
+                        '<select name="staff[' + position.id + ']" class="form-select" required>' +
+                        '<option value="">Select…</option>' + options +
+                        '</select>';
+                    packageWrap.appendChild(wrap);
+                });
+            }
+
+            serviceSelect.addEventListener('change', syncWalkInStaff);
+            document.getElementById('walkInModal')?.addEventListener('show.bs.modal', syncWalkInStaff);
+            syncWalkInStaff();
+        })();
 
         function esc(s) { return (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -561,7 +614,41 @@
                 assignBtn.textContent = 'Assign Staff';
                 assignBtn.addEventListener('click', () => {
                     document.getElementById('assignForm').action = statusBase + '/' + event.id + '/assign-personnel';
-                    document.getElementById('assign-personnel').value = p.personnelId || '';
+                    const singleWrap = document.getElementById('assign-single-wrap');
+                    const packageWrap = document.getElementById('assign-package-wrap');
+                    const singleSelect = document.getElementById('assign-personnel');
+                    const staffCatalog = @json($personnelJson);
+
+                    if (p.isPackage && (p.requiredPositions || []).length) {
+                        singleWrap.classList.add('d-none');
+                        singleSelect.required = false;
+                        singleSelect.disabled = true;
+                        packageWrap.classList.remove('d-none');
+                        packageWrap.innerHTML = '';
+                        const assigned = {};
+                        (p.packageStaff || []).forEach((row) => { assigned[row.position_id] = row.user_id; });
+                        (p.requiredPositions || []).forEach((position) => {
+                            const wrap = document.createElement('div');
+                            wrap.className = 'mb-2';
+                            const options = staffCatalog
+                                .filter((s) => !position.name || !s.position || s.position === position.name)
+                                .map((s) => '<option value="' + s.id + '"' + (String(assigned[position.id] || '') === String(s.id) ? ' selected' : '') + '>' + s.name + '</option>')
+                                .join('');
+                            wrap.innerHTML =
+                                '<label class="form-label">' + position.name + '</label>' +
+                                '<select name="staff[' + position.id + ']" class="form-select" required>' +
+                                '<option value="">Select…</option>' + options +
+                                '</select>';
+                            packageWrap.appendChild(wrap);
+                        });
+                    } else {
+                        packageWrap.classList.add('d-none');
+                        packageWrap.innerHTML = '';
+                        singleWrap.classList.remove('d-none');
+                        singleSelect.disabled = false;
+                        singleSelect.required = true;
+                        singleSelect.value = p.personnelId || '';
+                    }
                     new bootstrap.Modal(document.getElementById('assignModal')).show();
                 });
                 actions.appendChild(assignBtn);
