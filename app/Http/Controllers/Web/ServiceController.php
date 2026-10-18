@@ -40,6 +40,23 @@ class ServiceController extends Controller
             ->orderBy('name')
             ->get();
 
+        // Building blocks for a Packages-category service: every active
+        // non-Packages row the admin can tick into the inclusions list.
+        $offerableServices = Service::query()
+            ->where('status', 'active')
+            ->where('category', '!=', 'Packages')
+            ->orderBy('category')
+            ->orderBy('name')
+            ->get(['id', 'name', 'category', 'price', 'duration_minutes'])
+            ->map(fn (Service $service) => [
+                'id' => $service->id,
+                'name' => $service->name,
+                'category' => $service->category,
+                'price' => (float) $service->price,
+                'duration_minutes' => (int) $service->duration_minutes,
+            ])
+            ->values();
+
         return view('admin.services.index', [
             'services' => $services,
             'filters' => $filters,
@@ -47,6 +64,7 @@ class ServiceController extends Controller
             'categories' => ServiceCatalog::categoryOrder(),
             'statuses' => Service::query()->distinct()->orderBy('status')->pluck('status')->all(),
             'totalServices' => Service::count(),
+            'offerableServices' => $offerableServices,
         ]);
     }
 

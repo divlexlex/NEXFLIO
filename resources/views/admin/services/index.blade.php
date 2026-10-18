@@ -95,7 +95,7 @@
 
 {{-- CREATE/EDIT MODAL --}}
 <div class="modal fade" id="serviceModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <form method="POST" id="serviceForm" class="modal-content" enctype="multipart/form-data">
             @csrf
             <span id="service-method-holder"></span>
@@ -142,13 +142,28 @@
                     <label class="form-label">Description</label>
                     <textarea name="description" id="svc-description" class="form-control" rows="2"></textarea>
                 </div>
-                {{-- Package inclusions: visible only for the Packages category
-                     (toggle on change + on modal open). Required there via the
-                     server rule; one inclusion per line. --}}
+                {{-- Package builder: visible only for the Packages category.
+                     Pick offered services to compose inclusions; the textarea
+                     stays the stored source of truth (one inclusion per line)
+                     and can still be edited by hand. --}}
                 <div class="mb-2 d-none" id="svc-package-details-wrap">
+                    <label class="form-label">Build from offered services</label>
+                    <div class="form-text mt-0 mb-2">
+                        Tick the services this package includes. Inclusions, price, and duration update from your selection — you can still edit them below.
+                    </div>
+                    <div id="svc-package-picker" class="border rounded p-2 mb-2" style="max-height: 220px; overflow-y: auto;"
+                         data-offerable='@json($offerableServices)'>
+                        {{-- Checkboxes rendered by JS from data-offerable. --}}
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="svc-package-apply-totals">
+                            Apply selected totals
+                        </button>
+                        <span class="small text-muted" id="svc-package-selection-summary"></span>
+                    </div>
                     <label class="form-label" for="svc-package-details">Package details — what's included</label>
                     <textarea name="package_details" id="svc-package-details" class="form-control" rows="4" placeholder="One inclusion per line"></textarea>
-                    <div class="form-text">Shown on the public Packages services. Enter one inclusion per line.</div>
+                    <div class="form-text">Shown on the public Packages services. Filled from selected services, or type custom lines.</div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Badge <span class="text-muted">(optional)</span></label>
@@ -212,6 +227,103 @@
     (function () {
         const variantsWrap = document.getElementById('svc-variants');
         let variantIndex = 0;
+        let editingServiceId = null;
+        // When true, checkbox changes rewrite the package_details textarea
+        // from selected service names. Cleared once the admin types in the
+        // textarea so custom wording is not overwritten.
+        let syncDetailsFromPicker = true;
+
+        const picker = document.getElementById('svc-package-picker');
+        let offerable = [];
+        try { offerable = JSON.parse(picker?.dataset.offerable || '[]'); } catch (e) { offerable = []; }
+
+        function selectedOfferables() {
+            if (!picker) return [];
+            return Array.from(picker.querySelectorAll('input[type="checkbox"]:checked'))
+                .map((cb) => offerable.find((s) => String(s.id) === cb.value))
+                .filter(Boolean);
+        }
+
+        function updateSelectionSummary() {
+            const summary = document.getElementById('svc-package-selection-summary');
+            if (!summary) return;
+            const selected = selectedOfferables();
+            if (!selected.length) {
+                summary.textContent = '';
+                return;
+            }
+            const price = selected.reduce((sum, s) => sum + Number(s.price || 0), 0);
+            const mins = selected.reduce((sum, s) => sum + Number(s.duration_minutes || 0), 0);
+            summary.textContent = selected.length + ' selected · ₱' + price.toFixed(2) + ' · ' + mins + ' mins';
+        }
+
+        function writeDetailsFromSelection() {
+            if (!syncDetailsFromPicker) return;
+            const details = document.getElementById('svc-package-details');
+            if (!details) return;
+            details.value = selectedOfferables().map((s) => s.name).join('\n');
+        }
+
+        function applySelectedTotals() {
+            const selected = selectedOfferables();
+            if (!selected.length) return;
+            const price = selected.reduce((sum, s) => sum + Number(s.price || 0), 0);
+            const mins = selected.reduce((sum, s) => sum + Number(s.duration_minutes || 0), 0);
+            document.getElementById('svc-price').value = price.toFixed(2);
+            document.getElementById('svc-duration').value = Math.max(5, mins);
+        }
+
+        function onPickerChange() {
+            writeDetailsFromSelection();
+            updateSelectionSummary();
+            // Creating a package: keep price/duration aligned with the
+            // selection. Editing: only update the summary — use the button
+            // to apply totals so existing package pricing is not overwritten.
+            if (!editingServiceId) applySelectedTotals();
+        }
+
+        function renderPackagePicker(preselectedNames) {
+            if (!picker) return;
+            const names = new Set((preselectedNames || []).map((n) => n.trim().toLowerCase()).filter(Boolean));
+            const available = offerable.filter((s) => String(s.id) !== String(editingServiceId || ''));
+
+            if (!available.length) {
+                picker.innerHTML = '<p class="small text-muted mb-0">No active services to include yet. Add regular services first.</p>';
+                updateSelectionSummary();
+                return;
+            }
+
+            const byCategory = {};
+            available.forEach((s) => {
+                const cat = s.category || 'Other';
+                (byCategory[cat] = byCategory[cat] || []).push(s);
+            });
+
+            picker.innerHTML = '';
+            Object.keys(byCategory).sort().forEach((cat) => {
+                const heading = document.createElement('div');
+                heading.className = 'small fw-semibold text-muted mt-1 mb-1';
+                heading.textContent = cat;
+                picker.appendChild(heading);
+
+                byCategory[cat].forEach((s) => {
+                    const id = 'pkg-include-' + s.id;
+                    const wrap = document.createElement('div');
+                    wrap.className = 'form-check';
+                    wrap.innerHTML =
+                        '<input class="form-check-input" type="checkbox" value="' + s.id + '" id="' + id + '">' +
+                        '<label class="form-check-label small" for="' + id + '">' +
+                        s.name + ' <span class="text-muted">(₱' + Number(s.price).toFixed(0) + ' · ' + s.duration_minutes + ' mins)</span>' +
+                        '</label>';
+                    const cb = wrap.querySelector('input');
+                    if (names.has(String(s.name).trim().toLowerCase())) cb.checked = true;
+                    cb.addEventListener('change', onPickerChange);
+                    picker.appendChild(wrap);
+                });
+            });
+
+            updateSelectionSummary();
+        }
 
         // Package details are only relevant to the Packages category: the
         // whole block is hidden (and un-required) for every other category.
@@ -223,8 +335,20 @@
             const isPackages = cat.value === 'Packages';
             wrap.classList.toggle('d-none', !isPackages);
             details.required = isPackages;
+            // Switching into Packages with an empty picker (e.g. create flow
+            // that started on another category) builds the checklist once.
+            if (isPackages && picker && !picker.querySelector('.form-check')) {
+                renderPackagePicker([]);
+            }
         }
         document.getElementById('svc-category').addEventListener('change', syncPackageDetails);
+
+        document.getElementById('svc-package-apply-totals')?.addEventListener('click', applySelectedTotals);
+
+        document.getElementById('svc-package-details')?.addEventListener('input', () => {
+            // Admin typed custom inclusions — stop overwriting from checkboxes.
+            syncDetailsFromPicker = false;
+        });
 
         function addVariantRow(data) {
             data = data || {};
@@ -272,8 +396,10 @@
             const removeBox = document.getElementById('svc-remove-image');
 
             variantsWrap.innerHTML = '';
+            syncDetailsFromPicker = true;
 
             if (btn.dataset.mode === 'edit') {
+                editingServiceId = btn.dataset.id;
                 form.action = "{{ url('admin/services') }}/" + btn.dataset.id;
                 methodHolder.innerHTML = '<input type="hidden" name="_method" value="PATCH">';
                 document.getElementById('service-modal-title').textContent = 'Edit Service';
@@ -288,7 +414,8 @@
                 }
                 catSelect.value = currentCategory;
                 document.getElementById('svc-description').value = btn.dataset.description || '';
-                document.getElementById('svc-package-details').value = btn.dataset.packageDetails || '';
+                const packageDetails = btn.dataset.packageDetails || '';
+                document.getElementById('svc-package-details').value = packageDetails;
                 document.getElementById('svc-price').value = btn.dataset.price;
                 document.getElementById('svc-duration').value = btn.dataset.duration;
                 document.getElementById('svc-status').value = btn.dataset.status;
@@ -307,8 +434,18 @@
                 let variants = [];
                 try { variants = JSON.parse(btn.dataset.variants || '[]'); } catch (e) { variants = []; }
                 variants.forEach(addVariantRow);
+
+                const preselected = packageDetails.split(/\r\n|\r|\n/).map((l) => l.trim()).filter(Boolean);
+                // Existing custom wording that doesn't match service names
+                // should not be wiped the first time a checkbox changes.
+                const matched = preselected.filter((line) =>
+                    offerable.some((s) => s.name.trim().toLowerCase() === line.toLowerCase())
+                );
+                syncDetailsFromPicker = matched.length === preselected.length && preselected.length > 0;
+                renderPackagePicker(preselected);
                 syncPackageDetails();
             } else {
+                editingServiceId = null;
                 form.action = "{{ route('admin.services.store') }}";
                 methodHolder.innerHTML = '';
                 document.getElementById('service-modal-title').textContent = 'New Service';
@@ -316,6 +453,7 @@
                 document.getElementById('svc-category').querySelectorAll('option[data-legacy]').forEach((o) => o.remove());
                 preview.style.display = 'none';
                 removeWrap.style.display = 'none';
+                renderPackagePicker([]);
                 syncPackageDetails();
             }
         });

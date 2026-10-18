@@ -103,9 +103,34 @@ class PackageDetailsFeeFallbackTest extends TestCase
         // for the Packages category and the edit button carries the value.
         $this->assertStringContainsString('<div class="mb-2 d-none" id="svc-package-details-wrap">', $html);
         $this->assertStringContainsString('id="svc-package-details"', $html);
+        $this->assertStringContainsString('id="svc-package-picker"', $html);
+        $this->assertStringContainsString('Build from offered services', $html);
         $this->assertStringContainsString('syncPackageDetails', $html);
         $this->assertStringContainsString("cat.value === 'Packages'", $html);
         $this->assertStringContainsString('data-package-details=', $html);
+    }
+
+    public function test_admin_can_create_package_from_offered_service_names(): void
+    {
+        $facial = $this->makeService(['name' => 'Nx Facial Treatment', 'category' => 'Facial', 'price' => 499, 'duration_minutes' => 45]);
+        $massage = $this->makeService(['name' => 'Nx Swedish Massage', 'category' => 'Massage', 'price' => 699, 'duration_minutes' => 60]);
+
+        $details = $facial->name."\n".$massage->name;
+
+        $this->actingAs($this->owner)->post(
+            route('admin.services.store'),
+            $this->servicePayload([
+                'name' => 'Nx Built Package',
+                'package_details' => $details,
+                'price' => 1198,
+                'duration_minutes' => 105,
+            ])
+        )->assertRedirect()->assertSessionHasNoErrors();
+
+        $package = Service::where('name', 'Nx Built Package')->firstOrFail();
+        $this->assertSame($details, $package->package_details);
+        $this->assertSame('1198.00', (string) $package->price);
+        $this->assertSame(105, $package->duration_minutes);
     }
 
     public function test_public_services_page_renders_package_inclusions(): void
