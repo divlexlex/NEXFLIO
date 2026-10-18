@@ -132,6 +132,40 @@ class PackageMultiStaffBookingTest extends TestCase
         $this->assertStringContainsString('Massage Technician: Maya Massage', $appointment->personnelDisplayLabel());
     }
 
+    public function test_walk_in_single_service_rejects_wrong_category_staff(): void
+    {
+        $facial = Service::create([
+            'name' => 'Nx Walk-in Facial',
+            'category' => 'Facial',
+            'description' => 'Test',
+            'price' => 499,
+            'duration_minutes' => 45,
+            'status' => 'active',
+            'service_location_type' => 'branch',
+        ]);
+
+        $this->actingAs($this->manager)->post(route('admin.appointments.walk-in'), [
+            'walk_in_name' => 'Wrong Category Client',
+            'service_id' => $facial->id,
+            'personnel_id' => $this->massageStaff->id,
+            'appointment_date' => now()->toDateString(),
+            'start_time' => '16:00',
+        ])->assertSessionHasErrors('personnel_id');
+
+        $this->actingAs($this->manager)->post(route('admin.appointments.walk-in'), [
+            'walk_in_name' => 'Correct Category Client',
+            'service_id' => $facial->id,
+            'personnel_id' => $this->facialStaff->id,
+            'appointment_date' => now()->toDateString(),
+            'start_time' => '16:00',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('appointments', [
+            'walk_in_name' => 'Correct Category Client',
+            'personnel_id' => $this->facialStaff->id,
+        ]);
+    }
+
     public function test_walk_in_package_requires_one_staff_per_role(): void
     {
         $this->actingAs($this->manager)->post(route('admin.appointments.walk-in'), [

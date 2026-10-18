@@ -151,7 +151,9 @@
                                         data-id="{{ $appointment->id }}"
                                         data-date="{{ $appointment->appointment_date->toDateString() }}"
                                         data-time="{{ substr($appointment->start_time, 0, 5) }}"
-                                        data-personnel="{{ $appointment->personnel_id }}">
+                                        data-personnel="{{ $appointment->personnel_id }}"
+                                        data-category="{{ $appointment->service?->category }}"
+                                        data-eligible-positions="{{ json_encode(\App\Models\Position::namesForServiceCategory($appointment->service?->category ?? '')) }}">
                                     Override
                                 </button>
                             @endunless
@@ -323,11 +325,8 @@
                 </div>
                 <div class="mb-2" id="walkin-staff-single">
                     <label class="form-label">Staff</label>
-                    <select name="personnel_id" id="walkin-personnel" class="form-select" required>
-                        @foreach($personnel as $member)
-                            <option value="{{ $member->id }}">{{ $member->name }}</option>
-                        @endforeach
-                    </select>
+                    {{-- Options filled by JS from the selected service category. --}}
+                    <select name="personnel_id" id="walkin-personnel" class="form-select" required></select>
                 </div>
                 <div id="walkin-staff-package" class="d-none"></div>
                 <div class="row">
@@ -458,15 +457,43 @@
         });
         calendar.render();
 
-        // Walk-in: Packages show one staff select per required role; regular
-        // services keep the single Staff dropdown.
+        // Shared: staff who offer positions linked to a service category
+        // (Facial → Facial Technician, etc.). No linked positions → all staff.
+        const staffCatalog = @json($personnelJson);
+        function staffForEligiblePositions(eligiblePositions) {
+            const names = eligiblePositions || [];
+            // Strict filter only — never keep a previously selected staff
+            // member who does not offer this service category (e.g. a Massage
+            // Tech left over after switching to Gel Manicure / Nails).
+            return names.length
+                ? staffCatalog.filter((s) => names.includes(s.position))
+                : staffCatalog.slice();
+        }
+        function fillStaffSelect(select, staff, selectedId, emptyLabel) {
+            if (!select) return;
+            if (!staff.length) {
+                select.innerHTML = '<option value="">' + (emptyLabel || 'No matching staff') + '</option>';
+                return;
+            }
+            // Keep selection only when that person is still in the filtered pool.
+            const keepId = staff.some((s) => String(s.id) === String(selectedId || ''))
+                ? selectedId
+                : staff[0].id;
+            select.innerHTML = staff.map((s) => {
+                const selected = String(keepId) === String(s.id) ? ' selected' : '';
+                const hint = s.position ? ' (' + s.position + ')' : '';
+                return '<option value="' + s.id + '"' + selected + '>' + s.name + hint + '</option>';
+            }).join('');
+        }
+
+        // Walk-in: Packages → one select per role; single services → Staff
+        // dropdown filtered to employees who offer that service category.
         (function () {
             const serviceSelect = document.getElementById('walkin-service');
             const singleWrap = document.getElementById('walkin-staff-single');
             const packageWrap = document.getElementById('walkin-staff-package');
             const singleSelect = document.getElementById('walkin-personnel');
             const servicesCatalog = @json($servicesJson);
-            const staffCatalog = @json($personnelJson);
             if (!serviceSelect || !singleWrap || !packageWrap || !singleSelect) return;
 
             function syncWalkInStaff() {
@@ -479,6 +506,12 @@
                     singleWrap.classList.remove('d-none');
                     singleSelect.disabled = false;
                     singleSelect.required = true;
+                    fillStaffSelect(
+                        singleSelect,
+                        staffForEligiblePositions(service?.eligible_positions || []),
+                        null,
+                        'No staff offer this service category'
+                    );
                     return;
                 }
 
@@ -617,7 +650,6 @@
                     const singleWrap = document.getElementById('assign-single-wrap');
                     const packageWrap = document.getElementById('assign-package-wrap');
                     const singleSelect = document.getElementById('assign-personnel');
-                    const staffCatalog = @json($personnelJson);
 
                     if (p.isPackage && (p.requiredPositions || []).length) {
                         singleWrap.classList.add('d-none');
@@ -632,7 +664,7 @@
                             wrap.className = 'mb-2';
                             const options = staffCatalog
                                 .filter((s) => !position.name || !s.position || s.position === position.name)
-                                .map((s) => '<option value="' + s.id + '"' + (String(assigned[position.id] || '') === String(s.id) ? ' selected' : '') + '>' + s.name + '</option>')
+                                .map((s) => '<option value="' + s.id + '"' + (String(assigned[position.id] || '') === String(s.id) ? ' selected' : '') + '>' + s.name + ' (' + (s.position || 'Staff') + ')</option>')
                                 .join('');
                             wrap.innerHTML =
                                 '<label class="form-label">' + position.name + '</label>' +
@@ -647,7 +679,12 @@
                         singleWrap.classList.remove('d-none');
                         singleSelect.disabled = false;
                         singleSelect.required = true;
-                        singleSelect.value = p.personnelId || '';
+                        fillStaffSelect(
+                            singleSelect,
+                            staffForEligiblePositions(p.eligiblePositions || []),
+                            p.personnelId,
+                            'No staff offer this service category'
+                        );
                     }
                     new bootstrap.Modal(document.getElementById('assignModal')).show();
                 });
@@ -694,12 +731,20 @@
             document.getElementById('dw-statusForm').submit();
         });
 
-        const overrideModal = document.getElementById('overrideModal');        overrideModal.addEventListener('show.bs.modal', (event) => {
+        const overrideModal = document.getElementById('overrideModal');
+        overrideModal.addEventListener('show.bs.modal', (event) => {
             const btn = event.relatedTarget;
             document.getElementById('overrideForm').action = statusBase + '/' + btn.dataset.id + '/override';
             document.getElementById('ov-date').value = btn.dataset.date;
             document.getElementById('ov-time').value = btn.dataset.time;
-            document.getElementById('ov-personnel').value = btn.dataset.personnel;
+            let eligible = [];
+            try { eligible = JSON.parse(btn.dataset.eligiblePositions || '[]'); } catch (e) { eligible = []; }
+            fillStaffSelect(
+                document.getElementById('ov-personnel'),
+                staffForEligiblePositions(eligible),
+                btn.dataset.personnel,
+                'No staff offer this service category'
+            );
         });
     });
 </script>

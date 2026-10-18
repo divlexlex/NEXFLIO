@@ -31,7 +31,7 @@ class AppointmentController extends Controller
             $request->session()->put('filters.appointments.status', $statusFilter);
         }
 
-        $appointments = Appointment::with(['user', 'service', 'personnel', 'payment', 'payments'])
+        $appointments = Appointment::with(['user', 'service:id,name,category,price,duration_minutes', 'personnel', 'payment', 'payments'])
             ->when($statusFilter, fn ($query, $status) => $query->where('status', $status))
             ->orderByDesc('appointment_date')
             ->paginate(15)
@@ -56,6 +56,9 @@ class AppointmentController extends Controller
                 'name' => $service->name,
                 'category' => $service->category,
                 'is_package' => $service->requiresMultiStaff(),
+                // Positions that fulfil this service's category (Nail → Nail
+                // Technician, etc.). Empty means no category filter yet.
+                'eligible_positions' => \App\Models\Position::namesForServiceCategory($service->category),
                 'positions' => $service->positions->map(fn ($position) => [
                     'id' => $position->id,
                     'name' => $position->name,
@@ -287,6 +290,10 @@ class AppointmentController extends Controller
                     'personnel' => $appointment->personnelDisplayLabel(),
                     'personnelId' => $appointment->personnel_id,
                     'isPackage' => $appointment->service?->isPackageService() ?? false,
+                    'serviceCategory' => $appointment->service?->category,
+                    'eligiblePositions' => $appointment->service
+                        ? \App\Models\Position::namesForServiceCategory($appointment->service->category)
+                        : [],
                     'packageStaff' => $appointment->personnelAssignments->map(fn ($row) => [
                         'position_id' => $row->position_id,
                         'position_name' => $row->position?->name,
@@ -385,7 +392,7 @@ class AppointmentController extends Controller
         $validated = $request->validate($rules);
 
         $assignments = [];
-        $personnelId = $validated['personnel_id'] ?? null;
+        $personnelId = isset($validated['personnel_id']) ? (int) $validated['personnel_id'] : null;
 
         if ($isPackage) {
             foreach ($service->positions as $position) {
@@ -395,6 +402,20 @@ class AppointmentController extends Controller
                 $assignments[$position->id] = (int) $validated['staff'][$position->id];
             }
             $personnelId = collect($assignments)->filter()->first();
+        } elseif ($personnelId && $service) {
+            // Single service: staff must offer a position linked to this
+            // service category (Facial → Facial Technician, etc.).
+            $allowed = \App\Models\Position::namesForServiceCategory($service->category);
+            if ($allowed !== []) {
+                $holds = User::whereKey($personnelId)
+                    ->whereHas('staffProfile', fn ($query) => $query->whereIn('position', $allowed))
+                    ->exists();
+                if (! $holds) {
+                    return back()
+                        ->withErrors(['personnel_id' => 'That staff member does not offer this service category.'])
+                        ->withInput();
+                }
+            }
         }
 
         DB::transaction(function () use ($request, $validated, $assignments, $personnelId) {
