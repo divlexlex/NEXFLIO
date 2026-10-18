@@ -20,7 +20,7 @@
 return [
     'business_name' => 'Perfect Nails Wellness & Aesthetics',
     'address_line' => '237 A. Mabini St., Maypajo, Caloocan',
-    'hours' => 'Monday – Sunday: 10:00 AM – 9:00 PM',
+    'hours' => 'Monday – Sunday: 10:00 AM – 10:00 PM',
     'phones' => ['0905 556 3955', '0917 558 2122'],
     'map_url' => 'https://maps.google.com/?q=237+A.+Mabini+St.,+Maypajo,+Caloocan',
 ];

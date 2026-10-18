@@ -9,14 +9,14 @@ class BusinessHours extends Model
 {
     /**
      * Per-day-type default open/close times ('H:i:s'). Weekdays (Mon–Fri)
-     * currently open at noon; weekends (Sat–Sun) open in the morning. Both
-     * close at 1:00 AM — i.e. after midnight — which is a valid overnight
-     * pair (see windowForDay()).
+     * open at noon; weekends (Sat–Sun) open in the morning. Both close at
+     * 10:00 PM same calendar day — no overnight / post-midnight starts on
+     * that day's schedule (see windowForDay() / slotStartAllowed()).
      */
     public const DEFAULT_WEEKDAY_OPEN = '12:00:00';
-    public const DEFAULT_WEEKDAY_CLOSE = '01:00:00';
+    public const DEFAULT_WEEKDAY_CLOSE = '22:00:00';
     public const DEFAULT_WEEKEND_OPEN = '10:00:00';
-    public const DEFAULT_WEEKEND_CLOSE = '01:00:00';
+    public const DEFAULT_WEEKEND_CLOSE = '22:00:00';
 
     protected $fillable = ['day_of_week', 'open_at', 'close_at', 'is_open'];
 
@@ -83,9 +83,8 @@ class BusinessHours extends Model
     /**
      * The ONE shared slot rule: a start time is offered only when it is at
      * or after opening, before midnight, and the service finishes by the
-     * (overnight-aware) close. So a 60-minute service in a 12:00–01:00 day
-     * last starts at 11:30 PM, a 120-minute one at 11:00 PM, and nothing
-     * ever starts at or after 12:00 AM.
+     * (overnight-aware) close. With the default 10:00 PM close, a 60-minute
+     * service last starts at 9:00 PM — nothing past closing that day.
      */
     public static function slotStartAllowed(int $startMinute, int $duration, int $openMinute, int $effectiveClose): bool
     {
@@ -95,10 +94,29 @@ class BusinessHours extends Model
     }
 
     /**
+     * True when $startTime (H:i) on $date lets a $durationMinutes service
+     * finish by that day's closing time. Used to reject forged bookings
+     * past shop hours (e.g. same-day past 10:00 PM → book another day).
+     */
+    public static function startFitsOnDate(string $date, string $startTime, int $durationMinutes): bool
+    {
+        $window = static::windowForDay(Carbon::parse($date)->dayOfWeek);
+        if ($window === null) {
+            return false;
+        }
+
+        [$openMinute, $effectiveClose] = $window;
+        $parts = explode(':', substr($startTime, 0, 5));
+        $startMinute = ((int) $parts[0]) * 60 + ((int) ($parts[1] ?? 0));
+
+        return static::slotStartAllowed($startMinute, $durationMinutes, $openMinute, $effectiveClose);
+    }
+
+    /**
      * Human-readable public hours lines, grouped over consecutive days that
      * share the same open/close (reading Monday→Sunday). Weekday and weekend
      * therefore print as separate lines when they differ — e.g.
-     * "Monday – Friday: 12:00 PM – 1:00 AM", "Saturday – Sunday: 10:00 AM – 1:00 AM".
+     * "Monday – Friday: 12:00 PM – 10:00 PM", "Saturday – Sunday: 10:00 AM – 10:00 PM".
      *
      * @return list<string>
      */

@@ -25,7 +25,7 @@ class DialogflowController extends Controller
 
         $text = match ($intent) {
             'services.prices' => $this->servicesPrices($parameters['category'] ?? null),
-            'hours.location' => 'We are open daily from 10:00 AM to 8:00 PM. '
+            'hours.location' => 'We are open daily until 10:00 PM. '
                 . 'Walk-ins are welcome, but booked appointments are prioritized.',
             'booking.how' => 'Bookings are made through the Perfect Nails mobile app: '
                 . 'pick a service, choose your specialist and time slot, then upload '

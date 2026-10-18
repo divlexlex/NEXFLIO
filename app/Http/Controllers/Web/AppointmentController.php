@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\AppointmentChangeRequest;
+use App\Models\BusinessHours;
 use App\Models\LeaveRequest;
 use App\Models\Notification;
 use App\Models\Service;
@@ -390,6 +391,16 @@ class AppointmentController extends Controller
         }
 
         $validated = $request->validate($rules);
+
+        if ($service && ! BusinessHours::startFitsOnDate(
+            $validated['appointment_date'],
+            $validated['start_time'],
+            (int) $service->duration_minutes
+        )) {
+            return back()
+                ->withErrors(['start_time' => 'That time is past shop closing. Please choose an earlier slot, or book for another day.'])
+                ->withInput();
+        }
 
         $assignments = [];
         $personnelId = isset($validated['personnel_id']) ? (int) $validated['personnel_id'] : null;

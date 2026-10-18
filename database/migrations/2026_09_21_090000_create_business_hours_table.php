@@ -20,14 +20,15 @@ return new class extends Migration
             $table->unique('day_of_week');
         });
 
-        // Seed per-day-type defaults: weekdays (Mon–Fri) 12:00 PM–1:00 AM,
-        // weekends (Sat–Sun) 10:00 AM–1:00 AM (all Open).
+        // Seed per-day-type defaults: weekdays (Mon–Fri) 12:00 PM–10:00 PM,
+        // weekends (Sat–Sun) 10:00 AM–10:00 PM (all Open). Same-day bookings
+        // cannot start a service that would run past closing.
         foreach (range(0, 6) as $day) {
             $weekend = in_array($day, [0, 6], true);
             DB::table('business_hours')->insert([
                 'day_of_week' => $day,
                 'open_at'     => $weekend ? '10:00:00' : '12:00:00',
-                'close_at'    => '01:00:00',
+                'close_at'    => '22:00:00',
                 'is_open'     => true,
                 'created_at'  => now(),
                 'updated_at'  => now(),

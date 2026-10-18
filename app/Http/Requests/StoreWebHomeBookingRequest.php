@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\AppointmentStatus;
 use App\Enums\ServiceLocationType;
 use App\Models\Appointment;
+use App\Models\BusinessHours;
 use App\Models\Service;
 use App\Models\User;
 use App\Support\PackageStaffSelection;
@@ -149,6 +150,8 @@ class StoreWebHomeBookingRequest extends FormRequest
                     'That slot was just taken. Please choose a different time.'
                 );
             }
+
+            $this->validateWithinBusinessHours($validator);
         });
     }
 
@@ -159,6 +162,23 @@ class StoreWebHomeBookingRequest extends FormRequest
         return $serviceId
             ? Service::with(['variants', 'positions'])->find($serviceId)
             : null;
+    }
+
+    private function validateWithinBusinessHours(Validator $validator): void
+    {
+        $service = $this->resolveService();
+        $date = $this->input('appointment_date');
+        $time = $this->input('start_time');
+        if (! $service || ! $date || ! $time) {
+            return;
+        }
+
+        if (! BusinessHours::startFitsOnDate($date, $time, (int) $service->duration_minutes)) {
+            $validator->errors()->add(
+                'start_time',
+                'That time is past shop closing. Please choose an earlier slot, or book for another day.'
+            );
+        }
     }
 
     private function validatePackageStaff(Validator $validator): void

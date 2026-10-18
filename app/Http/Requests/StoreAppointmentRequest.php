@@ -4,6 +4,8 @@ namespace App\Http\Requests;
 
 use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
+use App\Models\BusinessHours;
+use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -56,6 +58,17 @@ class StoreAppointmentRequest extends FormRequest
                 $validator->errors()->add(
                     'start_time',
                     'This staff member already has a booking at that date and time.'
+                );
+            }
+
+            $service = Service::find($this->integer('service_id'));
+            $date = $this->input('appointment_date');
+            $time = $this->input('start_time');
+            if ($service && $date && $time
+                && ! BusinessHours::startFitsOnDate($date, $time, (int) $service->duration_minutes)) {
+                $validator->errors()->add(
+                    'start_time',
+                    'That time is past shop closing. Please choose an earlier slot, or book for another day.'
                 );
             }
         });

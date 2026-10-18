@@ -25,16 +25,16 @@ class BusinessHoursOvernightTest extends TestCase
 
     public function test_fresh_seed_uses_per_day_type_defaults(): void
     {
-        // Weekdays (Mon–Fri): 12:00 PM – 1:00 AM.
+        // Weekdays (Mon–Fri): 12:00 PM – 10:00 PM.
         foreach ([1, 2, 3, 4, 5] as $day) {
             $this->assertSame('12:00:00', \DB::table('business_hours')->where('day_of_week', $day)->value('open_at'), "weekday {$day} open");
-            $this->assertSame('01:00:00', \DB::table('business_hours')->where('day_of_week', $day)->value('close_at'), "weekday {$day} close");
+            $this->assertSame('22:00:00', \DB::table('business_hours')->where('day_of_week', $day)->value('close_at'), "weekday {$day} close");
         }
 
-        // Weekends (Sat–Sun): 10:00 AM – 1:00 AM.
+        // Weekends (Sat–Sun): 10:00 AM – 10:00 PM.
         foreach ([0, 6] as $day) {
             $this->assertSame('10:00:00', \DB::table('business_hours')->where('day_of_week', $day)->value('open_at'), "weekend {$day} open");
-            $this->assertSame('01:00:00', \DB::table('business_hours')->where('day_of_week', $day)->value('close_at'), "weekend {$day} close");
+            $this->assertSame('22:00:00', \DB::table('business_hours')->where('day_of_week', $day)->value('close_at'), "weekend {$day} close");
         }
 
         $this->assertSame(7, BusinessHours::count());
@@ -161,40 +161,54 @@ class BusinessHoursOvernightTest extends TestCase
         ]))->assertOk()->getContent();
     }
 
-    public function test_weekday_slots_allow_late_starts_but_never_past_midnight(): void
+    public function test_default_close_last_start_is_9pm_for_60_minute_service(): void
     {
-        $this->setAllDays('12:00', '01:00'); // 60 minutes after midnight
+        // Seeded defaults: close 10:00 PM — 60-min service last starts 9:00 PM.
         $staff = $this->makeStaff('Nora', 'Night');
         $service = $this->makeService(60);
 
         $html = $this->slotHtml($this->nextWeekday(1), $service, $staff); // Monday
 
-        $this->assertStringContainsString('time=23%3A30', $html); // 11:30 PM — last start
-        $this->assertStringNotContainsString('time=00%3A00', $html); // never 12:00 AM
+        $this->assertStringContainsString('time=21%3A00', $html); // 9:00 PM — last start
+        $this->assertStringNotContainsString('time=21%3A30', $html); // would finish after 10 PM
+        $this->assertStringNotContainsString('time=22%3A00', $html); // not at/after closing
         $this->assertStringNotContainsString('time=10%3A00', $html); // opens at noon, not 10 AM
     }
 
-    public function test_two_hour_service_last_start_is_11pm(): void
+    public function test_two_hour_service_last_start_is_8pm(): void
     {
-        $this->setAllDays('12:00', '01:00');
         $staff = $this->makeStaff('Tia', 'Twohour');
         $service = $this->makeService(120);
 
         $html = $this->slotHtml($this->nextWeekday(1), $service, $staff);
 
-        $this->assertStringContainsString('time=23%3A00', $html); // 11:00 PM — last start
-        $this->assertStringNotContainsString('time=23%3A30', $html); // would finish after 1 AM
+        $this->assertStringContainsString('time=20%3A00', $html); // 8:00 PM — last start
+        $this->assertStringNotContainsString('time=20%3A30', $html); // would finish after 10 PM
     }
 
     public function test_weekend_slots_open_in_the_morning(): void
     {
-        $this->setAllDays('10:00', '01:00');
         $staff = $this->makeStaff('Wendy', 'Weekend');
         $service = $this->makeService(60);
 
         $html = $this->slotHtml($this->nextWeekday(6), $service, $staff); // Saturday
 
         $this->assertStringContainsString('time=10%3A00', $html);
+        $this->assertStringContainsString('time=21%3A00', $html);
+        $this->assertStringNotContainsString('time=22%3A00', $html);
+    }
+
+    public function test_overnight_hours_still_allow_late_starts_when_configured(): void
+    {
+        // Managers may still set an overnight close; slot rule stays overnight-aware.
+        $this->setAllDays('12:00', '01:00');
+        $staff = $this->makeStaff('Ivy', 'Overnight');
+        $service = $this->makeService(60);
+
+        $html = $this->slotHtml($this->nextWeekday(1), $service, $staff);
+
+        $this->assertStringContainsString('time=23%3A30', $html);
+        $this->assertStringNotContainsString('time=00%3A00', $html);
     }
 
     public function test_same_day_close_last_start(): void
@@ -217,7 +231,7 @@ class BusinessHoursOvernightTest extends TestCase
             ->get(route('admin.availability'))->assertOk()->getContent();
 
         $this->assertStringContainsString('12:00 PM', $html);
-        $this->assertStringContainsString('1:00 AM', $html);
+        $this->assertStringContainsString('10:00 PM', $html);
         $this->assertStringContainsString('edit=1', $html); // enabled Edit link
         $this->assertStringNotContainsString('name="hours[', $html); // no inputs
         $this->assertStringNotContainsString('Save Business Hours', $html);
@@ -248,7 +262,7 @@ class BusinessHoursOvernightTest extends TestCase
     {
         $lines = BusinessHours::publicLines();
 
-        $this->assertContains('Monday – Friday: 12:00 PM – 1:00 AM', $lines);
-        $this->assertContains('Saturday – Sunday: 10:00 AM – 1:00 AM', $lines);
+        $this->assertContains('Monday – Friday: 12:00 PM – 10:00 PM', $lines);
+        $this->assertContains('Saturday – Sunday: 10:00 AM – 10:00 PM', $lines);
     }
 }
