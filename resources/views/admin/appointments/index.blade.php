@@ -70,10 +70,11 @@
 </div>
 
 @if($errors->any())
-    <div class="alert alert-danger">
+    <div class="alert alert-danger alert-dismissible fade show" data-nx-flash>
         @foreach($errors->all() as $error)
             <div>{{ $error }}</div>
         @endforeach
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 @endif
 
@@ -332,12 +333,13 @@
                 <div class="row">
                     <div class="col mb-2">
                         <label class="form-label">Date</label>
-                        <input type="date" name="appointment_date" class="form-control"
+                        <input type="date" name="appointment_date" id="walkin-date" class="form-control"
                                value="{{ now()->toDateString() }}" min="{{ now()->toDateString() }}" required>
                     </div>
                     <div class="col mb-2">
                         <label class="form-label">Time</label>
-                        <input type="time" name="start_time" class="form-control" required>
+                        <input type="time" name="start_time" id="walkin-time" class="form-control" required>
+                        <div class="text-danger small mt-1 d-none" id="walkin-time-hint"></div>
                     </div>
                 </div>
                 <div class="mb-2">
@@ -347,7 +349,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn btn-spa">Create Booking</button>
+                <button class="btn btn-spa" id="walkin-submit">Create Booking</button>
             </div>
         </form>
     </div>
@@ -540,6 +542,102 @@
             serviceSelect.addEventListener('change', syncWalkInStaff);
             document.getElementById('walkInModal')?.addEventListener('show.bs.modal', syncWalkInStaff);
             syncWalkInStaff();
+        })();
+
+        // Walk-in: warn BEFORE submit when the chosen start time is outside the
+        // shop's same-day window. This mirrors BusinessHours::windowForDay() +
+        // slotStartAllowed() exactly — it is a pre-submit mirror only; the
+        // server re-checks every booking on submit.
+        (function () {
+            const dateInput = document.getElementById('walkin-date');
+            const timeInput = document.getElementById('walkin-time');
+            const serviceSelect = document.getElementById('walkin-service');
+            const submitBtn = document.getElementById('walkin-submit');
+            const hint = document.getElementById('walkin-time-hint');
+            if (!dateInput || !timeInput || !serviceSelect || !submitBtn || !hint) return;
+
+            const nxBusinessHours = @json($businessHoursJson);
+            const nxServices = @json($servicesJson);
+
+            function minutesOf(hhmm) {
+                const parts = String(hhmm).split(':');
+                return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+            }
+
+            // Minutes since midnight (may exceed 1440 for the overnight close)
+            // to 12-hour "g:i A" — e.g. 1530 → "1:30 AM", 1500 → "1:00 AM".
+            function fmt(minutes) {
+                const total = ((minutes % 1440) + 1440) % 1440;
+                const hour24 = Math.floor(total / 60);
+                const meridiem = hour24 < 12 ? 'AM' : 'PM';
+                const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+                return hour12 + ':' + String(total % 60).padStart(2, '0') + ' ' + meridiem;
+            }
+
+            function setInvalid(message) {
+                hint.textContent = message;
+                hint.classList.remove('d-none');
+                timeInput.classList.add('is-invalid');
+                submitBtn.disabled = true;
+            }
+
+            function setNeutral() {
+                hint.textContent = '';
+                hint.classList.add('d-none');
+                timeInput.classList.remove('is-invalid');
+                submitBtn.disabled = false;
+            }
+
+            function validateWalkinTime() {
+                // Neutral until there is a date, time and service to judge —
+                // the inputs' own `required` attributes handle the empties.
+                if (!dateInput.value || !timeInput.value || !serviceSelect.value) {
+                    setNeutral();
+                    return;
+                }
+
+                const service = nxServices.find((s) => String(s.id) === String(serviceSelect.value));
+                const duration = Number((service && service.duration_minutes) || 0);
+
+                // Parse YYYY-MM-DD by hand — never new Date(value), whose
+                // timezone behavior can shift the weekday.
+                const weekday = new Date(
+                    parseInt(dateInput.value.slice(0, 4), 10),
+                    parseInt(dateInput.value.slice(5, 7), 10) - 1,
+                    parseInt(dateInput.value.slice(8, 10), 10)
+                ).getDay();
+
+                const hours = nxBusinessHours[weekday];
+                if (!hours || !hours.is_open) {
+                    setInvalid('The shop is closed on that day. Please choose another day.');
+                    return;
+                }
+
+                const openMin = minutesOf(hours.open);
+                const closeMin = minutesOf(hours.close);
+                const effectiveClose = closeMin <= openMin ? closeMin + 1440 : closeMin;
+                const startMin = minutesOf(timeInput.value);
+
+                if (startMin < openMin) {
+                    setInvalid('That time is before shop opening. Please choose a later slot.');
+                    return;
+                }
+                if (startMin >= 1440 || (startMin + duration) > effectiveClose) {
+                    const endMin = startMin + duration;
+                    setInvalid("That slot won't fit — this service would end at " + fmt(endMin)
+                        + ", past the " + fmt(effectiveClose)
+                        + " closing. Please choose an earlier slot, or book for another day.");
+                    return;
+                }
+
+                setNeutral();
+            }
+
+            document.getElementById('walkInModal')?.addEventListener('shown.bs.modal', validateWalkinTime);
+            serviceSelect.addEventListener('change', validateWalkinTime);
+            dateInput.addEventListener('change', validateWalkinTime);
+            timeInput.addEventListener('change', validateWalkinTime);
+            timeInput.addEventListener('input', validateWalkinTime);
         })();
 
         function esc(s) { return (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }

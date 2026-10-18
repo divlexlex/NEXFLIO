@@ -50,6 +50,20 @@ class AppointmentController extends Controller
             ->orderBy('name')
             ->get();
 
+        // Walk-in closing guard: the modal mirrors BusinessHours::windowForDay()
+        // + slotStartAllowed() client-side, so hand it each day's window. A day
+        // with no row counts as closed.
+        $hoursByDay = BusinessHours::all()->keyBy('day_of_week');
+        $businessHoursJson = [];
+        for ($day = 0; $day <= 6; $day++) {
+            $row = $hoursByDay->get($day);
+            $businessHoursJson[$day] = [
+                'open' => $row?->open_at ? Carbon::parse($row->open_at)->format('H:i') : null,
+                'close' => $row?->close_at ? Carbon::parse($row->close_at)->format('H:i') : null,
+                'is_open' => (bool) ($row?->is_open ?? false),
+            ];
+        }
+
         return view('admin.appointments.index', [
             'appointments' => $appointments,
             'services' => $services,
@@ -57,6 +71,7 @@ class AppointmentController extends Controller
                 'id' => $service->id,
                 'name' => $service->name,
                 'category' => $service->category,
+                'duration_minutes' => $service->duration_minutes,
                 'is_package' => $service->requiresMultiStaff(),
                 // Positions that fulfil this service's category (Nail → Nail
                 // Technician, etc.). Empty → UI shows no staff options.
@@ -66,6 +81,7 @@ class AppointmentController extends Controller
                     'name' => $position->name,
                 ])->values(),
             ])->values(),
+            'businessHoursJson' => (object) $businessHoursJson,
             'personnel' => $personnel,
             'personnelJson' => $personnel->map(fn (User $user) => [
                 'id' => $user->id,
