@@ -12,6 +12,7 @@ use App\Models\Payment;
 use App\Models\Promo;
 use App\Models\User;
 use App\Services\GeminiService;
+use App\Services\RevenueRecognitionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Validator;
@@ -28,6 +29,11 @@ use Illuminate\Support\Facades\Validator;
  */
 class FlioController extends Controller
 {
+    public function __construct(
+        private readonly RevenueRecognitionService $revenue,
+    ) {
+    }
+
     public function ask(Request $request, GeminiService $gemini)
     {
         // Validated manually so we can always answer with JSON. The app only
@@ -90,19 +96,12 @@ class FlioController extends Controller
             ->get();
         $last90 = Appointment::where('appointment_date', '>=', now()->subDays(90))->get();
 
-        // Money — same math as DashboardController::weeklyMetrics().
-        $revenueThisWeek = (float) Payment::where('status', PaymentStatus::Verified)
-            ->where('verified_at', '>=', $weekStart)->sum('amount');
-        $revenueLastWeek = (float) Payment::where('status', PaymentStatus::Verified)
-            ->whereBetween('verified_at', [$prevWeekStart, $weekStart])->sum('amount');
+        // Money — same math as DashboardController::weeklyMetrics()
+        // (completed-service recognized revenue, not verified payments).
+        $revenueThisWeek = $this->revenue->sumBetween($weekStart);
+        $revenueLastWeek = $this->revenue->sumBetween($prevWeekStart, $weekStart->copy()->subSecond());
 
-        $revenueByCategory = Payment::with(['appointment:id,service_id', 'appointment.service:id,category'])
-            ->where('status', PaymentStatus::Verified)
-            ->where('verified_at', '>=', now()->subDays(30))
-            ->get()
-            ->groupBy(fn (Payment $payment) => $payment->appointment->service->category ?? 'Unknown')
-            ->map(fn ($payments) => round((float) $payments->sum('amount'), 2))
-            ->sortDesc();
+        $revenueByCategory = $this->revenue->byCategorySince(now()->subDays(30));
 
         // Demand — same math as weeklyMetrics().
         $byDay = $last90

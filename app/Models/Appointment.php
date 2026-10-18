@@ -27,6 +27,7 @@ class Appointment extends Model
         'appointment_date',
         'start_time',
         'status',
+        'completed_at',
         'notes',
         'payment_proof_path',
     ];
@@ -36,6 +37,7 @@ class Appointment extends Model
         return [
             'status' => AppointmentStatus::class,
             'appointment_date' => 'datetime',
+            'completed_at' => 'datetime',
             'booked_price' => 'decimal:2',
         ];
     }

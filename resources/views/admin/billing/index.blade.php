@@ -15,8 +15,9 @@
 <div class="row g-3 mb-4">
     <div class="col-md-6">
         <div class="card p-3">
-            <div class="text-muted small">Verified Revenue · {{ $month }}</div>
+            <div class="text-muted small">Recognized Revenue · {{ $month }}</div>
             <div class="fs-2 fw-bold text-gold">₱{{ number_format($revenueTotal, 2) }}</div>
+            <div class="small text-muted mt-1">Collected (verified payments): ₱{{ number_format($collectedTotal, 2) }}</div>
         </div>
     </div>
     <div class="col-md-6">

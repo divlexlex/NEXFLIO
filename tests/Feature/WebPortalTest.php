@@ -123,13 +123,15 @@ class WebPortalTest extends TestCase
 
     public function test_walk_in_creates_booked_appointment_with_verified_cash_payment(): void
     {
+        // Weekdays open at 12:00 — use 13:00 so tomorrow always fits whether
+        // the next calendar day is a weekday or weekend.
         $response = $this->actingAs($this->manager)->post('/admin/appointments/walk-in', [
             'walk_in_name' => 'Maria Santos',
             'walk_in_phone' => '0917 000 0000',
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '11:00',
+            'start_time' => '13:00',
         ]);
 
         $response->assertSessionHasNoErrors()->assertRedirect();

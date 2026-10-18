@@ -23,7 +23,7 @@
 <div class="row g-3 mb-4">
     <div class="col-md-4">
         <div class="card p-3">
-            <div class="text-muted small">Verified Revenue (YTD)</div>
+            <div class="text-muted small">Recognized Revenue (YTD)</div>
             <div class="fs-2 fw-bold text-gold">₱{{ number_format($yearRevenue, 2) }}</div>
         </div>
     </div>

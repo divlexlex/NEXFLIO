@@ -7,14 +7,22 @@ use App\Http\Controllers\Controller;
 use App\Models\Commission;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\RevenueRecognitionService;
 use Illuminate\Http\Request;
 
 class BillingController extends Controller
 {
+    public function __construct(
+        private readonly RevenueRecognitionService $revenue,
+    ) {
+    }
+
     public function index(Request $request)
     {
         $month = $request->query('month', now()->format('Y-m'));
         [$year, $mon] = array_pad(explode('-', $month), 2, null);
+        $year = (int) $year;
+        $mon = (int) $mon;
 
         // Per-staff payroll for the month: fixed base + commission ledger sum.
         $staff = User::where('role_id', User::ROLE_STAFF)
@@ -36,6 +44,8 @@ class BillingController extends Controller
                 ];
             });
 
+        // Collection ledger for the month (verified payments) — separate from
+        // recognized revenue, which only counts Completed appointments.
         $payments = Payment::with(['appointment.service', 'appointment.user', 'verifier'])
             ->where('status', PaymentStatus::Verified)
             ->whereYear('verified_at', $year)
@@ -47,7 +57,8 @@ class BillingController extends Controller
             'month' => $month,
             'staffPayroll' => $staff,
             'payments' => $payments,
-            'revenueTotal' => round((float) $payments->sum('amount'), 2),
+            'revenueTotal' => $this->revenue->sumForMonth($year, $mon),
+            'collectedTotal' => round((float) $payments->sum('amount'), 2),
             'payrollTotal' => round((float) $staff->sum('total'), 2),
         ]);
     }

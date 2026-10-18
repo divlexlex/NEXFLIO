@@ -456,7 +456,9 @@ class AppointmentController extends Controller
             }
         }
 
-        DB::transaction(function () use ($request, $validated, $assignments, $personnelId) {
+        DB::transaction(function () use ($request, $validated, $assignments, $personnelId, $service) {
+            $price = (float) ($service?->price ?? 0);
+
             $appointment = Appointment::create([
                 'user_id' => null,
                 'walk_in_name' => $validated['walk_in_name'],
@@ -466,6 +468,10 @@ class AppointmentController extends Controller
                 'appointment_date' => $validated['appointment_date'],
                 'start_time' => $validated['start_time'],
                 'notes' => $validated['notes'] ?? null,
+                'booked_price' => $price,
+                // Walk-ins start Booked (cash taken at the counter). The
+                // verified payment below records collection only — recognized
+                // revenue waits for status → Completed (see RevenueRecognitionService).
                 'status' => AppointmentStatus::Booked,
             ]);
 
@@ -477,8 +483,11 @@ class AppointmentController extends Controller
                 $appointment->syncPersonnelAssignments($assignments);
             }
 
+            // Collection fact (cash at counter). Must stay Verified so
+            // verifiedPaid() / balanceDue() treat the walk-in as paid; it
+            // must NOT drive dashboard revenue until completion.
             $appointment->payment()->create([
-                'amount' => $appointment->service->price,
+                'amount' => $price,
                 'method' => 'cash',
                 'status' => PaymentStatus::Verified,
                 'verified_by' => $request->user()->id,

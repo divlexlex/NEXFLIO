@@ -14,6 +14,7 @@ use App\Models\Service;
 use App\Models\StockMovement;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -107,6 +108,14 @@ class AppointmentService
 
         DB::transaction(function () use ($appointment, $target, $actor, $options, $verificationStep) {
             $appointment->status = $target;
+
+            // Stamp recognition time exactly once. Completed is terminal, so
+            // retries / concurrent second completions cannot re-set it after
+            // the first successful transition (canTransitionTo rejects them).
+            if ($target === AppointmentStatus::Completed && $appointment->completed_at === null) {
+                $appointment->completed_at = now();
+            }
+
             $appointment->save();
 
             if ($verificationStep && $target === AppointmentStatus::Booked) {
@@ -169,6 +178,18 @@ class AppointmentService
                 );
             }
         });
+
+        // Dashboard AI insight card caches weekly aggregates for 12h — drop
+        // the bucket whenever a transition can change recognized revenue or
+        // completion counts so the next load recomputes.
+        if (in_array($target, [
+            AppointmentStatus::Completed,
+            AppointmentStatus::Cancelled,
+            AppointmentStatus::NoShow,
+            AppointmentStatus::InService,
+        ], true)) {
+            Cache::forget('insights:week:'.now()->format('o-W'));
+        }
 
         return $appointment->fresh(['user', 'service', 'personnel', 'payment']);
     }

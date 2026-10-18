@@ -3,16 +3,20 @@
 namespace App\Http\Controllers\Web;
 
 use App\Enums\AppointmentStatus;
-use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Inventory;
-use App\Models\Payment;
 use App\Services\GeminiService;
+use App\Services\RevenueRecognitionService;
 use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
 {
+    public function __construct(
+        private readonly RevenueRecognitionService $revenue,
+    ) {
+    }
+
     public function index()
     {
         $today = now()->toDateString();
@@ -23,10 +27,7 @@ class DashboardController extends Controller
             'upcomingBooked' => Appointment::where('appointment_date', '>=', $today)
                 ->where('status', AppointmentStatus::Booked)
                 ->count(),
-            'monthRevenue' => (float) Payment::where('status', PaymentStatus::Verified)
-                ->whereYear('verified_at', now()->year)
-                ->whereMonth('verified_at', now()->month)
-                ->sum('amount'),
+            'monthRevenue' => $this->revenue->sumForMonth((int) now()->year, (int) now()->month),
             'lowStocks' => Inventory::whereColumn('quantity', '<=', 'reorder_point')->get(),
         ]);
     }
@@ -37,24 +38,8 @@ class DashboardController extends Controller
      */
     public function chartData()
     {
-        // Revenue per week, last 8 weeks (verified payments).
-        $start = now()->startOfWeek()->subWeeks(7);
-        $payments = Payment::where('status', PaymentStatus::Verified)
-            ->where('verified_at', '>=', $start)
-            ->get(['amount', 'verified_at']);
-
-        $revenueByWeek = [];
-        for ($i = 0; $i < 8; $i++) {
-            $weekStart = $start->copy()->addWeeks($i);
-            $weekEnd = $weekStart->copy()->endOfWeek();
-            $revenueByWeek[] = [
-                'label' => $weekStart->format('M j'),
-                'total' => round((float) $payments
-                    ->filter(fn ($payment) => $payment->verified_at !== null
-                        && $payment->verified_at->between($weekStart, $weekEnd))
-                    ->sum('amount'), 2),
-            ];
-        }
+        // Recognized revenue per week, last 8 weeks (Completed only).
+        $revenueByWeek = $this->revenue->weeklyTotals(8);
 
         // Bookings per service and completions per staff, last 30 days.
         $recent = Appointment::with(['service:id,name', 'personnel:id,name'])
@@ -95,7 +80,7 @@ class DashboardController extends Controller
         }
 
         $insight = Cache::remember(
-            'insights:week:' . now()->format('o-W'),
+            'insights:week:'.now()->format('o-W'),
             now()->addHours(12),
             fn () => $gemini->summarizeOperations($this->weeklyMetrics())
         );
@@ -111,24 +96,15 @@ class DashboardController extends Controller
         $weekStart = now()->startOfWeek();
         $prevWeekStart = $weekStart->copy()->subWeek();
 
-        $revenueThisWeek = (float) Payment::where('status', PaymentStatus::Verified)
-            ->where('verified_at', '>=', $weekStart)->sum('amount');
-        $revenueLastWeek = (float) Payment::where('status', PaymentStatus::Verified)
-            ->whereBetween('verified_at', [$prevWeekStart, $weekStart])->sum('amount');
+        $revenueThisWeek = $this->revenue->sumBetween($weekStart);
+        $revenueLastWeek = $this->revenue->sumBetween($prevWeekStart, $weekStart->copy()->subSecond());
 
         $recent = Appointment::with('service:id,name')
             ->where('appointment_date', '>=', now()->subDays(30))
             ->get();
 
-        // Verified money over the last 30 days rolled up by the appointment's
-        // service category — category names and totals only, no client rows.
-        $revenueByCategory = Payment::with(['appointment:id,service_id', 'appointment.service:id,category'])
-            ->where('status', PaymentStatus::Verified)
-            ->where('verified_at', '>=', now()->subDays(30))
-            ->get()
-            ->groupBy(fn (Payment $payment) => $payment->appointment->service->category ?? 'Unknown')
-            ->map(fn ($payments) => round((float) $payments->sum('amount'), 2))
-            ->sortDesc();
+        // Recognized money over the last 30 days rolled up by service category.
+        $revenueByCategory = $this->revenue->byCategorySince(now()->subDays(30));
 
         // 90-day booking rhythm: per weekday and per start hour.
         $last90 = Appointment::where('appointment_date', '>=', now()->subDays(90))->get();
