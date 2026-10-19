@@ -43,7 +43,7 @@
 
                         @if($service->variants->isEmpty())
                             <p class="small nx-text-secondary mt-2 mb-3">
-                                Down payment for this service: ₱{{ number_format(\App\Support\ReservationFee::for($service), 2) }} — deducted from your total, balance paid at the branch.
+                                Down payment for this service: ₱{{ number_format(\App\Support\BookingExtras::downPaymentForService($service, (float) $service->price), 2) }} — deducted from your total, balance paid at the branch.
                             </p>
                         @endif
 

@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Service;
 use App\Models\User;
-use App\Support\ReservationFee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -13,8 +12,8 @@ use Tests\TestCase;
 /**
  * (A) The Packages-category "package_details" field: admin validation +
  * persistence, and client rendering as an inclusions list.
- * (B) The ReservationFee custom-tier-label fallback to the price rule, plus
- * end-to-end branch/home bookings with a custom-labelled tier.
+ * (B) End-to-end branch/home bookings with a custom-labelled tier now use
+ * that service's own configured down payment.
  */
 class PackageDetailsFeeFallbackTest extends TestCase
 {
@@ -219,39 +218,7 @@ class PackageDetailsFeeFallbackTest extends TestCase
             ->assertSee('NxReview Two');
     }
 
-    // ---- Part B: ReservationFee custom-label fallback ---------------------
-
-    public function test_reservation_fee_falls_back_for_custom_tier_labels(): void
-    {
-        $service = $this->makeService(['name' => 'Nx Fee Package', 'category' => 'Packages', 'price' => 1899]);
-        $service->variants()->createMany([
-            ['label' => 'Solo', 'price' => 1899, 'sort' => 1],
-            ['label' => 'Couple', 'price' => 3699, 'sort' => 2],
-            ['label' => 'Barkada', 'price' => 7199, 'sort' => 3],
-            ['label' => 'Deluxe', 'price' => 450, 'sort' => 4],
-            ['label' => 'Premium', 'price' => 900, 'sort' => 5],
-        ]);
-
-        // Custom labels use the price rule on the variant's price.
-        $this->assertSame(225.0, ReservationFee::for($service, 'Deluxe'));
-        $this->assertSame(300.0, ReservationFee::for($service, 'Premium'));
-
-        // Mapped labels keep their exact tiers.
-        $this->assertSame(300.0, ReservationFee::for($service, 'Solo'));
-        $this->assertSame(500.0, ReservationFee::for($service, 'Couple'));
-        $this->assertSame(2000.0, ReservationFee::for($service, 'Barkada'));
-
-        // Case-insensitive mapped labels, and the fee never exceeds the price.
-        $this->assertSame(300.0, ReservationFee::for($service, 'solo'));
-
-        $capped = $this->makeService(['name' => 'Nx Capped', 'category' => 'Packages', 'price' => 200]);
-        $capped->variants()->createMany([
-            ['label' => 'Solo', 'price' => 200, 'sort' => 1],
-            ['label' => 'Cheap Deluxe', 'price' => 200, 'sort' => 2],
-        ]);
-        $this->assertSame(200.0, ReservationFee::for($capped, 'Solo'));
-        $this->assertSame(100.0, ReservationFee::for($capped, 'Cheap Deluxe'));
-    }
+    // ---- Part B: custom-tier bookings use the configured DP ----------------
 
     public function test_branch_booking_with_custom_tier_label_completes(): void
     {
@@ -262,6 +229,7 @@ class PackageDetailsFeeFallbackTest extends TestCase
             'category' => 'Packages',
             'package_details' => 'Inclusion one',
             'price' => 450,
+            'down_payment' => 225,
             'service_location_type' => 'branch',
         ]);
         $variant = $service->variants()->create(['label' => 'Deluxe', 'price' => 450, 'sort' => 1]);
@@ -279,7 +247,6 @@ class PackageDetailsFeeFallbackTest extends TestCase
         $appointment = \App\Models\Appointment::latest('id')->firstOrFail();
         $this->assertSame('Deluxe', $appointment->variant_label);
         $this->assertEquals(450, (float) $appointment->booked_price);
-        // 450 < 500 -> exactly half, stored as the down payment.
         $this->assertEquals(225, (float) $appointment->payment->amount);
     }
 
@@ -292,6 +259,7 @@ class PackageDetailsFeeFallbackTest extends TestCase
             'category' => 'Packages',
             'package_details' => 'Inclusion one',
             'price' => 900,
+            'down_payment' => 300,
             'service_location_type' => 'home',
         ]);
         $variant = $service->variants()->create(['label' => 'Deluxe', 'price' => 900, 'sort' => 1]);
@@ -313,11 +281,10 @@ class PackageDetailsFeeFallbackTest extends TestCase
         $appointment = \App\Models\Appointment::latest('id')->firstOrFail();
         $this->assertSame('Deluxe', $appointment->variant_label);
         $this->assertEquals(900, (float) $appointment->booked_price);
-        // 900 >= 500 -> flat 300.
         $this->assertEquals(300, (float) $appointment->payment->amount);
     }
 
-    public function test_custom_tier_label_cash_still_rejected_for_packages(): void
+    public function test_custom_tier_label_cash_allowed_when_no_down_payment(): void
     {
         Storage::fake('public');
 
@@ -325,6 +292,7 @@ class PackageDetailsFeeFallbackTest extends TestCase
             'name' => 'Nx Cash Custom Package',
             'category' => 'Packages',
             'price' => 450,
+            'down_payment' => null,
             'service_location_type' => 'branch',
         ]);
         $variant = $service->variants()->create(['label' => 'Deluxe', 'price' => 450, 'sort' => 1]);
@@ -337,8 +305,10 @@ class PackageDetailsFeeFallbackTest extends TestCase
             'start_time' => '10:00',
             'method' => 'cash',
             'payment_proof' => null,
-        ])->assertSessionHasErrors('method');
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
-        $this->assertSame(0, \App\Models\Appointment::count());
+        $appointment = \App\Models\Appointment::latest('id')->firstOrFail();
+        $this->assertSame('cash', $appointment->payment->method);
+        $this->assertEquals(450, (float) $appointment->payment->amount);
     }
 }

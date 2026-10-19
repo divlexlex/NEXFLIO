@@ -30,10 +30,21 @@ class AppointmentAddedService extends Model
         return $this->source === 'creation';
     }
 
-    /** Added later from the Payments add flow. */
+    /** Picked as an extra inside the client's online booking wizard. */
+    public function isBooking(): bool
+    {
+        return $this->source === 'booking';
+    }
+
+    /**
+     * Added later from the Payments add flow. Only these carry the "Added"
+     * tag and a down-payment sub-line: creation and booking extras were part
+     * of the original avail, and their DP (if any) was collected with the
+     * booking payment.
+     */
     public function isPayment(): bool
     {
-        return $this->source !== 'creation';
+        return $this->source === 'payment';
     }
 
     protected function casts(): array

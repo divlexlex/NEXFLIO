@@ -23,7 +23,7 @@ class UnverifiedChangeRequestGatingTest extends TestCase
 
     protected $seed = true;
 
-    private const NOTICE = 'Requests to reschedule or cancel will be available once your reservation fee is verified.';
+    private const NOTICE = 'Requests to reschedule or cancel will be available once your payment is verified.';
 
     private User $manager;
 

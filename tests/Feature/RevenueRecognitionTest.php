@@ -15,8 +15,12 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Recognized revenue = Completed appointments only, dated by completed_at.
- * Walk-in cash verification at booking is collection, not recognition.
+ * Rule A (sha, 2026-10-19): revenue = Verified payments, dated by
+ * verified_at. A down payment credits revenue the moment it is verified,
+ * including a second-chance payment after a rejection (top-up / resubmit).
+ * Payments on Cancelled appointments count ₱0; completion adds nothing
+ * (the branch settlement is already a Verified payment), so no total can
+ * ever double-count.
  */
 class RevenueRecognitionTest extends TestCase
 {
@@ -35,6 +39,8 @@ class RevenueRecognitionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->travelTo(now()->addDay()->setTime(8, 0));
 
         $this->manager = User::where('email', 'manager@nexflio.test')->firstOrFail();
         $this->staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
@@ -59,7 +65,7 @@ class RevenueRecognitionTest extends TestCase
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
             'appointment_date' => now()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '12:00',
         ])->assertSessionHasNoErrors();
 
         return Appointment::where('walk_in_name', 'Walk-in Guest')->latest('id')->firstOrFail();
@@ -78,7 +84,7 @@ class RevenueRecognitionTest extends TestCase
 
         $this->assertSame(AppointmentStatus::Booked, $appointment->status);
         // Walk-ins now start with NO payment — the booking has a balance but
-        // no recognized revenue until the visit completes.
+        // no revenue until a payment is recorded and verified.
         $this->assertNull($appointment->payment);
         $this->assertSame(0.0, $appointment->verifiedPaid());
         $this->assertSame(500.0, $appointment->balanceDue());
@@ -87,9 +93,10 @@ class RevenueRecognitionTest extends TestCase
         $this->assertEquals(0.0, $this->revenue->amountFor($appointment->fresh()));
     }
 
-    public function test_confirm_and_start_do_not_increase_recognized_revenue(): void
+    public function test_verify_credits_revenue_and_start_adds_nothing(): void
     {
-        // Online-style path: Unverified → Booked → InService (no revenue yet).
+        // Rule A: Unverified → Booked (verify) credits the verified payment
+        // at once; Booked → InService adds nothing more.
         $appointment = Appointment::create([
             'user_id' => User::where('email', 'client@nexflio.test')->firstOrFail()->id,
             'service_id' => $this->service->id,
@@ -108,17 +115,30 @@ class RevenueRecognitionTest extends TestCase
         $before = $this->revenue->sumBetween();
 
         $this->transition($appointment->fresh(), AppointmentStatus::Booked);
-        $this->assertEquals($before, $this->revenue->sumBetween());
+        $this->assertEquals(round($before + 500, 2), $this->revenue->sumBetween());
 
         $this->transition($appointment->fresh(), AppointmentStatus::InService);
-        $this->assertEquals($before, $this->revenue->sumBetween());
+        $this->assertEquals(round($before + 500, 2), $this->revenue->sumBetween());
         $this->assertNull($appointment->fresh()->completed_at);
     }
 
-    public function test_completing_walk_in_recognizes_revenue_exactly_once(): void
+    public function test_completing_walk_in_does_not_double_count_revenue(): void
     {
         $appointment = $this->createWalkIn();
+
+        // The branch records the ₱500 at the counter (an immediately
+        // Verified kind='branch' payment) — that recording IS the credit.
+        $appointment->payments()->create([
+            'kind' => 'branch',
+            'amount' => 500,
+            'method' => 'cash',
+            'status' => PaymentStatus::Verified,
+            'verified_by' => $this->manager->id,
+            'verified_at' => now(),
+        ]);
+
         $before = $this->revenue->sumBetween();
+        $this->assertEquals(500.0, $this->revenue->amountFor($appointment->fresh()));
 
         $this->transition($appointment->fresh(), AppointmentStatus::InService);
         $this->assertEquals($before, $this->revenue->sumBetween());
@@ -128,10 +148,11 @@ class RevenueRecognitionTest extends TestCase
         $appointment->refresh();
         $this->assertSame(AppointmentStatus::Completed, $appointment->status);
         $this->assertNotNull($appointment->completed_at);
-        $this->assertEquals(round($before + 500, 2), $this->revenue->sumBetween());
+        // Completion adds nothing — the total stays exactly the ₱500 paid.
+        $this->assertEquals($before, $this->revenue->sumBetween());
         $this->assertEquals(500.0, $this->revenue->amountFor($appointment));
 
-        // Second completion is rejected — no double count.
+        // Second completion is rejected — still no double count.
         try {
             $this->transition($appointment->fresh(), AppointmentStatus::Completed);
             $this->fail('Expected invalid transition from Completed to Completed');
@@ -139,7 +160,7 @@ class RevenueRecognitionTest extends TestCase
             // expected
         }
 
-        $this->assertEquals(round($before + 500, 2), $this->revenue->sumBetween());
+        $this->assertEquals($before, $this->revenue->sumBetween());
     }
 
     public function test_cancelling_pending_or_confirmed_walk_in_leaves_revenue_unchanged(): void
@@ -180,6 +201,14 @@ class RevenueRecognitionTest extends TestCase
     public function test_concurrent_completion_requests_count_revenue_once(): void
     {
         $appointment = $this->createWalkIn();
+        $appointment->payments()->create([
+            'kind' => 'branch',
+            'amount' => 500,
+            'method' => 'cash',
+            'status' => PaymentStatus::Verified,
+            'verified_by' => $this->manager->id,
+            'verified_at' => now(),
+        ]);
         $this->transition($appointment->fresh(), AppointmentStatus::InService);
         $before = $this->revenue->sumBetween();
 
@@ -198,17 +227,18 @@ class RevenueRecognitionTest extends TestCase
             // expected
         }
 
-        $this->assertEquals(round($before + 500, 2), $this->revenue->sumBetween());
+        $this->assertEquals($before, $this->revenue->sumBetween());
         $this->assertSame(1, Appointment::where('status', AppointmentStatus::Completed)->whereKey($id)->count());
     }
 
-    public function test_daily_and_monthly_revenue_only_count_completed_services(): void
+    public function test_daily_and_monthly_revenue_count_verified_payments_only(): void
     {
         $walkIn = $this->createWalkIn();
 
-        // Booked + verified payment must not appear in monthly recognized revenue.
+        // No payment recorded yet → nothing counts.
         $this->assertEquals(0.0, $this->revenue->sumForMonth((int) now()->year, (int) now()->month));
 
+        // A Verified payment on a CANCELLED appointment counts ₱0.
         Appointment::create([
             'user_id' => null,
             'walk_in_name' => 'Cancelled Guest',
@@ -216,7 +246,7 @@ class RevenueRecognitionTest extends TestCase
             'personnel_id' => $this->staff->id,
             'booked_price' => 500,
             'appointment_date' => now()->toDateString(),
-            'start_time' => '12:00',
+            'start_time' => '14:00',
             'status' => AppointmentStatus::Cancelled,
         ])->payment()->create([
             'amount' => 500,
@@ -228,26 +258,41 @@ class RevenueRecognitionTest extends TestCase
 
         $this->assertEquals(0.0, $this->revenue->sumForMonth((int) now()->year, (int) now()->month));
 
+        // Recording the walk-in's branch payment credits ₱500 at once,
+        // dated by verified_at (today) — completion afterwards adds ₱0.
+        $walkIn->payments()->create([
+            'kind' => 'branch',
+            'amount' => 500,
+            'method' => 'cash',
+            'status' => PaymentStatus::Verified,
+            'verified_at' => now(),
+            'verified_by' => $this->manager->id,
+        ]);
+
+        $this->assertEquals(500.0, $this->revenue->sumForMonth((int) now()->year, (int) now()->month));
+        $this->assertEquals(500.0, $this->revenue->sumBetween(now()->startOfDay(), now()->endOfDay()));
+
         $this->transition($walkIn->fresh(), AppointmentStatus::InService);
         $this->transition($walkIn->fresh(), AppointmentStatus::Completed);
 
         $this->assertEquals(500.0, $this->revenue->sumForMonth((int) now()->year, (int) now()->month));
-        $this->assertEquals(500.0, $this->revenue->sumBetween(now()->startOfDay(), now()->endOfDay()));
     }
 
-    public function test_dashboard_month_revenue_uses_recognized_not_verified_payments(): void
+    public function test_dashboard_month_revenue_uses_verified_payments(): void
     {
-        $this->createWalkIn(); // verified ₱500, Booked → must not show on dashboard
-
-        $this->actingAs($this->manager)
-            ->get(route('admin.dashboard'))
-            ->assertOk();
+        $appointment = $this->createWalkIn(); // no payment yet → ₱0 revenue
 
         $this->assertEquals(0.0, $this->revenue->sumForMonth((int) now()->year, (int) now()->month));
 
-        $appointment = Appointment::where('walk_in_name', 'Walk-in Guest')->firstOrFail();
-        $this->transition($appointment->fresh(), AppointmentStatus::InService);
-        $this->transition($appointment->fresh(), AppointmentStatus::Completed);
+        // Recording the counter payment credits the dashboard at once.
+        $appointment->payments()->create([
+            'kind' => 'branch',
+            'amount' => 500,
+            'method' => 'cash',
+            'status' => PaymentStatus::Verified,
+            'verified_by' => $this->manager->id,
+            'verified_at' => now(),
+        ]);
 
         $this->assertEquals(500.0, $this->revenue->sumForMonth((int) now()->year, (int) now()->month));
 
@@ -255,6 +300,12 @@ class RevenueRecognitionTest extends TestCase
             ->get(route('admin.dashboard'))
             ->assertOk()
             ->assertSee('₱500.00', false);
+
+        // Completion afterwards changes nothing.
+        $this->transition($appointment->fresh(), AppointmentStatus::InService);
+        $this->transition($appointment->fresh(), AppointmentStatus::Completed);
+
+        $this->assertEquals(500.0, $this->revenue->sumForMonth((int) now()->year, (int) now()->month));
     }
 
     public function test_online_booking_shares_same_recognition_rules(): void
@@ -278,8 +329,9 @@ class RevenueRecognitionTest extends TestCase
 
         $before = $this->revenue->sumBetween();
 
+        // Verify credits at once; starting and completing add nothing.
         $this->transition($appointment->fresh(), AppointmentStatus::Booked);
-        $this->assertEquals($before, $this->revenue->sumBetween());
+        $this->assertEquals(round($before + 500, 2), $this->revenue->sumBetween());
 
         $this->transition($appointment->fresh(), AppointmentStatus::InService);
         $this->transition($appointment->fresh(), AppointmentStatus::Completed);

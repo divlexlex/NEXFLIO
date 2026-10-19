@@ -56,7 +56,7 @@ class HomeServiceBookingTest extends TestCase
         ]);
         $this->homeService = Service::create([
             'name' => 'Home Only Massage', 'category' => 'Massage', 'description' => 'Test',
-            'price' => 900, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'home',
+            'price' => 900, 'down_payment' => 300, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'home',
         ]);
         $this->bothService = Service::create([
             'name' => 'Either Massage', 'category' => 'Massage', 'description' => 'Test',

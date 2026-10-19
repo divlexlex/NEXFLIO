@@ -48,10 +48,27 @@
                         </div>
                     </div>
 
+                    @foreach($extras ?? [] as $extra)
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="nx-card-media" style="width: 64px; height: 64px; border-radius: var(--nx-radius-md); flex-shrink: 0;">
+                            @if($extra['service']->image_url)
+                                <img src="{{ $extra['service']->image_url }}" alt="{{ $extra['service']->name }}">
+                            @else
+                        <i class="bi bi-image opacity-50"></i>
+                            @endif
+                        </div>
+                        <div>
+                            <p class="fw-semibold mb-0">{{ $extra['service']->name }}@if(! empty($extra['variant_label'])) <span class="nx-text-secondary">— {{ $extra['variant_label'] }}</span>@endif</p>
+                            <p class="small nx-text-secondary mb-0">{{ $extra['service']->duration_minutes }} mins &middot; ₱{{ number_format($extra['price'] ?? $extra['service']->price, 2) }}</p>
+                        </div>
+                    </div>
+                    @endforeach
+
                     {{-- DATE --}}
                     <form method="GET" action="{{ route('account.booking.branch.schedule') }}" id="dateForm">
                         <input type="hidden" name="service" value="{{ $service->id }}">
                         @if($variant)<input type="hidden" name="variant" value="{{ $variant->id }}">@endif
+                        @include('partials.booking.carry-extras', ['extras' => $extras])
                         <label class="form-label nx-eyebrow">Date</label>
                         <div class="d-flex gap-2 flex-wrap">
                             <input type="date" name="date" value="{{ $date }}" min="{{ $minDate }}" max="{{ $maxDate }}"
@@ -67,6 +84,7 @@
                         <input type="hidden" name="service" value="{{ $service->id }}">
                         @if($variant)<input type="hidden" name="variant" value="{{ $variant->id }}">@endif
                         <input type="hidden" name="date" value="{{ $date }}">
+                        @include('partials.booking.carry-extras', ['extras' => $extras])
                         @include('partials.booking.personnel-picker')
                     </form>
 
@@ -85,6 +103,13 @@
                             foreach ($staffSelection as $positionId => $value) {
                                 $slotQuery['staff'][$positionId] = $value;
                             }
+                        }
+                        if (! empty($extras)) {
+                            $slotQuery['extras'] = collect($extras)->map(fn ($extra) => array_filter([
+                                'service_id' => $extra['service']->id,
+                                'variant_label' => $extra['variant_label'],
+                                'personnel_id' => $extra['personnel_id'],
+                            ], fn ($value) => $value !== null && $value !== ''))->all();
                         }
                     @endphp
                     <label class="form-label nx-eyebrow">Time</label>

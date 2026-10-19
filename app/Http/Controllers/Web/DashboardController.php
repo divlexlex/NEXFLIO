@@ -38,7 +38,7 @@ class DashboardController extends Controller
      */
     public function chartData()
     {
-        // Recognized revenue per week, last 8 weeks (Completed only).
+        // Revenue per week, last 8 weeks (verified payments).
         $revenueByWeek = $this->revenue->weeklyTotals(8);
 
         // Bookings per service and completions per staff, last 30 days.
@@ -103,7 +103,7 @@ class DashboardController extends Controller
             ->where('appointment_date', '>=', now()->subDays(30))
             ->get();
 
-        // Recognized money over the last 30 days rolled up by service category.
+        // Verified money over the last 30 days rolled up by service category.
         $revenueByCategory = $this->revenue->byCategorySince(now()->subDays(30));
 
         // 90-day booking rhythm: per weekday and per start hour.

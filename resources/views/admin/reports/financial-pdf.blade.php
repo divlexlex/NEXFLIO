@@ -23,14 +23,14 @@
 
     <h2>Summary</h2>
     <table class="summary">
-        <tr><td>Recognized Revenue (YTD)</td><td>&#8369;{{ number_format($yearRevenue, 2) }}</td></tr>
+        <tr><td>Revenue (YTD)</td><td>&#8369;{{ number_format($yearRevenue, 2) }}</td></tr>
         <tr><td>Commissions Accrued (YTD)</td><td>&#8369;{{ number_format($yearCommissions, 2) }}</td></tr>
         <tr><td>Net of Commissions</td><td>&#8369;{{ number_format($yearRevenue - $yearCommissions, 2) }}</td></tr>
     </table>
 
     <h2>Monthly Revenue — last 12 months</h2>
     <table>
-        <thead><tr><th>Month</th><th class="num">Recognized Revenue</th></tr></thead>
+        <thead><tr><th>Month</th><th class="num">Revenue</th></tr></thead>
         <tbody>
             @foreach($months as $month)
                 <tr>

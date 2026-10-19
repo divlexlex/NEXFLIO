@@ -258,7 +258,7 @@
             <div class="col-lg-8">
                 <div class="accordion d-flex flex-column gap-3" id="faqAccordion">
                     @php($faqs = [
-                        ['q' => 'Do I need to pay before my appointment?', 'a' => 'A ₱200 reservation fee secures your slot. Upload your proof of payment in the booking portal and the branch verifies it, usually within the hour. The balance is settled at check-out.'],
+                        ['q' => 'Do I need to pay before my appointment?', 'a' => 'When your service has a down payment, it secures your slot. Upload your proof of payment in the booking portal and the branch verifies it, usually within the hour. Any balance is settled at check-out.'],
                         ['q' => 'What happens if I arrive late?', 'a' => 'A short grace period applies per service; arriving beyond it may require rescheduling depending on the day\'s bookings. Message the branch as soon as you know you\'ll be late.'],
                         ['q' => 'Can I request a specific therapist?', 'a' => 'Yes — preferred staff can be requested during booking, subject to their availability on your selected date and time.'],
                         ['q' => 'How do I cancel or reschedule?', 'a' => 'Manage your booking from the mobile app up to the cutoff shown on your appointment details.'],

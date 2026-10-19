@@ -37,16 +37,14 @@
                         <span class="nx-review-label">Price</span>
                         <span class="nx-review-value">₱{{ number_format($price, 2) }}</span>
                     </div>
-                    @if($fee !== null)
-                        <div class="nx-review-row">
-                            <span class="nx-review-label">Reservation fee (due now)</span>
-                            <span class="nx-review-value">₱{{ number_format($fee, 2) }}</span>
-                        </div>
-                        <div class="nx-review-row">
-                            <span class="nx-review-label">Balance (pay at the branch)</span>
-                            <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
-                        </div>
-                    @endif
+                    <div class="nx-review-row">
+                        <span class="nx-review-label">Down payment — {{ $service->name }}</span>
+                        <span class="nx-review-value">{{ $fee > 0 ? '₱'.number_format($fee, 2) : 'None' }}</span>
+                    </div>
+                    <div class="nx-review-row">
+                        <span class="nx-review-label">Balance (pay at the branch)</span>
+                        <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
+                    </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Duration</span>
                         <span class="nx-review-value">{{ $service->duration_minutes }} mins</span>
@@ -80,18 +78,15 @@
 
                     <div class="alert alert-warning mt-4 mb-0">
                         <i class="bi bi-info-circle me-1"></i>
-                        @if($fee !== null)
-                            Only the ₱{{ number_format($fee, 2) }} reservation fee is due online now — the
-                            current balance is paid at the branch. Please send proof of payment to confirm
-                            your reservation. Reservation fees are deducted from the total cost of services.
-                            @if(! $isPackage)
-                                Prefer to pay everything on appointment day? Choose <strong>Cash</strong> on the next step
-                                — no upload needed.
-                            @endif
-                            Thank you and we look forward to pamper you!
+                        @if($requiresDownPayment)
+                            Only the ₱{{ number_format($fee, 2) }} down payment is due online now — the
+                            ₱{{ number_format($balance, 2) }} balance is paid at the branch. Please send proof
+                            of payment to confirm your reservation. Down payments are deducted from the total
+                            cost of services. Thank you and we look forward to pamper you!
                         @else
-                            A reservation fee proof of payment is required next. Your slot is only reserved
-                            after our team verifies your payment — this booking is not confirmed yet.
+                            Nothing is due online right now. Choose <strong>Cash</strong> on the next step to pay
+                            ₱{{ number_format($price, 2) }} in full on appointment day, or pay the full amount
+                            online with proof to secure your slot. Thank you and we look forward to pamper you!
                         @endif
                     </div>
 

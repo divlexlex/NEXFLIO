@@ -70,8 +70,8 @@
                      each with its price. Creation-time avails are part of the
                      appointment's services (no tag, no down-payment line); only
                      services added later from the Payments flow carry the
-                     "Added" tag and their recorded 50% down payment. The
-                     balance already sums them all via booked_price. --}}
+                     "Added" tag and their recorded down payment. The balance
+                     already sums them all via booked_price. --}}
                 <div class="small mb-2" data-card-services>
                     <div class="d-flex justify-content-between gap-2">
                         <span>{{ $appointment->displayServiceName() }}</span>
@@ -83,9 +83,12 @@
                                 {{ $added->displayName() }}
                                 @if($added->isPayment())
                                     <span class="badge text-bg-secondary ms-1">Added</span>
-                                    {{-- Recorded 50% down payment for this added
-                                         service (display only). --}}
-                                    <span class="d-block text-muted">Down payment (50%): ₱{{ number_format(round((float) $added->price * 0.5, 2), 2) }}</span>
+                                    {{-- Only shown when a down payment was
+                                         actually recorded with the addition
+                                         (display only). --}}
+                                    @if(($added->down_payment_recorded ?? null) !== null)
+                                        <span class="d-block text-muted">Down payment: ₱{{ number_format($added->down_payment_recorded, 2) }}</span>
+                                    @endif
                                 @endif
                             </span>
                             <span class="text-muted text-nowrap">₱{{ number_format($added->price, 2) }}</span>
@@ -109,8 +112,8 @@
                 {{-- Add another service. Booked or In-Service appointments
                      accept additions — see storeAdditionalService. Opens the
                      SAME shared modal; the balance reacts to the raised
-                     booked_price on reload, and the modal's 50% down payment
-                     applies to this added service. --}}
+                     booked_price on reload, and the modal's optional down
+                     payment applies to this added service. --}}
                 @if(in_array($appointment->status->value, ['booked', 'in-service'], true))
                     <button type="button" class="btn btn-sm btn-outline-secondary mb-2"
                             data-bs-toggle="modal" data-bs-target="#addedServiceModal"

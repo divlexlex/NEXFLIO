@@ -3,52 +3,64 @@
 namespace App\Services;
 
 use App\Enums\AppointmentStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Appointment;
+use App\Models\Payment;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
- * Completed-service revenue only. Payment verification records cash/collection
- * facts and must not inflate recognized revenue before the appointment reaches
- * {@see AppointmentStatus::Completed}.
+ * Rule A (sha, 2026-10-19): revenue is VERIFIED money, dated by verified_at.
  *
- * Amount = booked_price snapshot, falling back to the service's listed price.
- * Period filters use completed_at (set once at completion).
+ * A down payment counts the moment a manager verifies it — including a
+ * second-chance payment on a booking whose first payment was rejected
+ * (top-up after insufficient_amount, resubmitted proof after
+ * invalid_proof): the verify step flips those rows to Verified, so the
+ * credit is automatic and happens exactly once per payment row.
+ *
+ * Two guards keep the total honest:
+ *  - a payment on a Cancelled appointment counts ₱0 (a rejected booking's
+ *    held partial receipt is not revenue while the booking is dead; if the
+ *    client revives it with a top-up, the appointment leaves Cancelled and
+ *    the held money counts again);
+ *  - completing an appointment adds nothing — the balance was already
+ *    credited when its branch settlement / check-out payment was recorded
+ *    as Verified, so a booking's revenue can never exceed what was paid.
  */
 class RevenueRecognitionService
 {
     /**
-     * Service value that counts as recognized revenue for one appointment.
-     * Zero unless the appointment is Completed.
+     * Verified money collected for one appointment. ₱0 while the
+     * appointment is Cancelled, whatever its payment rows say.
      */
     public function amountFor(Appointment $appointment): float
     {
-        if ($appointment->status !== AppointmentStatus::Completed) {
+        if ($appointment->status === AppointmentStatus::Cancelled) {
             return 0.0;
         }
 
-        $appointment->loadMissing('service:id,price');
-
-        return round((float) ($appointment->booked_price ?? $appointment->service?->price ?? 0), 2);
+        return round((float) $appointment->verifiedPayments()->sum('amount'), 2);
     }
 
     /**
-     * Completed appointments with a recognition timestamp in the inclusive window.
+     * Verified payments in the inclusive window, excluding payments whose
+     * appointment is Cancelled.
      *
-     * @return \Illuminate\Database\Eloquent\Builder<Appointment>
+     * @return \Illuminate\Database\Eloquent\Builder<Payment>
      */
-    public function completedQuery(?Carbon $from = null, ?Carbon $to = null)
+    public function verifiedQuery(?Carbon $from = null, ?Carbon $to = null)
     {
-        $query = Appointment::query()
-            ->where('status', AppointmentStatus::Completed)
-            ->whereNotNull('completed_at');
+        $query = Payment::query()
+            ->where('status', PaymentStatus::Verified)
+            ->whereHas('appointment', fn ($query) => $query
+                ->where('status', '!=', AppointmentStatus::Cancelled->value));
 
         if ($from !== null) {
-            $query->where('completed_at', '>=', $from);
+            $query->where('verified_at', '>=', $from);
         }
 
         if ($to !== null) {
-            $query->where('completed_at', '<=', $to);
+            $query->where('verified_at', '<=', $to);
         }
 
         return $query;
@@ -56,9 +68,7 @@ class RevenueRecognitionService
 
     public function sumBetween(?Carbon $from = null, ?Carbon $to = null): float
     {
-        return $this->sumAppointments(
-            $this->completedQuery($from, $to)->with('service:id,price')->get()
-        );
+        return round((float) $this->verifiedQuery($from, $to)->sum('amount'), 2);
     }
 
     public function sumForMonth(int $year, int $month): float
@@ -86,22 +96,20 @@ class RevenueRecognitionService
     public function weeklyTotals(int $weeks = 8): array
     {
         $start = now()->startOfWeek()->subWeeks($weeks - 1);
-        $appointments = $this->completedQuery($start)
-            ->with('service:id,price')
-            ->get(['id', 'booked_price', 'service_id', 'completed_at', 'status']);
+        $payments = $this->verifiedQuery($start)->get(['amount', 'verified_at']);
 
         $buckets = [];
         for ($i = 0; $i < $weeks; $i++) {
             $weekStart = $start->copy()->addWeeks($i);
             $weekEnd = $weekStart->copy()->endOfWeek();
-            $slice = $appointments->filter(
-                fn (Appointment $appointment) => $appointment->completed_at !== null
-                    && $appointment->completed_at->between($weekStart, $weekEnd)
+            $slice = $payments->filter(
+                fn (Payment $payment) => $payment->verified_at !== null
+                    && $payment->verified_at->between($weekStart, $weekEnd)
             );
 
             $buckets[] = [
                 'label' => $weekStart->format('M j'),
-                'total' => $this->sumAppointments($slice),
+                'total' => round((float) $slice->sum('amount'), 2),
             ];
         }
 
@@ -116,22 +124,20 @@ class RevenueRecognitionService
     public function monthlyTotals(int $months = 12): array
     {
         $start = now()->startOfMonth()->subMonths($months - 1);
-        $appointments = $this->completedQuery($start)
-            ->with('service:id,price')
-            ->get(['id', 'booked_price', 'service_id', 'completed_at', 'status']);
+        $payments = $this->verifiedQuery($start)->get(['amount', 'verified_at']);
 
         $buckets = [];
         for ($i = 0; $i < $months; $i++) {
             $monthStart = $start->copy()->addMonths($i);
             $monthEnd = $monthStart->copy()->endOfMonth();
-            $slice = $appointments->filter(
-                fn (Appointment $appointment) => $appointment->completed_at !== null
-                    && $appointment->completed_at->between($monthStart, $monthEnd)
+            $slice = $payments->filter(
+                fn (Payment $payment) => $payment->verified_at !== null
+                    && $payment->verified_at->between($monthStart, $monthEnd)
             );
 
             $buckets[] = [
                 'label' => $monthStart->format('M Y'),
-                'revenue' => $this->sumAppointments($slice),
+                'revenue' => round((float) $slice->sum('amount'), 2),
             ];
         }
 
@@ -139,27 +145,17 @@ class RevenueRecognitionService
     }
 
     /**
-     * Recognized revenue rolled up by service category since $from.
+     * Verified revenue rolled up by service category since $from.
      *
      * @return Collection<string, float>
      */
     public function byCategorySince(Carbon $from): Collection
     {
-        return $this->completedQuery($from)
-            ->with('service:id,category,price')
+        return $this->verifiedQuery($from)
+            ->with('appointment.service:id,category')
             ->get()
-            ->groupBy(fn (Appointment $appointment) => $appointment->service->category ?? 'Unknown')
-            ->map(fn (Collection $group) => $this->sumAppointments($group))
+            ->groupBy(fn (Payment $payment) => $payment->appointment->service->category ?? 'Unknown')
+            ->map(fn (Collection $group) => round((float) $group->sum('amount'), 2))
             ->sortDesc();
-    }
-
-    /**
-     * @param  Collection<int, Appointment>  $appointments
-     */
-    private function sumAppointments(Collection $appointments): float
-    {
-        return round((float) $appointments->sum(
-            fn (Appointment $appointment) => (float) ($appointment->booked_price ?? $appointment->service?->price ?? 0)
-        ), 2);
     }
 }

@@ -38,10 +38,14 @@
             <div class="col-lg-7">
                 <div class="nx-booking-panel">
                     <p class="nx-text-secondary mb-4" id="pay-lead-online">
-                        Send the reservation fee of ₱{{ number_format($fee ?? 0, 2) }} via GCash, Maya, GoTyme, bank transfer or card, then upload a screenshot or
-                        photo of the receipt below. Our team verifies payments manually — you'll be
-                        notified as soon as your payment is confirmed. The remaining balance is settled
-                        after your appointment.
+                        @if($requiresDownPayment)
+                            Send the down payment of <strong>₱{{ number_format($fee, 2) }}</strong> via GCash, Maya, GoTyme, bank transfer or card, then upload a screenshot or
+                            photo of the receipt below. Our team verifies payments manually — you'll be
+                            notified as soon as your payment is confirmed. The remaining
+                            <strong>₱{{ number_format($balance, 2) }}</strong> balance is settled after your appointment.
+                        @else
+                            Nothing is due online right now. Pay <strong>₱{{ number_format($price, 2) }}</strong> in full online with proof, or choose <strong>Cash</strong> to pay the full amount on appointment day.
+                        @endif
                     </p>
                     <p class="nx-text-secondary mb-4 d-none" id="pay-lead-cash">
                         No payment needed now — your booking is confirmed immediately and the amount is
@@ -68,26 +72,24 @@
                             <span class="nx-review-label">Price</span>
                             <span class="nx-review-value">₱{{ number_format($price, 2) }}</span>
                         </div>
-                        @if($fee !== null)
-                            <div class="nx-review-row">
-                                <span class="nx-review-label">Reservation fee (due now)</span>
-                                <span class="nx-review-value">₱{{ number_format($fee, 2) }}</span>
-                            </div>
-                            <div class="nx-review-row mb-4">
-                                <span class="nx-review-label">Balance (pay at the branch)</span>
-                                <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
-                            </div>
-                        @endif
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Down payment — {{ $service->name }}</span>
+                            <span class="nx-review-value">{{ $fee > 0 ? '₱'.number_format($fee, 2) : 'None' }}</span>
+                        </div>
+                        <div class="nx-review-row mb-4">
+                            <span class="nx-review-label">Balance (pay at the branch)</span>
+                            <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
+                        </div>
 
                         <label class="form-label" for="pay-method">Payment method</label>
                         <select name="method" id="pay-method" class="form-select mb-4" style="max-width: 260px;">
                             @foreach(config('payment.methods', []) as $value => $label)
-                                @continue($isPackage && $value === 'cash')
+                                @continue($requiresDownPayment && $value === 'cash')
                                 <option value="{{ $value }}" @selected(old('method') === $value || (old('method') === null && $value === 'gcash'))>{{ $label }}</option>
                             @endforeach
                         </select>
-                        @if($isPackage)
-                            <p class="small nx-text-secondary mb-4">Package bookings require the reservation fee to be paid online with proof of payment — Cash is not available for packages. The remaining balance is paid at the branch on your appointment day.</p>
+                        @if($requiresDownPayment)
+                            <p class="small nx-text-secondary mb-4">A down payment is required for this booking and must be paid online with proof of payment — Cash is not available. The remaining balance is paid at the branch on your appointment day.</p>
                         @endif
 
                         <div id="pay-proof-block">

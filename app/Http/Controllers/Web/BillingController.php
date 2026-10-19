@@ -45,7 +45,7 @@ class BillingController extends Controller
             });
 
         // Collection ledger for the month (verified payments) — separate from
-        // recognized revenue, which only counts Completed appointments.
+        // revenue (Rule A counts these same verified payments, minus any on Cancelled appointments).
         $payments = Payment::with(['appointment.service', 'appointment.user', 'verifier'])
             ->where('status', PaymentStatus::Verified)
             ->whereYear('verified_at', $year)

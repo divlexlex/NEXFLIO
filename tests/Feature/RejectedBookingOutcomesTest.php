@@ -41,7 +41,7 @@ class RejectedBookingOutcomesTest extends TestCase
         $this->staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
 
         $this->service = Service::create([
-            'name' => 'Outcome Facial (test)', 'category' => 'Facial', 'description' => 'Test',
+            'name' => 'Outcome Facial (test)', 'category' => 'Massage', 'description' => 'Test',
             'price' => 800, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
     }
@@ -53,7 +53,7 @@ class RejectedBookingOutcomesTest extends TestCase
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '12:00',
             'status' => AppointmentStatus::Unverified,
         ]);
         $appointment->payment()->create([
@@ -205,7 +205,7 @@ class RejectedBookingOutcomesTest extends TestCase
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '12:00',
         ])->assertRedirect();
 
         $this->actingAs($this->client)->post(

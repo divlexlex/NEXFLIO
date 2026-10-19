@@ -44,13 +44,15 @@
                     <div class="small text-muted mt-1 d-none" id="added-personnel-hint"></div>
                 </div>
 
-                {{-- 50% down payment. Recorded only when the request carries
-                     record_dp (checked by default here); the balance still
+                {{-- Optional down payment collected now. Pre-filled from the
+                     chosen service's configured amount (capped at its price);
+                     blank/0 records no payment at all. The balance still
                      grows by the FULL added price either way. --}}
                 <div class="border-top mt-3 pt-3">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="fw-semibold">Down payment for this added service (50%)</span>
-                        <span class="fw-bold" id="added-dp-amount">₱0.00</span>
+                    <div class="mb-2">
+                        <label class="form-label" for="added-dp-input">Down payment (₱) <span class="text-muted">(optional)</span></label>
+                        <input type="number" step="0.01" min="0" name="down_payment" id="added-dp-input" class="form-control" placeholder="Leave blank for none">
+                        <div class="small text-muted mt-1">Pre-filled from the service's configured amount. Leave blank to collect nothing now; the full added price still joins the Balance due.</div>
                     </div>
                     <div class="mb-2">
                         <label class="form-label" for="added-dp-method">Method</label>
@@ -60,11 +62,6 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="record_dp" value="1" id="added-record-dp" checked>
-                        <label class="form-check-label" for="added-record-dp">Record down payment now</label>
-                    </div>
-                    <div class="small text-muted mt-1">Half of the added service is collected now; the rest joins the Balance due.</div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -88,7 +85,7 @@
         const variantSelect = document.getElementById('added-variant');
         const personnelSelect = document.getElementById('added-personnel');
         const personnelHint = document.getElementById('added-personnel-hint');
-        const dpAmount = document.getElementById('added-dp-amount');
+        const dpInput = document.getElementById('added-dp-input');
         if (!modal || !form || !serviceSelect || !variantWrap || !variantSelect || !personnelSelect) return;
 
         const statusBase = @json(url('admin/appointments'));
@@ -176,11 +173,17 @@
             return Number(service.price) || 0;
         }
 
-        // 50% of the pick, rounded to 2 decimals (₱399.00 → ₱199.50).
+        // Pre-fill the optional down payment from the pick's configured
+        // amount, never above its price. None → blank.
         function syncDownPayment() {
-            if (!dpAmount) return;
-            const half = Math.round(currentPrice() * 0.5 * 100) / 100;
-            dpAmount.textContent = '₱' + half.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (!dpInput) return;
+            const service = currentService();
+            const price = currentPrice();
+            let configured = service && service.down_payment != null ? Number(service.down_payment) : 0;
+            configured = Math.min(Math.max(configured, 0), price);
+            dpInput.value = configured > 0
+                ? configured.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/,/g, '')
+                : '';
         }
 
         function refresh() { syncVariants(); syncPersonnel(); syncDownPayment(); }

@@ -135,8 +135,8 @@ class AiInsightsTest extends TestCase
         $a7 = $this->makeAppointment($this->facial, $this->clientC, 50, '15:00', AppointmentStatus::Completed, 500.00); // Sun
         $a8 = $this->makeAppointment($this->massage, $this->clientB, 45, '09:00', AppointmentStatus::Completed, 1000.00); // Fri
 
-        // Verified money still exists on Booked a5 — must NOT appear in
-        // recognized revenue_by_category. Completed only: Massage 1800, Facial 500.
+        // Rule A: verified money counts even on Booked a5. Last 30 days:
+        // Massage 1000 + 800 + 600 = 2400, Facial 500.
         $this->verifiedPayment($a1, 1000.00, 5);
         $this->verifiedPayment($a2, 800.00, 9);
         $this->verifiedPayment($a3, 500.00, 3);
@@ -326,10 +326,10 @@ class AiInsightsTest extends TestCase
             $this->assertArrayHasKey($key, $metrics);
         }
 
-        // Recognized revenue only (Completed): Massage 1000+800, Facial 500.
-        // Booked a5's verified ₱600 must not count.
+        // Rule A (verified payments): Massage 1000+800+600 (a5 is Booked
+        // but its ₱600 is verified, so it counts), Facial 500.
         $this->assertEquals(
-            ['Massage' => 1800.0, 'Facial' => 500.0],
+            ['Massage' => 2400.0, 'Facial' => 500.0],
             $metrics['revenue_by_category_last_30_days']
         );
 

@@ -20,6 +20,7 @@ class Service extends Model
         'description',
         'package_details',
         'price',
+        'down_payment',
         'duration_minutes',
         'image_path',
         'status',
@@ -35,6 +36,7 @@ class Service extends Model
     {
         return [
             'price' => 'decimal:2',
+            'down_payment' => 'decimal:2',
             'service_location_type' => ServiceLocationType::class,
         ];
     }
@@ -89,6 +91,19 @@ class Service extends Model
         return $this->relationLoaded('positions')
             ? $this->positions->isNotEmpty()
             : $this->positions()->exists();
+    }
+
+    /**
+     * True for anything the catalog treats as a package: a Packages-category
+     * service, a multi-staff package, or one of the named Head-Spa packages
+     * that live in an ordinary category (see ServiceCatalog). Extras are
+     * never packages, so the booking wizard and its request both use this.
+     */
+    public function isPackageForExtras(): bool
+    {
+        return $this->isPackageService()
+            || $this->requiresMultiStaff()
+            || in_array($this->name, \App\Support\ServiceCatalog::PACKAGE_SERVICE_NAMES, true);
     }
 
     /**

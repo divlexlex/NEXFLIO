@@ -196,7 +196,7 @@ class WalkInPaymentLifecycleTest extends TestCase
         ]);
     }
 
-    public function test_add_with_record_dp_totals_into_the_record_form_then_checkout(): void
+    public function test_add_with_down_payment_totals_into_the_record_form_then_checkout(): void
     {
         // Main ₱999 walk-in, entirely unpaid.
         $main = $this->service('Lifecycle Main 999', 'Massage', 999);
@@ -220,12 +220,12 @@ class WalkInPaymentLifecycleTest extends TestCase
         $this->assertStringContainsString('value="999.00"', $html);
         $this->assertStringNotContainsString('Confirm check-out', $html);
 
-        // Add ₱599 while STILL Booked, recording the 50% down payment.
+        // Add ₱599 while STILL Booked, recording a ₱299.50 down payment.
         $this->actingAs($this->manager)
             ->post(route('admin.appointments.additional-services.store', $appointment->id), [
                 'service_id' => $add->id,
                 'personnel_id' => $this->facialStaff->id,
-                'record_dp' => 1,
+                'down_payment' => 299.50,
                 'method' => 'cash',
             ])->assertRedirect()->assertSessionHas('success');
 
@@ -267,24 +267,24 @@ class WalkInPaymentLifecycleTest extends TestCase
 
         $appointment = $this->createWalkIn('Pending Guest'); // main ₱500, Booked, unpaid
 
-        // Add a ₱799 service with the 50% down payment recorded (₱399.50).
+        // Add a ₱799 service with a ₱399.50 down payment recorded.
         $this->actingAs($this->manager)
             ->post(route('admin.appointments.additional-services.store', $appointment->id), [
                 'service_id' => $add->id,
                 'personnel_id' => $this->facialStaff->id,
-                'record_dp' => 1,
+                'down_payment' => 399.50,
                 'method' => 'cash',
             ])->assertRedirect()->assertSessionHas('success');
 
         $appointment->refresh();
         $this->assertSame(899.50, $appointment->balanceDue()); // 500 + 799 − 399.50
 
-        // Fix A: the added row shows its own 50% down payment amount.
+        // Fix A: the added row shows its own recorded down payment amount.
         $pending = $this->actingAs($this->manager)
             ->get(route('admin.payments', ['status' => 'pending']))
             ->assertOk()->getContent();
         $this->assertStringContainsString($appointment->referenceCode(), $pending);
-        $this->assertStringContainsString('Down payment (50%): ₱399.50', $pending);
+        $this->assertStringContainsString('Down payment: ₱399.50', $pending);
 
         // Fix B: a recorded DP does NOT move a walk-in into Verified — it
         // stays Pending while a balance remains.

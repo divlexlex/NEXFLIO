@@ -5,7 +5,7 @@
      StoreWebHomeBookingRequest.
      Expects (any may be null/absent): $service, $variant (Branch package
      tier id), $date, $time, $personnel, $notes, $guests (Branch
-     reservation-fee bookings without variants — the Details step's guest
+     down-payment bookings without variants — the Details step's guest
      count), $address (Home Service only — the array BookingController's
      addressFieldsFromRequest() shape returns: source_client_address_id,
      street_address, barangay, city_municipality, province, postal_code) --}}
@@ -21,6 +21,17 @@
 @endif
 @if(!empty($notes))<input type="hidden" name="notes" value="{{ $notes }}">@endif
 @if(!empty($guests))<input type="hidden" name="guests" value="{{ $guests }}">@endif
+@if(!empty($extras) && is_array($extras))
+    @foreach($extras as $index => $extra)
+        <input type="hidden" name="extras[{{ $index }}][service_id]" value="{{ $extra['service']->id }}">
+        @if(!empty($extra['variant_label']))
+            <input type="hidden" name="extras[{{ $index }}][variant_label]" value="{{ $extra['variant_label'] }}">
+        @endif
+        @if(!empty($extra['personnel_id']))
+            <input type="hidden" name="extras[{{ $index }}][personnel_id]" value="{{ $extra['personnel_id'] }}">
+        @endif
+    @endforeach
+@endif
 @if(!empty($address))
     @foreach(['source_client_address_id', 'street_address', 'barangay', 'city_municipality', 'province', 'postal_code'] as $field)
         @if(!empty($address[$field]))<input type="hidden" name="{{ $field }}" value="{{ $address[$field] }}">@endif

@@ -9,7 +9,7 @@
 | Intentionally duplicated rather than extracted into a shared include:
 | Home's FAQ section is already-completed, reviewed Website work and this
 | task does not touch it. These are the identical questions/answers, not
-| paraphrases — every policy statement here (reservation fee amount,
+| paraphrases — every policy statement here (down payment rule,
 | grace-period existence, cancellation channel, home service coverage
 | behavior) matches what's already approved and live, nothing new was
 | invented. Categories are added purely as organizational labels; no new
@@ -24,7 +24,7 @@ return [
         [
             'category' => 'Payments',
             'question' => 'Do I need to pay before my appointment?',
-            'answer' => 'A ₱200 reservation fee secures your slot. Upload your proof of payment in the booking portal and the branch verifies it, usually within the hour. The balance is settled at check-out.',
+            'answer' => 'When your service has a down payment, it secures your slot. Upload your proof of payment in the booking portal and the branch verifies it, usually within the hour. Any balance is settled at check-out.',
         ],
         [
             'category' => 'Before Your Appointment',

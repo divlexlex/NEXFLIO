@@ -61,8 +61,8 @@ class AdminServicesFilterTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('FilterCat Facial One', $html);
-        $this->assertStringNotContainsString('FilterCat Massage One', $html);
+        $this->assertStringContainsString('<strong>FilterCat Facial One</strong>', $html);
+        $this->assertStringNotContainsString('<strong>FilterCat Massage One</strong>', $html);
 
         $expected = Service::where('category', 'Facial')->count();
         $this->assertStringContainsString("Showing {$expected} of ".Service::count().' services', $html);
@@ -78,8 +78,8 @@ class AdminServicesFilterTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('ZzzQuirkyName Service', $html);
-        $this->assertStringNotContainsString('Ordinary Other Service', $html);
+        $this->assertStringContainsString('<strong>ZzzQuirkyName Service</strong>', $html);
+        $this->assertStringNotContainsString('<strong>Ordinary Other Service</strong>', $html);
     }
 
     public function test_status_filter_works(): void
@@ -92,8 +92,8 @@ class AdminServicesFilterTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('FilterStatus Inactive One', $html);
-        $this->assertStringNotContainsString('FilterStatus Active One', $html);
+        $this->assertStringContainsString('<strong>FilterStatus Inactive One</strong>', $html);
+        $this->assertStringNotContainsString('<strong>FilterStatus Active One</strong>', $html);
     }
 
     public function test_empty_filter_result_shows_match_message(): void

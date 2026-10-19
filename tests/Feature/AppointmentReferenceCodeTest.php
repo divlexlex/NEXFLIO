@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\Service;
+use App\Models\StaffProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -42,11 +43,11 @@ class AppointmentReferenceCodeTest extends TestCase
 
         $this->manicure = Service::create([
             'name' => 'Manicure (test)', 'category' => 'Nails', 'description' => 'Test',
-            'price' => 179, 'duration_minutes' => 45, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 179, 'down_payment' => null, 'duration_minutes' => 45, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
         $this->massage = Service::create([
             'name' => 'Swedish Massage (test)', 'category' => 'Massage', 'description' => 'Test',
-            'price' => 599, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 599, 'down_payment' => 300, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
     }
 
@@ -171,7 +172,7 @@ class AppointmentReferenceCodeTest extends TestCase
         $this->actingAs($this->client)->get($response->headers->get('Location'))
             ->assertOk()
             ->assertSee($this->expectedCode($appointment))
-            ->assertSee('Reservation fee (paid online)')
+            ->assertSee('Down payment (paid online)')
             ->assertSee('Balance (pay at the branch)');
     }
 
@@ -182,14 +183,22 @@ class AppointmentReferenceCodeTest extends TestCase
             'name' => 'Walk-in Staff', 'email' => 'walkin-staff@nexflio.test',
             'password' => bcrypt('password'), 'role_id' => User::ROLE_STAFF,
         ]);
+        StaffProfile::create([
+            'user_id' => $staff->id,
+            'base_pay' => 12000,
+            'commission_rate' => 10,
+            'position' => 'Nail Technician',
+            'employment_status' => 'active',
+            'hired_at' => now()->toDateString(),
+        ]);
 
         $this->actingAs($this->manager)->post(route('admin.appointments.walk-in'), [
             'walk_in_name' => 'Walk-in Client',
             'service_id' => $this->manicure->id,
             'personnel_id' => $staff->id,
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '11:00',
-        ])->assertRedirect();
+            'start_time' => '15:00',
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $appointment = Appointment::latest('id')->firstOrFail();
         $code = $this->expectedCode($appointment);

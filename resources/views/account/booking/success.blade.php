@@ -7,7 +7,8 @@
       App\Services\AppointmentService::transition). Cash bookings also land
       here Unverified now — a submitted request the branch confirms, with the
       full amount payable at the spa (see BookingController@store). Bookings
-      that only paid the reservation fee online show the remaining branch
+       that only paid the down payment
+      online show the remaining branch
       balance. The address block below renders only when
      $appointment->address exists (Home Service only) — see
      App\Models\AppointmentAddress. --}}
@@ -47,6 +48,12 @@
                         <span class="nx-review-label">Service</span>
                         <span class="nx-review-value">{{ $appointment->displayServiceName() }}</span>
                     </div>
+                    @foreach($appointment->addedServices as $added)
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Extra service</span>
+                            <span class="nx-review-value">{{ $added->displayName() }} — ₱{{ number_format((float) $added->price, 2) }}</span>
+                        </div>
+                    @endforeach
                     @if($appointment->price !== null)
                         <div class="nx-review-row">
                             <span class="nx-review-label">Price</span>
@@ -55,7 +62,7 @@
                     @endif
                     @if($hasBalance)
                         <div class="nx-review-row">
-                            <span class="nx-review-label">Reservation fee (paid online)</span>
+                            <span class="nx-review-label">Down payment (paid online)</span>
                             <span class="nx-review-value">₱{{ number_format($paidNow, 2) }}</span>
                         </div>
                         <div class="nx-review-row">

@@ -27,7 +27,7 @@
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="card p-3">
-            <div class="text-muted small">Recognized Revenue · {{ now()->format('F') }}</div>
+            <div class="text-muted small">Revenue · {{ now()->format('F') }}</div>
             <div class="fs-2 fw-bold text-gold">₱{{ number_format($monthRevenue, 2) }}</div>
         </div>
     </div>

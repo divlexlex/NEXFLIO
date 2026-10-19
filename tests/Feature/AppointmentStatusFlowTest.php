@@ -28,6 +28,8 @@ class AppointmentStatusFlowTest extends TestCase
     {
         parent::setUp();
 
+        $this->travelTo(now()->addDay()->setTime(8, 0));
+
         $this->manager = User::where('email', 'manager@nexflio.test')->firstOrFail();
         $this->staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
         $this->client = User::where('email', 'client@nexflio.test')->firstOrFail();
@@ -41,7 +43,7 @@ class AppointmentStatusFlowTest extends TestCase
 
         $this->service = Service::create([
             'name' => 'Classic Manicure',
-            'category' => 'Nails',
+            'category' => 'Massage',
             'description' => 'Test service',
             'price' => 500.00,
             'duration_minutes' => 45,
@@ -57,7 +59,7 @@ class AppointmentStatusFlowTest extends TestCase
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
             'appointment_date' => now()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '12:00',
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ]);
 
@@ -184,7 +186,7 @@ class AppointmentStatusFlowTest extends TestCase
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
             'appointment_date' => now()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '12:00',
             'payment_proof' => UploadedFile::fake()->image('proof2.jpg'),
         ])->assertStatus(422);
     }

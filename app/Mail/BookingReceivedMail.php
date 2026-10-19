@@ -33,8 +33,8 @@ class BookingReceivedMail extends Mailable implements ShouldQueue
         $paidNow = (float) ($this->appointment->payment?->amount ?? 0);
 
         // Cash bookings are confirmed at once — the whole price is payable
-        // at the branch. Online bookings that only paid the reservation fee
-        // still owe the balance at the branch.
+        // at the branch. Online bookings that only paid a down payment still
+        // owe the balance at the branch.
         if ($this->appointment->status === AppointmentStatus::Booked
             && $this->appointment->payment?->method === 'cash') {
             return new Content(view: 'mail.notification', with: [
@@ -58,7 +58,7 @@ class BookingReceivedMail extends Mailable implements ShouldQueue
                     "Thank you for booking {$service} on "
                         . $this->appointment->appointment_date->format('F j, Y')
                         . " at {$timeLabel}.",
-                    'Our manager is verifying your reservation fee of ₱'.number_format($paidNow, 2)
+                    'Our manager is verifying your down payment of ₱'.number_format($paidNow, 2)
                         . '. The remaining ₱'.number_format($price - $paidNow, 2)
                         . ' is payable at the branch.',
                 ],

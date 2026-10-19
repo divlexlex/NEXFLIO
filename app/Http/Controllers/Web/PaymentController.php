@@ -75,8 +75,8 @@ class PaymentController extends Controller
 
         // Walk-in bucketing differs from online (FIX B): a walk-in stays in
         // the Pending tab while ANY balance remains, and only reaches
-        // Verified once the bill is fully settled. A 50% down payment
-        // recorded at add time does NOT move it to Verified. balanceDue() is
+        // Verified once the bill is fully settled. A down payment recorded
+        // at add time does NOT move it to Verified. balanceDue() is
         // derived (booked_price − verified money, floored at 0), so it is
         // expressed as a correlated subquery here. Online cards keep the
         // payment-status bucketing untouched.
@@ -208,9 +208,17 @@ class PaymentController extends Controller
             );
         }
 
+        // Attach each Payments-added service's recorded down payment (if any)
+        // for the card sub-line. There is no FK between a DP payment and its
+        // added row, so the amount is matched to the verified kind='branch'
+        // row created alongside it (within a few seconds), never to a later
+        // branch settlement.
+        $appointments->getCollection()->each(fn (Appointment $appointment) => $this->attachAddedServiceDownPayments($appointment));
+
         // Catalog + staff data for the shared add-service modal (identical
         // shape to AppointmentController@index — same partial, same endpoints).
         $services = Service::with('positions:id,name')
+
             ->with('variants')
             ->where('status', 'active')
             ->orderBy('name')
@@ -233,6 +241,7 @@ class PaymentController extends Controller
                 'name' => $service->name,
                 'category' => $service->category,
                 'duration_minutes' => $service->duration_minutes,
+                'down_payment' => $service->down_payment !== null ? (float) $service->down_payment : null,
                 'is_package' => $service->requiresMultiStaff(),
                 'eligible_positions' => \App\Models\Position::namesForServiceCategory($service->category),
                 'positions' => $service->positions->map(fn ($position) => [
@@ -342,5 +351,65 @@ class PaymentController extends Controller
         }
 
         return back()->with('success', 'Refund marked as sent — the client has been notified.');
+    }
+
+    /**
+     * A Payments-added service carries no FK to the down-payment payment
+     * recorded with it, so each added row is paired with the Verified
+     * kind='branch' payment created in the same add operation (within a few
+     * seconds) and not already paired. A later branch settlement is too far
+     * away to match. The matched amount (never the configured amount) is
+     * what the card prints; no match => no sub-line.
+     */
+    private function attachAddedServiceDownPayments(Appointment $appointment): void
+    {
+        $added = $appointment->addedServices
+            ->where('source', 'payment')
+            ->sortBy('id')
+            ->values();
+
+        if ($added->isEmpty()) {
+            return;
+        }
+
+        $payments = $appointment->payments
+            ->filter(fn (Payment $payment) => $payment->kind === 'branch'
+                && $payment->status === PaymentStatus::Verified
+                && (float) $payment->amount > 0)
+            ->sortBy('id')
+            ->values();
+
+        $used = [];
+
+        foreach ($added as $service) {
+            $service->down_payment_recorded = null;
+
+            $bestIndex = null;
+            $bestDiff = null;
+
+            foreach ($payments as $index => $payment) {
+                if (isset($used[$index])) {
+                    continue;
+                }
+
+                $diff = abs($service->created_at->diffInSeconds($payment->created_at));
+
+                // The payment is written moments after its added row in the
+                // same request; anything further apart is a later settlement.
+                if ($diff > 15) {
+                    continue;
+                }
+
+                if ($bestIndex === null || $diff < $bestDiff) {
+                    $bestIndex = $index;
+                    $bestDiff = $diff;
+                }
+            }
+
+            if ($bestIndex !== null) {
+                $used[$bestIndex] = true;
+                $service->down_payment_recorded = (float) $payments[$bestIndex]->amount;
+            }
+        }
     }
 }

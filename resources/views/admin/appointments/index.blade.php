@@ -864,8 +864,12 @@
             const addedList = document.getElementById('dw-added-list');
             const addedRow = document.getElementById('dw-added-row');
             const addedRows = p.addedServices || [];
-            const creationRows = addedRows.filter((row) => (row.source || 'payment') === 'creation');
-            const paymentRows = addedRows.filter((row) => (row.source || 'payment') !== 'creation');
+            // Original avail: creation-time walk-in picks AND extras chosen
+            // inside the client's online booking wizard ('booking'). Only
+            // later payment-time adds are the separate "Additional services"
+            // line.
+            const creationRows = addedRows.filter((row) => (row.source || 'payment') !== 'payment');
+            const paymentRows = addedRows.filter((row) => (row.source || 'payment') === 'payment');
 
             function addedLine(row) {
                 const line = document.createElement('div');

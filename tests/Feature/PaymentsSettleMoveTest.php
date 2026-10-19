@@ -40,10 +40,13 @@ class PaymentsSettleMoveTest extends TestCase
 
         $this->client = User::where('email', 'client@nexflio.test')->firstOrFail();
         $this->manager = User::where('email', 'manager@nexflio.test')->firstOrFail();
-        // Real seeded catalog: SAM Couple 4399, fee tier Couple 500.
+        // Real seeded catalog: SAM Couple 4399 with a ₱500 down payment;
+        // Manicure ₱179 with a ₱89.50 down payment for the online flow.
         $this->sam = Service::where('name', 'Package SAM')->firstOrFail();
+        $this->sam->update(['down_payment' => 500]);
         $this->samCoupleId = $this->sam->variants()->where('label', 'Couple')->firstOrFail()->id;
         $this->manicure = Service::where('name', 'Manicure')->firstOrFail();
+        $this->manicure->update(['down_payment' => 89.50]);
     }
 
     private function samBooking(): Appointment
@@ -159,6 +162,8 @@ class PaymentsSettleMoveTest extends TestCase
     // list nowhere else).
     public function test_cash_booking_settles_from_all_tab(): void
     {
+        $this->manicure->update(['down_payment' => null]);
+
         $this->actingAs($this->client)->post(route('account.booking.branch.store'), [
             'service_id' => $this->manicure->id,
             'personnel_id' => 'any',
@@ -239,8 +244,8 @@ class PaymentsSettleMoveTest extends TestCase
             ->patch(route('admin.payments.verify', $sam->payment->id))
             ->assertRedirect();
 
-        // Online Manicure: 179 price -> 89.50 fee; verify, then settle the
-        // remainder — the settled counterpart.
+        // Online Manicure: 179 price -> 89.50 down payment; verify, then
+        // settle the remainder — the settled counterpart.
         $this->actingAs($this->client)->post(route('account.booking.branch.store'), [
             'service_id' => $this->manicure->id,
             'personnel_id' => 'any',

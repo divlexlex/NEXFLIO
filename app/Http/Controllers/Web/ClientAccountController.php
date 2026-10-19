@@ -203,10 +203,10 @@ class ClientAccountController extends Controller
     {
         $type = $request->input('type');
 
-        // Change requests open only once the reservation fee is verified
-        // (Booked) — Unverified bookings must wait for payment verification.
+        // Change requests open only once the payment is verified (Booked) —
+        // Unverified bookings must wait for payment verification.
         if ($appointment->status !== AppointmentStatus::Booked) {
-            return back()->withErrors(['type' => 'You can request changes once your reservation fee has been verified.']);
+            return back()->withErrors(['type' => 'You can request changes once your payment has been verified.']);
         }
 
         AppointmentChangeRequest::create([

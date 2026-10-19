@@ -8,10 +8,12 @@ use App\Models\Appointment;
 use App\Models\BusinessHours;
 use App\Models\Service;
 use App\Models\User;
+use App\Support\BookingExtras;
 use App\Support\PackageStaffSelection;
 use App\Support\ServiceCapacity;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
 /**
@@ -86,6 +88,25 @@ class StoreWebBranchBookingRequest extends FormRequest
                 'nullable',
                 Rule::exists('service_variants', 'id')->where('service_id', $this->input('service_id')),
             ],
+            // Extra services taken in the SAME visit (same date/time and the
+            // same Appointment ID). Structural rules only — prices are never
+            // accepted from the browser; store() resolves each price from the
+            // real Service / ServiceVariant rows. Eligibility and availability
+            // of the chosen personnel are re-checked there with the wizard's
+            // own rules.
+            'extras' => ['nullable', 'array'],
+            'extras.*.service_id' => [
+                'required',
+                Rule::exists('services', 'id')
+                    ->where('status', 'active')
+                    ->whereIn('service_location_type', ServiceLocationType::bookableAtBranch())
+                    ->whereNull('deleted_at'),
+            ],
+            'extras.*.variant_label' => ['nullable', 'string', 'max:255'],
+            'extras.*.personnel_id' => [
+                'nullable',
+                Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
+            ],
             'appointment_date' => 'required|date|after_or_equal:tomorrow',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
@@ -111,8 +132,9 @@ class StoreWebBranchBookingRequest extends FormRequest
     {
         $validator->after(function (Validator $validator) {
             $this->validateVariantChoice($validator);
-            $this->validatePackageCash($validator);
             $this->validatePackageStaff($validator);
+            $extras = $this->validateExtras($validator);
+            $this->validateCashAgainstDownPayment($validator, $extras);
 
             if ($validator->errors()->isNotEmpty()) {
                 return;
@@ -145,7 +167,7 @@ class StoreWebBranchBookingRequest extends FormRequest
                 );
             }
 
-            $this->validateWithinBusinessHours($validator);
+            $this->validateWithinBusinessHours($validator, $extras);
             $this->validateServiceCapacity($validator);
         });
     }
@@ -159,7 +181,38 @@ class StoreWebBranchBookingRequest extends FormRequest
             : null;
     }
 
-    private function validateWithinBusinessHours(Validator $validator): void
+    /**
+     * Validate the extras rows through the SAME resolver store() uses and
+     * return the server-trusted extras (empty when none/invalid). Any error
+     * is added under the offending `extras.N.*` key, so the wizard shows its
+     * normal inline message and nothing is written.
+     *
+     * @return list<array{service: \App\Models\Service, variant_label: string|null, price: float, personnel_id: int|null}>
+     */
+    private function validateExtras(Validator $validator): array
+    {
+        $rows = $this->input('extras', []);
+        if (! is_array($rows) || $rows === []) {
+            return [];
+        }
+
+        try {
+            return BookingExtras::resolve($rows);
+        } catch (ValidationException $e) {
+            foreach ($e->errors() as $key => $messages) {
+                foreach ($messages as $message) {
+                    $validator->errors()->add($key, $message);
+                }
+            }
+
+            return [];
+        }
+    }
+
+    /**
+     * @param  list<array{service: \App\Models\Service}>  $extras
+     */
+    private function validateWithinBusinessHours(Validator $validator, array $extras = []): void
     {
         $service = $this->resolveService();
         $date = $this->input('appointment_date');
@@ -168,7 +221,12 @@ class StoreWebBranchBookingRequest extends FormRequest
             return;
         }
 
-        if (! BusinessHours::startFitsOnDate($date, $time, (int) $service->duration_minutes)) {
+        // One visit: the main service plus every extra must finish by the
+        // shop's closing time, using the same shared window rule.
+        $duration = (int) $service->duration_minutes
+            + array_sum(array_map(fn (array $extra) => (int) $extra['service']->duration_minutes, $extras));
+
+        if (! BusinessHours::startFitsOnDate($date, $time, $duration)) {
             $validator->errors()->add(
                 'start_time',
                 'That time is past shop closing. Please choose an earlier slot, or book for another day.'
@@ -209,12 +267,44 @@ class StoreWebBranchBookingRequest extends FormRequest
     {
         $assignments = $this->input('package_assignments');
         if (is_array($assignments)) {
-            return collect($assignments)->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+            return collect($assignments)
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->merge($this->extraPersonnelIds())
+                ->unique()
+                ->values()
+                ->all();
         }
 
         $personnelId = $this->integer('personnel_id');
 
-        return $personnelId ? [$personnelId] : [];
+        return collect($personnelId ? [$personnelId] : [])
+            ->merge($this->extraPersonnelIds())
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Personnel chosen for the extra services — they occupy the same slot,
+     * so the exact-slot double-booking check must consider them too.
+     *
+     * @return list<int>
+     */
+    private function extraPersonnelIds(): array
+    {
+        $rows = $this->input('extras', []);
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        return collect($rows)
+            ->pluck('personnel_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**
@@ -237,21 +327,34 @@ class StoreWebBranchBookingRequest extends FormRequest
     }
 
     /**
-     * Package bookings (the booked service has variants) must pay the
-     * reservation fee online with proof — Cash is rejected server-side, so
-     * hiding the option in the view alone is never enough to bypass it.
+     * Cash is only offered when nothing is due online. When the booked
+     * services (main + extras) add up to a down payment, it must be paid
+     * online with proof — rejected server-side here so hiding the option in
+     * the view alone can never be bypassed.
+     *
+     * @param  list<array{service: \App\Models\Service, price: float}>  $extras
      */
-    private function validatePackageCash(Validator $validator): void
+    private function validateCashAgainstDownPayment(Validator $validator, array $extras): void
     {
         if ($this->input('method') !== 'cash') {
             return;
         }
 
-        $serviceId = $this->integer('service_id');
-        $service = $serviceId ? \App\Models\Service::with('variants')->find($serviceId) : null;
+        $service = $this->resolveService();
+        if (! $service) {
+            return;
+        }
 
-        if ($service && $service->variants->isNotEmpty()) {
-            $validator->errors()->add('method', 'Cash is not available for package bookings.');
+        $variant = $this->input('variant_id')
+            ? $service->variants->firstWhere('id', (int) $this->input('variant_id'))
+            : null;
+        $mainPrice = (float) ($variant?->price ?? $service->price);
+
+        if (BookingExtras::downPayment($service, $mainPrice, $extras) > 0) {
+            $validator->errors()->add(
+                'method',
+                'Cash is not available because this booking requires a down payment. Please pay the down payment online with proof.'
+            );
         }
     }
 

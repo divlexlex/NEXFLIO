@@ -8,6 +8,7 @@ use App\Models\Appointment;
 use App\Models\BusinessHours;
 use App\Models\Service;
 use App\Models\User;
+use App\Support\BookingExtras;
 use App\Support\PackageStaffSelection;
 use App\Support\ServiceCapacity;
 use Illuminate\Foundation\Http\FormRequest;
@@ -87,7 +88,8 @@ class StoreWebHomeBookingRequest extends FormRequest
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
             // Cash needs no proof (payable at the door); every other method
-            // still needs the manual proof upload for the reservation fee.
+            // still needs the manual proof upload for the down payment or
+            // full online amount.
             'payment_proof' => 'nullable|required_unless:method,cash|image|max:5120',
             'method' => ['sometimes', Rule::in(array_keys(config('payment.methods', [])))],
 
@@ -118,8 +120,8 @@ class StoreWebHomeBookingRequest extends FormRequest
     {
         $validator->after(function (Validator $validator) {
             $this->validateVariantChoice($validator);
-            $this->validatePackageCash($validator);
             $this->validatePackageStaff($validator);
+            $this->validateCashAgainstDownPayment($validator);
 
             if ($validator->errors()->isNotEmpty()) {
                 return;
@@ -244,21 +246,32 @@ class StoreWebHomeBookingRequest extends FormRequest
     }
 
     /**
-     * Package bookings (the booked service has variants) must pay the
-     * reservation fee online with proof — Cash is rejected server-side, so
-     * hiding the option in the view alone is never enough to bypass it.
+     * Cash is only offered when nothing is due online. When the booked
+     * service has a configured down payment, it must be paid online with
+     * proof — rejected server-side here so hiding the option in the view
+     * alone can never be bypassed.
      */
-    private function validatePackageCash(Validator $validator): void
+    private function validateCashAgainstDownPayment(Validator $validator): void
     {
         if ($this->input('method') !== 'cash') {
             return;
         }
 
-        $serviceId = $this->integer('service_id');
-        $service = $serviceId ? \App\Models\Service::with('variants')->find($serviceId) : null;
+        $service = $this->resolveService();
+        if (! $service) {
+            return;
+        }
 
-        if ($service && $service->variants->isNotEmpty()) {
-            $validator->errors()->add('method', 'Cash is not available for package bookings.');
+        $variant = $this->input('variant_id')
+            ? $service->variants->firstWhere('id', (int) $this->input('variant_id'))
+            : null;
+        $mainPrice = (float) ($variant?->price ?? $service->price);
+
+        if (BookingExtras::downPaymentForService($service, $mainPrice) > 0) {
+            $validator->errors()->add(
+                'method',
+                'Cash is not available because this booking requires a down payment. Please pay the down payment online with proof.'
+            );
         }
     }
 

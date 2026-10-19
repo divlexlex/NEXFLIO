@@ -33,11 +33,18 @@
                     <hr class="my-4" style="border-color: var(--nx-border);">
 
                     <form method="GET" action="{{ route('account.booking.branch.review') }}">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? []])
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? [], 'extras' => $extras])
+
+                        @if(! empty($extras))
+                            <div class="nx-review-row">
+                                <span class="nx-review-label">Extra services</span>
+                                <span class="nx-review-value">{{ collect($extras)->map(fn ($extra) => $extra['service']->name . ($extra['variant_label'] ? ' — ' . $extra['variant_label'] : '') . ' (₱' . number_format($extra['price'], 2) . ')')->implode(', ') }}</span>
+                            </div>
+                        @endif
 
                         @if($variant === null)
                             <p class="small nx-text-secondary mt-2 mb-3">
-                                Down payment for this service: ₱{{ number_format(\App\Support\ReservationFee::for($service), 2) }} — deducted from your total, balance paid at the branch.
+                                Down payment for this service: ₱{{ number_format(\App\Support\BookingExtras::downPaymentForService($service, (float) $service->price), 2) }} — deducted from your total, balance paid at the branch.@if(! empty($extras)) Each extra adds its own configured down payment.@endif
                             </p>
                         @endif
 
@@ -45,7 +52,7 @@
                         <textarea name="notes" id="notes" rows="4" maxlength="1000" class="form-control" placeholder="Anything the team should know before your visit?">{{ $notes }}</textarea>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                            <a href="{{ route('account.booking.branch.schedule', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date])) }}" class="nx-btn nx-btn-outline">
+                            <a href="{{ route('account.booking.branch.schedule', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'extras' => ! empty($extras) ? collect($extras)->map(fn ($extra) => array_filter(['service_id' => $extra['service']->id, 'variant_label' => $extra['variant_label'], 'personnel_id' => $extra['personnel_id']], fn ($value) => $value !== null && $value !== ''))->all() : null])) }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

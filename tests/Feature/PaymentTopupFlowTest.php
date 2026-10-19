@@ -6,6 +6,7 @@ use App\Enums\AppointmentStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Appointment;
 use App\Models\Service;
+use App\Models\StaffProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -45,11 +46,19 @@ class PaymentTopupFlowTest extends TestCase
             'name' => 'Topup Staff', 'email' => 'topup-staff@nexflio.test',
             'password' => bcrypt('password'), 'role_id' => User::ROLE_STAFF,
         ]);
+        StaffProfile::create([
+            'user_id' => $this->staff->id,
+            'base_pay' => 12000,
+            'commission_rate' => 10,
+            'position' => 'Massage Technician',
+            'employment_status' => 'active',
+            'hired_at' => now()->toDateString(),
+        ]);
 
-        // LIZ-shaped fixture: Couple tier 3699, fee 500.
+        // LIZ-shaped fixture: Couple tier 3699, down payment 500.
         $this->package = Service::create([
             'name' => 'Package LIZ (test)', 'category' => 'Head Spa', 'description' => 'Test',
-            'price' => 1899, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 1899, 'down_payment' => 500, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
         $this->package->variants()->createMany([
             ['label' => 'Solo', 'price' => 1899, 'guests' => 1, 'sort' => 1],
@@ -163,7 +172,7 @@ class PaymentTopupFlowTest extends TestCase
         $appointment = $this->bookCoupleOnline([
             'personnel_id' => $this->staff->id,
             'appointment_date' => $date,
-            'start_time' => '11:00',
+            'start_time' => '15:00',
         ]);
         $this->rejectPrimary($appointment, 'insufficient_amount', 200);
 
@@ -171,11 +180,11 @@ class PaymentTopupFlowTest extends TestCase
         // check, which is exactly what we need to simulate this).
         $this->actingAs($this->manager)->post(route('admin.appointments.walk-in'), [
             'walk_in_name' => 'Slot Taker',
-            'service_id' => $this->package->id,
+            'service_id' => Service::where('name', 'Swedish Massage')->firstOrFail()->id,
             'personnel_id' => $this->staff->id,
             'appointment_date' => $date,
-            'start_time' => '11:00',
-        ])->assertRedirect();
+            'start_time' => '15:00',
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->actingAs($this->client)->post(
             route('account.bookings.topup.store', $appointment->id),

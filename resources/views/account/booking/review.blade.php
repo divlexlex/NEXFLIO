@@ -30,23 +30,39 @@
                         <span class="nx-review-value">{{ $service->name }}@if($variant) — {{ $variant->label }}@endif</span>
                     </div>
                     @include('partials.package-inclusions', ['service' => $service])
+                    @foreach(($extras ?? []) as $extra)
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Extra service</span>
+                            <span class="nx-review-value">{{ $extra['service']->name }}@if($extra['variant_label']) — {{ $extra['variant_label'] }}@endif — ₱{{ number_format($extra['price'], 2) }}</span>
+                        </div>
+                    @endforeach
                     <div class="nx-review-row">
                         <span class="nx-review-label">Price</span>
                         <span class="nx-review-value">₱{{ number_format($price, 2) }}</span>
                     </div>
-                    @if($fee !== null)
+                    <div class="nx-review-row">
+                        <span class="nx-review-label">Down payment — {{ $service->name }}@if($variant) ({{ $variant->label }})@endif</span>
+                        <span class="nx-review-value">{{ $mainFee > 0 ? '₱'.number_format($mainFee, 2) : 'None' }}</span>
+                    </div>
+                    @foreach(($extras ?? []) as $extra)
                         <div class="nx-review-row">
-                            <span class="nx-review-label">Reservation fee (due now)</span>
-                            <span class="nx-review-value">₱{{ number_format($fee, 2) }}</span>
+                            <span class="nx-review-label">Down payment — {{ $extra['service']->name }}@if($extra['variant_label']) ({{ $extra['variant_label'] }})@endif</span>
+                            <span class="nx-review-value">{{ ($extra['down_payment'] ?? 0) > 0 ? '₱'.number_format($extra['down_payment'], 2) : 'None' }}</span>
                         </div>
+                    @endforeach
+                    @if(! empty($extras))
                         <div class="nx-review-row">
-                            <span class="nx-review-label">Balance (pay at the branch)</span>
-                            <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
+                            <span class="nx-review-label">Down payment (due now, total)</span>
+                            <span class="nx-review-value">₱{{ number_format($fee, 2) }}</span>
                         </div>
                     @endif
                     <div class="nx-review-row">
+                        <span class="nx-review-label">Balance (pay at the branch)</span>
+                        <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
+                    </div>
+                    <div class="nx-review-row">
                         <span class="nx-review-label">Duration</span>
-                        <span class="nx-review-value">{{ $service->duration_minutes }} mins</span>
+                        <span class="nx-review-value">{{ $service->duration_minutes + collect($extras ?? [])->sum(fn ($extra) => (int) $extra['service']->duration_minutes) }} mins</span>
                     </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Date</span>
@@ -73,21 +89,21 @@
 
                     <div class="alert alert-warning mt-4 mb-0">
                         <i class="bi bi-info-circle me-1"></i>
-                        @if($fee !== null)
-                            Only the ₱{{ number_format($fee, 2) }} reservation fee is due online now — the
-                            current balance is paid at the branch. Please send proof of payment to confirm
-                            your reservation. Reservation fees are deducted from the total cost of services.
-                            @if(! $isPackage)
-                                Prefer to pay everything at the spa? Choose <strong>Cash</strong> on the next step
-                                — no upload needed.
-                            @endif
-                            Thank you and we look forward to pamper you!
+                        @if($requiresDownPayment)
+                            Only the ₱{{ number_format($fee, 2) }} down payment is due online now — the
+                            ₱{{ number_format($balance, 2) }} balance is paid at the branch. Please send proof of
+                            payment to confirm your reservation. Down payments are deducted from the total cost
+                            of services. Thank you and we look forward to pamper you!
+                        @else
+                            Nothing is due online right now. Choose <strong>Cash</strong> on the next step to pay
+                            ₱{{ number_format($price, 2) }} in full at the branch, or pay the full amount online
+                            with proof to secure your slot. Thank you and we look forward to pamper you!
                         @endif
                     </div>
 
                     <form method="GET" action="{{ route('account.booking.branch.payment') }}" class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? [], 'notes' => $notes])
-                        <a href="{{ route('account.booking.branch.details', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? null])) }}" class="nx-btn nx-btn-outline">
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? [], 'notes' => $notes, 'extras' => $extras ?? []])
+                        <a href="{{ route('account.booking.branch.details', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? null, 'extras' => ! empty($extras) ? collect($extras)->map(fn ($extra) => array_filter(['service_id' => $extra['service']->id, 'variant_label' => $extra['variant_label'], 'personnel_id' => $extra['personnel_id']], fn ($value) => $value !== null && $value !== ''))->all() : null])) }}" class="nx-btn nx-btn-outline">
                             <i class="bi bi-arrow-left me-1"></i>Back
                         </a>
                         <button type="submit" class="nx-btn nx-btn-primary">

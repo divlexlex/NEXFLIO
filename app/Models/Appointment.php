@@ -140,7 +140,7 @@ class Appointment extends Model
 
     /**
      * Every payment row on this booking — the first is the booking-time
-     * payment (online reservation fee / full online amount / cash promise),
+     * payment (online down payment / full online amount / cash promise),
      * later rows are branch settlements, partial receipts, or top-ups.
      * payment() (hasOne) always resolves to that first row.
      */
@@ -167,6 +167,11 @@ class Appointment extends Model
         return (float) $payments
             ->where('status', PaymentStatus::Verified)
             ->sum('amount');
+    }
+
+    public function verifiedPayments()
+    {
+        return $this->payments()->where('status', PaymentStatus::Verified);
     }
 
     /** Verified money collected online (fees, partial receipts, top-ups) — everything not taken at the branch. */

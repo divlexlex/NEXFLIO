@@ -40,7 +40,7 @@ class PaymentsAppointmentCardsTest extends TestCase
 
         $this->package = Service::create([
             'name' => 'Package LIZ (test)', 'category' => 'Head Spa', 'description' => 'Test',
-            'price' => 1899, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 1899, 'down_payment' => 500, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
         $this->package->variants()->createMany([
             ['label' => 'Solo', 'price' => 1899, 'guests' => 1, 'sort' => 1],

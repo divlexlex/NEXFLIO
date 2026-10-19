@@ -5,8 +5,8 @@
      gateway — manual proof upload + Management verification for online
      methods, same as the existing mobile booking flow. Cash needs no proof:
      the booking is submitted as a request the branch confirms, and the full
-     amount is payable at the spa. When a reservation fee applies, only the fee is due online now
-     and the balance settles at the branch. --}}
+     amount is payable at the spa. When a down payment applies, only that amount is due online now
+     and the balance settles at the branch; when none applies, Cash or the full price online. --}}
 @extends('layouts.public')
 
 @section('title', 'Book — Payment')
@@ -33,6 +33,16 @@
                         @include('partials.booking.progress-compact', ['step' => 5])
                     </div>
 
+                    <p class="nx-text-secondary mb-4" id="pay-lead-online">
+                        @if($requiresDownPayment)
+                            Send the down payment of <strong>₱{{ number_format($fee, 2) }}</strong> via GCash, Maya, GoTyme, bank transfer or card, then upload a screenshot or
+                            photo of the receipt below. Our team verifies payments manually — you'll be
+                            notified as soon as your payment is confirmed. The remaining
+                            <strong>₱{{ number_format($balance, 2) }}</strong> balance is settled at the branch.
+                        @else
+                            Nothing is due online right now. Pay <strong>₱{{ number_format($price, 2) }}</strong> in full online with proof, or choose <strong>Cash</strong> on the next step to pay the full amount at the branch.
+                        @endif
+                    </p>
                     <p class="nx-text-secondary mb-4 d-none" id="pay-lead-cash">
                         No payment needed now — your booking is confirmed immediately and you pay
                         <strong>₱{{ number_format($price, 2) }} in full at the branch</strong>.
@@ -42,20 +52,34 @@
                         <span class="nx-review-label">Service</span>
                         <span class="nx-review-value">{{ $service->name }}@if($variant) — {{ $variant->label }}@endif</span>
                     </div>
-                    <div class="nx-review-row @if($fee === null) mb-4 @endif">
+                    @foreach(($extras ?? []) as $extra)
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Extra service</span>
+                            <span class="nx-review-value">{{ $extra['service']->name }}@if($extra['variant_label']) — {{ $extra['variant_label'] }}@endif — ₱{{ number_format($extra['price'], 2) }}</span>
+                        </div>
+                    @endforeach
+                    <div class="nx-review-row">
                         <span class="nx-review-label">Price</span>
                         <span class="nx-review-value">₱{{ number_format($price, 2) }}</span>
                     </div>
-                    @if($fee !== null)
+                    <div class="nx-review-row">
+                        <span class="nx-review-label">Down payment — {{ $service->name }}@if($variant) ({{ $variant->label }})@endif</span>
+                        <span class="nx-review-value">{{ $mainFee > 0 ? '₱'.number_format($mainFee, 2) : 'None' }}</span>
+                    </div>
+                    @foreach(($extras ?? []) as $extra)
                         <div class="nx-review-row">
-                            <span class="nx-review-label">Reservation fee (due now)</span>
-                            <span class="nx-review-value">₱{{ number_format($fee, 2) }}</span>
+                            <span class="nx-review-label">Down payment — {{ $extra['service']->name }}@if($extra['variant_label']) ({{ $extra['variant_label'] }})@endif</span>
+                            <span class="nx-review-value">{{ ($extra['down_payment'] ?? 0) > 0 ? '₱'.number_format($extra['down_payment'], 2) : 'None' }}</span>
                         </div>
-                        <div class="nx-review-row mb-4">
-                            <span class="nx-review-label">Balance (pay at the branch)</span>
-                            <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
-                        </div>
-                    @endif
+                    @endforeach
+                    <div class="nx-review-row">
+                        <span class="nx-review-label">Down payment (due now, total)</span>
+                        <span class="nx-review-value">₱{{ number_format($fee, 2) }}</span>
+                    </div>
+                    <div class="nx-review-row mb-4">
+                        <span class="nx-review-label">Balance (pay at the branch)</span>
+                        <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
+                    </div>
 
                     <form method="POST" action="{{ route('account.booking.branch.store') }}" enctype="multipart/form-data">
                         @csrf
@@ -68,16 +92,17 @@
                             <input type="hidden" name="staff[{{ $positionId }}]" value="{{ $value }}">
                         @endforeach
                         @if($notes)<input type="hidden" name="notes" value="{{ $notes }}">@endif
+                        @include('partials.booking.carry-extras', ['extras' => $extras ?? []])
 
                         <label class="form-label" for="pay-method">Payment method</label>
                         <select name="method" id="pay-method" class="form-select mb-2" style="max-width: 260px;">
                             @foreach(config('payment.methods', []) as $value => $label)
-                                @continue($isPackage && $value === 'cash')
+                                @continue($requiresDownPayment && $value === 'cash')
                                 <option value="{{ $value }}" @selected(old('method') === $value || (old('method') === null && $value === 'gcash'))>{{ $label }}</option>
                             @endforeach
                         </select>
-                        @if($isPackage)
-                            <p class="small nx-text-secondary mb-4">Package bookings require the reservation fee to be paid online with proof of payment — Cash is not available for packages. The remaining balance is paid at the branch on your appointment day.</p>
+                        @if($requiresDownPayment)
+                            <p class="small nx-text-secondary mb-4">A down payment is required for this booking and must be paid online with proof of payment — Cash is not available. The remaining balance is paid at the branch on your appointment day.</p>
                         @endif
                         <p class="small nx-text-secondary mb-4 d-none" id="pay-receiving"></p>
 
@@ -123,7 +148,7 @@
                         </div>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                            <a href="{{ route('account.booking.branch.review', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes])) }}" class="nx-btn nx-btn-outline">
+                            <a href="{{ route('account.booking.branch.review', array_filter(['service' => $service->id, 'variant' => $variant?->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'extras' => ! empty($extras) ? collect($extras)->map(fn ($extra) => array_filter(['service_id' => $extra['service']->id, 'variant_label' => $extra['variant_label'], 'personnel_id' => $extra['personnel_id']], fn ($value) => $value !== null && $value !== ''))->all() : null])) }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

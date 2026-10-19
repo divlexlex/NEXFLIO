@@ -40,7 +40,7 @@
     <div class="table-responsive">
         <table class="table align-middle">
             <thead>
-                <tr><th style="width:60px;"></th><th>Name</th><th>Category</th><th>Price</th><th>Duration</th><th>Status</th><th class="text-end"></th></tr>
+                <tr><th style="width:60px;"></th><th>Name</th><th>Category</th><th>Price</th><th>Down payment</th><th>Duration</th><th>Status</th><th class="text-end"></th></tr>
             </thead>
             <tbody>
                 @forelse($services as $service)
@@ -52,6 +52,7 @@
                         </td>
                         <td>{{ $service->category }}</td>
                         <td>₱{{ number_format($service->price, 2) }}</td>
+                        <td>{{ $service->down_payment !== null ? '₱'.number_format((float) $service->down_payment, 2) : 'None' }}</td>
                         <td>{{ $service->duration_minutes }} mins</td>
                         <td>
                             <span class="badge {{ match($service->status) {
@@ -71,6 +72,7 @@
                                     data-package-details="{{ $service->package_details }}"
                                     data-position-ids="{{ $service->positions->pluck('id')->values()->toJson() }}"
                                     data-price="{{ $service->price }}"
+                                    data-down-payment="{{ $service->down_payment }}"
                                     data-duration="{{ $service->duration_minutes }}"
                                     data-status="{{ $service->status }}"
                                     data-badge="{{ $service->badge }}"
@@ -87,7 +89,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="text-center text-muted py-4">{{ $hasFilters ? 'No services match the filters.' : 'No services yet.' }}</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">{{ $hasFilters ? 'No services match the filters.' : 'No services yet.' }}</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -138,6 +140,11 @@
                         <label class="form-label">Duration (mins)</label>
                         <input type="number" name="duration_minutes" id="svc-duration" class="form-control" min="5" required>
                     </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Down payment (₱) <span class="text-muted">(optional)</span></label>
+                    <input type="number" step="0.01" name="down_payment" id="svc-down-payment" class="form-control" min="0" placeholder="Leave blank for none">
+                    <div class="form-text">Amount due online for this service. Blank means the client may pay Cash or settle the full price online.</div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Description</label>
@@ -489,6 +496,7 @@
                 const packageDetails = btn.dataset.packageDetails || '';
                 document.getElementById('svc-package-details').value = packageDetails;
                 document.getElementById('svc-price').value = btn.dataset.price;
+                document.getElementById('svc-down-payment').value = btn.dataset.downPayment || '';
                 document.getElementById('svc-duration').value = btn.dataset.duration;
                 document.getElementById('svc-status').value = btn.dataset.status;
                 document.getElementById('svc-badge').value = btn.dataset.badge || '';

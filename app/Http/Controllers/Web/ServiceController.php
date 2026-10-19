@@ -153,6 +153,7 @@ class ServiceController extends Controller
             'position_ids' => ['nullable', 'array', 'required_if:category,Packages', 'min:1'],
             'position_ids.*' => ['integer', 'distinct', 'exists:positions,id'],
             'price' => 'required|numeric|min:0',
+            'down_payment' => 'nullable|numeric|min:0',
             'duration_minutes' => 'required|integer|min:5',
             'status' => ['required', Rule::in(['active', 'inactive', 'suspended'])],
             'badge' => 'nullable|string|max:50',

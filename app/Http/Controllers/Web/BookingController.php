@@ -20,8 +20,8 @@ use App\Models\StaffSchedule;
 use App\Models\StaffShiftAssignment;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Support\BookingExtras;
 use App\Support\PackageStaffSelection;
-use App\Support\ReservationFee;
 use App\Support\ServiceCapacity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -115,8 +115,54 @@ class BookingController extends Controller
     {
         $service = Service::bookableAtBranch()->with(['variants', 'positions'])->findOrFail($id);
 
+        // Extra services the client may add to the same visit: real active
+        // branch-bookable REGULAR services (never packages). Packages stay a
+        // main-service choice only, exactly like the walk-in extras rule.
+        $extraServices = Service::bookableAtBranch()
+            ->with('variants')
+            ->orderBy('name')
+            ->get()
+            ->reject(fn (Service $candidate) => $candidate->isPackageForExtras())
+            ->map(fn (Service $candidate) => [
+                'id' => $candidate->id,
+                'name' => $candidate->name,
+                'category' => $candidate->category,
+                'price' => (float) $candidate->price,
+                'down_payment' => $candidate->down_payment !== null ? (float) $candidate->down_payment : null,
+                'duration_minutes' => (int) $candidate->duration_minutes,
+                // Position names that may perform it — the same
+                // category→position mapping the main service uses.
+                'positions' => Position::namesForServiceCategory((string) $candidate->category),
+                'variants' => $candidate->variants->map(fn ($variant) => [
+                    'label' => $variant->label,
+                    'price' => (float) $variant->price,
+                ])->values(),
+            ])
+            ->values();
+
+        // Eligibility pool for the extras' personnel picks — the same
+        // category→position mapping the main service uses, filtered to
+        // active, non-break staff. Date-aware availability is applied on the
+        // schedule step, where the date is known.
+        $staffCatalog = User::where('role_id', User::ROLE_STAFF)
+            ->whereHas('staffProfile', fn ($query) => $query
+                ->where('employment_status', 'active')
+                ->where('is_on_break', false))
+            ->with('staffProfile:id,user_id,position')
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (User $member) => [
+                'id' => $member->id,
+                'name' => $member->name,
+                'position' => $member->staffProfile?->position,
+            ])
+            ->values();
+
         return view('account.booking.service-detail', [
             'service' => $service,
+            'extraServices' => $extraServices,
+            'staffCatalog' => $staffCatalog,
+            'eligiblePositionNames' => Position::namesForServiceCategory($service->category),
         ]);
     }
 
@@ -135,7 +181,9 @@ class BookingController extends Controller
         $date = $request->query('date') ?: now()->toDateString();
         $date = $this->clampDate($date);
 
-        return view('account.booking.schedule', $this->scheduleViewData($request, $service, $date, $variant));
+        $extras = $this->extrasFromRequest($request);
+
+        return view('account.booking.schedule', $this->scheduleViewData($request, $service, $date, $variant, $extras));
     }
 
     public function details(Request $request)
@@ -150,7 +198,9 @@ class BookingController extends Controller
             return $variant;
         }
 
-        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.branch.schedule');
+        $extras = $this->extrasFromRequest($request);
+
+        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.branch.schedule', $extras);
         if ($scheduleError) {
             return $scheduleError;
         }
@@ -167,6 +217,7 @@ class BookingController extends Controller
             'personnelLabel' => $this->personnelLabelFor($service, $request),
             'client' => Auth::user(),
             'notes' => $request->query('notes'),
+            'extras' => $extras,
         ]);
     }
 
@@ -182,7 +233,9 @@ class BookingController extends Controller
             return $variant;
         }
 
-        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.branch.schedule');
+        $extras = $this->extrasFromRequest($request);
+
+        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.branch.schedule', $extras);
         if ($scheduleError) {
             return $scheduleError;
         }
@@ -199,10 +252,8 @@ class BookingController extends Controller
             'personnelLabel' => $this->personnelLabelFor($service, $request),
             'notes' => $request->query('notes'),
             'client' => Auth::user(),
-            // Packages (services with variants) never offer Cash — the
-            // reservation fee must be paid online with proof.
-            'isPackage' => $service->variants->isNotEmpty(),
-            ...$this->feeQuote($service, $variant),
+            'extras' => $extras,
+            ...$this->feeQuote($service, $variant, $extras),
         ]);
     }
 
@@ -218,7 +269,9 @@ class BookingController extends Controller
             return $variant;
         }
 
-        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.branch.schedule');
+        $extras = $this->extrasFromRequest($request);
+
+        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.branch.schedule', $extras);
         if ($scheduleError) {
             return $scheduleError;
         }
@@ -233,10 +286,8 @@ class BookingController extends Controller
             'personnel' => $request->query('personnel'),
             'staff' => $staff,
             'notes' => $request->query('notes'),
-            // Packages (services with variants) never offer Cash — the
-            // reservation fee must be paid online with proof.
-            'isPackage' => $service->variants->isNotEmpty(),
-            ...$this->feeQuote($service, $variant),
+            'extras' => $extras,
+            ...$this->feeQuote($service, $variant, $extras),
         ]);
     }
 
@@ -251,17 +302,26 @@ class BookingController extends Controller
         $variant = isset($validated['variant_id'])
             ? $service->variants->firstWhere('id', (int) $validated['variant_id'])
             : null;
-        $price = (float) ($variant?->price ?? $service->price);
+        $mainPrice = (float) ($variant?->price ?? $service->price);
 
-        // The reservation fee is always re-derived here — a browser-supplied
-        // amount is never trusted. Cash skips the fee entirely: the full
-        // booked price is payable at the branch.
+        // Extra services in the SAME visit. Re-resolved from the DB here (the
+        // request already validated them) so prices are never taken from the
+        // browser: variant price when a variant is chosen, else service price.
+        $extras = BookingExtras::resolve($validated['extras'] ?? []);
+        $extrasTotal = BookingExtras::totalPrice($extras);
+        $price = round($mainPrice + $extrasTotal, 2);
+
+        // The down payment is always re-derived here — a browser-supplied
+        // amount is never trusted. Each booked service contributes its own
+        // configured down payment, capped at its resolved price; a service
+        // with none contributes 0. Cash is only allowed when nothing is due
+        // online; otherwise the down payment is paid online with proof.
         $method = $validated['method'] ?? 'gcash';
         $isCash = $method === 'cash';
-        $fee = ReservationFee::for($service, $variant?->label);
+        $fee = BookingExtras::downPayment($service, $mainPrice, $extras);
         $packageAssignments = $validated['package_assignments'] ?? null;
 
-        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee, $packageAssignments) {
+        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $extras, $method, $isCash, $fee, $packageAssignments) {
             $appointment = Appointment::create([
                 'user_id' => $request->user()->id,
                 'service_id' => $validated['service_id'],
@@ -288,13 +348,30 @@ class BookingController extends Controller
                 $appointment->syncPersonnelAssignments($packageAssignments);
             }
 
-            // Online + fee => only the down payment is charged now (the
-            // balance settles at the branch). Cash => the full booked price
-            // is owed at the branch; the row stays pending until the branch
-            // records it — pending cash never counts as paid (see
-            // Appointment::paymentState()).
+            // Each extra is an appointment_added_services row under the SAME
+            // Appointment ID — one appointment, one reference code. Its
+            // price is already folded into booked_price above; source
+            // 'booking' marks it as part of the client's original avail (not
+            // a later Payments add).
+            foreach ($extras as $extra) {
+                $appointment->addedServices()->create([
+                    'service_id' => $extra['service']->id,
+                    'variant_label' => $extra['variant_label'],
+                    'price' => $extra['price'],
+                    'personnel_id' => $extra['personnel_id'],
+                    'added_by' => $request->user()->id,
+                    'source' => 'booking',
+                ]);
+            }
+
+            // Online with a down payment => only that amount is charged now
+            // (the balance settles at the branch). Online with no down
+            // payment => the full booked price is paid online. Cash => the
+            // full booked price is owed at the branch; the row stays pending
+            // until the branch records it — pending cash never counts as paid
+            // (see Appointment::paymentState()).
             $paymentData = [
-                'amount' => $isCash ? $price : $fee,
+                'amount' => $isCash ? $price : ($fee > 0 ? $fee : $price),
                 'method' => $method,
                 'status' => PaymentStatus::Pending,
             ];
@@ -315,11 +392,15 @@ class BookingController extends Controller
             $notifyTitle = 'Booking received';
             $notifyBody = "We received your Cash booking for {$appointment->displayServiceName()}. "
                 . 'The branch will confirm your booking — please pay ₱'.number_format($price, 2).' at the spa.';
+        } elseif ($fee > 0) {
+            $notifyTitle = 'Booking received';
+            $notifyBody = "We received your booking for {$appointment->displayServiceName()}. "
+                . 'Your down payment of ₱'.number_format($fee, 2).' is pending verification — '
+                . 'the ₱'.number_format($price - $fee, 2).' balance is payable at the branch.';
         } else {
             $notifyTitle = 'Booking received';
             $notifyBody = "We received your booking for {$appointment->displayServiceName()}. "
-                . 'Your reservation fee of ₱'.number_format($fee, 2).' is pending verification — '
-                . 'the ₱'.number_format($price - $fee, 2).' balance is payable at the branch.';
+                . 'Your payment of ₱'.number_format($price, 2).' is pending verification.';
         }
 
         $notificationService->notify(
@@ -342,7 +423,7 @@ class BookingController extends Controller
         // Branch (account.booking.branch.success) and Home Service
         // (account.booking.home.success) routes — the view itself renders
         // the address block only when $appointment->address exists.
-        $appointment = Appointment::with(['service', 'personnel', 'payment', 'address'])
+        $appointment = Appointment::with(['service', 'personnel', 'payment', 'address', 'addedServices.service'])
             ->where('user_id', Auth::id())
             ->findOrFail($id);
 
@@ -487,9 +568,6 @@ class BookingController extends Controller
             'personnelLabel' => $this->personnelLabelFor($service, $request),
             'notes' => $request->query('notes'),
             'client' => Auth::user(),
-            // Packages (services with variants) never offer Cash — the
-            // reservation fee must be paid online with proof.
-            'isPackage' => $service->variants->isNotEmpty(),
             ...$this->feeQuote($service, null),
         ]);
     }
@@ -521,9 +599,6 @@ class BookingController extends Controller
             'personnel' => $request->query('personnel'),
             'staff' => $staff,
             'notes' => $request->query('notes'),
-            // Packages (services with variants) never offer Cash — the
-            // reservation fee must be paid online with proof.
-            'isPackage' => $service->variants->isNotEmpty(),
             ...$this->feeQuote($service, null),
         ]);
     }
@@ -539,10 +614,9 @@ class BookingController extends Controller
     {
         $validated = $request->validated();
 
-        // Same fee derivation as the Branch flow: the package tier (when the
-        // service has variants), otherwise the price rule — capped at the
-        // booked price. Cash skips the fee entirely: the full booked price
-        // is payable at the door.
+        // Same down-payment derivation as the Branch flow: the configured
+        // per-service amount, capped at the resolved booked price; none means
+        // 0. Cash is only allowed when nothing is due online.
         $service = Service::with(['variants', 'positions'])->findOrFail($validated['service_id']);
         $variant = isset($validated['variant_id'])
             ? $service->variants->firstWhere('id', (int) $validated['variant_id'])
@@ -551,7 +625,7 @@ class BookingController extends Controller
 
         $method = $validated['method'] ?? 'gcash';
         $isCash = $method === 'cash';
-        $fee = ReservationFee::for($service, $variant?->label);
+        $fee = BookingExtras::downPaymentForService($service, $price);
         $packageAssignments = $validated['package_assignments'] ?? null;
 
         $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee, $packageAssignments) {
@@ -581,12 +655,14 @@ class BookingController extends Controller
                 $appointment->syncPersonnelAssignments($packageAssignments);
             }
 
-            // Online + fee => only the down payment is charged now (the
-            // balance settles later). Cash => the full booked price is owed
-            // at the door; the row stays pending until recorded — pending
-            // cash never counts as paid (see Appointment::paymentState()).
+            // Online with a down payment => only that amount is charged now
+            // (the balance settles later). Online with none => the full
+            // booked price is paid online. Cash => the full booked price is
+            // owed at the door; the row stays pending until recorded —
+            // pending cash never counts as paid (see
+            // Appointment::paymentState()).
             $paymentData = [
-                'amount' => $isCash ? $price : $fee,
+                'amount' => $isCash ? $price : ($fee > 0 ? $fee : $price),
                 'method' => $method,
                 'status' => PaymentStatus::Pending,
             ];
@@ -617,9 +693,12 @@ class BookingController extends Controller
             $isCash
                 ? "We received your Cash Home Service booking for {$appointment->displayServiceName()}. "
                     . 'The branch will confirm your booking — please pay ₱'.number_format($price, 2).' at the spa.'
-                : "We received your Home Service booking for {$appointment->displayServiceName()}. "
-                    . 'Your reservation fee of ₱'.number_format($fee, 2).' is pending verification — '
-                    . 'the ₱'.number_format($price - $fee, 2).' balance is payable at the branch.',
+                : ($fee > 0
+                    ? "We received your Home Service booking for {$appointment->displayServiceName()}. "
+                        . 'Your down payment of ₱'.number_format($fee, 2).' is pending verification — '
+                        . 'the ₱'.number_format($price - $fee, 2).' balance is payable at the branch.'
+                    : "We received your Home Service booking for {$appointment->displayServiceName()}. "
+                        . 'Your payment of ₱'.number_format($price, 2).' is pending verification.'),
             new BookingReceivedMail($appointment),
             ['appointment_id' => $appointment->id]
         );
@@ -697,7 +776,7 @@ class BookingController extends Controller
      * incomplete selection. $scheduleRoute lets Branch and Home Service
      * share this one check while redirecting back to their own schedule step.
      */
-    private function validateScheduleSelection(Request $request, string $scheduleRoute)
+    private function validateScheduleSelection(Request $request, string $scheduleRoute, array $extras = [])
     {
         $date = $request->query('date');
         $time = $request->query('time');
@@ -706,6 +785,7 @@ class BookingController extends Controller
         $service = $serviceId
             ? Service::with('positions')->find($serviceId)
             : null;
+        $extraDuration = array_sum(array_map(fn (array $extra) => (int) $extra['service']->duration_minutes, $extras));
 
         try {
             $request->validate([
@@ -714,6 +794,21 @@ class BookingController extends Controller
             ], [], [
                 'date' => 'date', 'time' => 'time',
             ]);
+
+            // The whole visit (main + extras) must fit inside the shop's
+            // closing time — the same window rule store() enforces. Only
+            // checked when extras are present, so a single-service booking
+            // (and the Home flow, which never has extras) behaves exactly as
+            // before.
+            if ($extras !== [] && $service && ! BusinessHours::startFitsOnDate(
+                (string) $date,
+                (string) $time,
+                (int) ($service->duration_minutes ?? 0) + $extraDuration
+            )) {
+                throw ValidationException::withMessages([
+                    'time' => 'That time is past shop closing. Please choose an earlier slot, or book for another day.',
+                ]);
+            }
 
             if ($service?->requiresMultiStaff()) {
                 $staff = PackageStaffSelection::fromRequest($request, $service);
@@ -831,11 +926,12 @@ class BookingController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function scheduleViewData(Request $request, Service $service, string $date, ?ServiceVariant $variant = null): array
+    private function scheduleViewData(Request $request, Service $service, string $date, ?ServiceVariant $variant = null, array $extras = []): array
     {
         $eligiblePersonnel = $this->eligiblePersonnel($date, $service);
         $eligibleIds = $eligiblePersonnel->pluck('id');
         $isMultiStaff = $service->requiresMultiStaff();
+        $extraDuration = array_sum(array_map(fn (array $extra) => (int) $extra['service']->duration_minutes, $extras));
 
         $personnelParam = $request->query('personnel'); // null | 'any' | numeric id
         $staffSelection = PackageStaffSelection::fromRequest($request, $service);
@@ -857,8 +953,8 @@ class BookingController extends Controller
             if (PackageStaffSelection::isComplete($service, $staffSelection)) {
                 $concrete = PackageStaffSelection::concreteIds($staffSelection);
                 $slots = $concrete === []
-                    ? $this->buildSlotGrid($service, $date, 'any', $eligibleIds, $capacityGuests)
-                    : $this->buildSlotGridForStaff($service, $date, $concrete, $capacityGuests);
+                    ? $this->buildSlotGrid($service, $date, 'any', $eligibleIds, $capacityGuests, $extraDuration)
+                    : $this->buildSlotGridForStaff($service, $date, $concrete, $capacityGuests, $extraDuration);
             }
 
             // Carry a sentinel so downstream steps that still read `personnel`
@@ -875,7 +971,7 @@ class BookingController extends Controller
 
             $slots = [];
             if ($personnelParam) {
-                $slots = $this->buildSlotGrid($service, $date, $personnelParam, $eligibleIds, $capacityGuests);
+                $slots = $this->buildSlotGrid($service, $date, $personnelParam, $eligibleIds, $capacityGuests, $extraDuration);
             }
         }
 
@@ -892,6 +988,9 @@ class BookingController extends Controller
             'eligibleByPosition' => $eligibleByPosition,
             'slots' => $slots,
             'selectedTime' => $request->query('time'),
+            'extras' => $extras,
+            'extraDuration' => $extraDuration,
+            'totalDuration' => (int) ($service->duration_minutes ?? 0) + $extraDuration,
         ];
     }
 
@@ -900,11 +999,11 @@ class BookingController extends Controller
      *
      * @param  list<int>  $userIds
      */
-    private function buildSlotGridForStaff(Service $service, string $date, array $userIds, ?int $guests = null): array
+    private function buildSlotGridForStaff(Service $service, string $date, array $userIds, ?int $guests = null, int $extraDuration = 0): array
     {
         $grids = [];
         foreach ($userIds as $userId) {
-            $grids[] = collect($this->buildSlotGrid($service, $date, (string) $userId, collect($userIds), $guests))
+            $grids[] = collect($this->buildSlotGrid($service, $date, (string) $userId, collect($userIds), $guests, $extraDuration))
                 ->keyBy('time');
         }
 
@@ -1007,9 +1106,14 @@ class BookingController extends Controller
      *
      * Past times are dropped when $date is today.
      */
-    private function buildSlotGrid(Service $service, string $date, string $personnelParam, $eligibleIds, ?int $guests = null): array
+    private function buildSlotGrid(Service $service, string $date, string $personnelParam, $eligibleIds, ?int $guests = null, int $extraDuration = 0): array
     {
         $duration = $service->duration_minutes ?: 30;
+        // The whole visit — main service plus every extra — is what has to
+        // fit inside business hours and inside a blocked window. Capacity
+        // pools stay per service (the main service's own duration), exactly
+        // as before.
+        $visitDuration = $duration + max(0, $extraDuration);
         $dayOfWeek = (int) Carbon::parse($date)->dayOfWeek;
 
         // Business-hours window for this day, via the ONE shared rule
@@ -1131,7 +1235,7 @@ class BookingController extends Controller
         for ($minute = $openMinute; $minute < 1440; $minute += self::SLOT_STEP_MINUTES) {
             // The ONE shared last-call rule (no start at/after 12:00 AM; the
             // service must finish by the overnight-aware close).
-            if (! BusinessHours::slotStartAllowed($minute, $duration, $openMinute, $effectiveClose)) {
+            if (! BusinessHours::slotStartAllowed($minute, $visitDuration, $openMinute, $effectiveClose)) {
                 break;
             }
 
@@ -1155,8 +1259,8 @@ class BookingController extends Controller
             }
 
             // Check blocked slots
-            $isBlocked = $blockedSlots->contains(function ($b) use ($minute, $duration, $candidateIds) {
-                $slotEnd = $minute + $duration;
+            $isBlocked = $blockedSlots->contains(function ($b) use ($minute, $visitDuration, $candidateIds) {
+                $slotEnd = $minute + $visitDuration;
                 if ($b['personnel_id'] !== null) {
                     return in_array($b['personnel_id'], $candidateIds->all(), false)
                         && $minute < $b['end'] && $slotEnd > $b['start'];
@@ -1194,22 +1298,72 @@ class BookingController extends Controller
 
     /**
      * Server-side price breakdown for the Review / Payment steps: the booked
-     * price, the reservation fee due now (always resolves — mapped tier,
-     * custom-label fallback, or the price rule), and the balance payable at
-     * the branch. Display only — store() recomputes all of this from scratch.
+     * price, the per-service down payment due now (each configured amount
+     * capped at its own resolved price), and the balance payable at the
+     * branch. Display only — store() recomputes all of this from scratch.
      *
-     * @return array{price: float, fee: float, balance: float}
+     * With extras, `price` is the whole visit (main + extras) and `fee` is
+     * the sum of each booked service's own down payment — the same
+     * computation store() uses for the single booking payment.
+     *
+     * @param  list<array{service: Service, variant_label: string|null, price: float, down_payment: float, personnel_id: int|null}>  $extras
+     * @return array{price: float, fee: float, balance: float, mainPrice: float, mainFee: float, extrasTotal: float, extrasDownPayment: float, requiresDownPayment: bool}
      */
-    private function feeQuote(Service $service, ?ServiceVariant $variant): array
+    private function feeQuote(Service $service, ?ServiceVariant $variant, array $extras = []): array
     {
-        $price = (float) ($variant?->price ?? $service->price);
-        $fee = ReservationFee::for($service, $variant?->label);
+        $mainPrice = (float) ($variant?->price ?? $service->price);
+        $extrasTotal = BookingExtras::totalPrice($extras);
+        $price = round($mainPrice + $extrasTotal, 2);
+        $mainFee = BookingExtras::downPaymentForService($service, $mainPrice);
+        $extrasDownPayment = round(array_sum(array_map(
+            fn (array $extra) => BookingExtras::downPaymentForService($extra['service'], (float) $extra['price']),
+            $extras
+        )), 2);
+        $fee = round($mainFee + $extrasDownPayment, 2);
 
         return [
             'price' => $price,
             'fee' => $fee,
             'balance' => max(0, round($price - $fee, 2)),
+            'mainPrice' => $mainPrice,
+            'mainFee' => $mainFee,
+            'extrasTotal' => $extrasTotal,
+            'extrasDownPayment' => $extrasDownPayment,
+            'requiresDownPayment' => $fee > 0,
         ];
+    }
+
+    /**
+     * Extras carried through the wizard's query string. Display-only at this
+     * stage: an unparseable/invalid row is simply dropped, never trusted —
+     * store() re-resolves everything from the DB. Rows are carried as
+     * extras[N][service_id|variant_label|personnel_id].
+     *
+     * @return list<array{service: Service, variant_label: string|null, price: float, personnel_id: int|null}>
+     */
+    private function extrasFromRequest(Request $request): array
+    {
+        $rows = $request->query('extras', []);
+        if (! is_array($rows) || $rows === []) {
+            return [];
+        }
+
+        $extras = [];
+        foreach (array_values($rows) as $row) {
+            if (! is_array($row) || empty($row['service_id'])) {
+                continue;
+            }
+
+            try {
+                $extras[] = BookingExtras::resolveRow($row, count($extras));
+            } catch (ValidationException) {
+                // A tampered/removed extra never breaks the step; store()
+                // is the authoritative gate.
+                continue;
+            }
+        }
+
+        return $extras;
     }
 
     /**

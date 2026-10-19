@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Web;
 
 use App\Enums\AppointmentStatus;
+use App\Enums\PaymentStatus;
+use App\Models\Payment;
 use App\Http\Controllers\Controller;
-use App\Models\Appointment;
 use App\Models\Commission;
 use App\Services\RevenueRecognitionService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -84,20 +85,21 @@ class ReportController extends Controller
     {
         $months = $this->revenue->monthlyTotals(12);
 
-        // Top services: completed this calendar year, dated by completion.
-        $completedThisYear = Appointment::with('service:id,name,price')
-            ->where('status', AppointmentStatus::Completed)
-            ->whereNotNull('completed_at')
-            ->whereYear('completed_at', now()->year)
+        // Top services: this calendar year's verified payments, grouped by
+        // the appointment's service (Rule A basis, same as the totals).
+
+        $paymentsThisYear = Payment::with('appointment.service:id,name')
+            ->where('status', PaymentStatus::Verified)
+            ->whereYear('verified_at', now()->year)
+            ->whereHas('appointment', fn ($query) => $query
+                ->where('status', '!=', AppointmentStatus::Cancelled->value))
             ->get();
 
-        $topServices = $completedThisYear
-            ->groupBy(fn ($appointment) => $appointment->service->name ?? 'Unknown')
+        $topServices = $paymentsThisYear
+            ->groupBy(fn ($payment) => $payment->appointment->service->name ?? 'Unknown')
             ->map(fn ($group) => [
-                'count' => $group->count(),
-                'revenue' => round((float) $group->sum(
-                    fn ($appointment) => (float) ($appointment->booked_price ?? $appointment->service->price ?? 0)
-                ), 2),
+                'count' => $group->pluck('appointment_id')->unique()->count(),
+                'revenue' => round((float) $group->sum('amount'), 2),
             ])
             ->sortByDesc('revenue')
             ->take(10);

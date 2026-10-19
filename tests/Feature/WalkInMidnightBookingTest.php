@@ -128,11 +128,11 @@ class WalkInMidnightBookingTest extends TestCase
 
         $this->assertDatabaseHas('appointments', [
             'walk_in_name' => 'Ten PM Guest',
-            'start_time' => '22:00:00',
+            'start_time' => '22:00',
         ]);
         $this->assertDatabaseHas('appointments', [
             'walk_in_name' => 'Eleven PM Guest',
-            'start_time' => '23:00:00',
+            'start_time' => '23:00',
         ]);
     }
 
@@ -161,8 +161,8 @@ class WalkInMidnightBookingTest extends TestCase
 
         $this->assertDatabaseHas('appointments', [
             'walk_in_name' => 'Midnight Guest',
-            'appointment_date' => $this->date,
-            'start_time' => '00:00:00',
+            'appointment_date' => $this->date.' 00:00:00',
+            'start_time' => '00:00',
         ]);
     }
 

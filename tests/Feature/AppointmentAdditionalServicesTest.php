@@ -440,6 +440,7 @@ class AppointmentAdditionalServicesTest extends TestCase
         $this->add($appointment->id, [
             'service_id' => $this->facial->id,
             'personnel_id' => $this->facialStaff->id,
+            'down_payment' => 150,
         ])->assertSessionHas('success');
 
         $html = $this->actingAs($this->manager)
@@ -449,12 +450,12 @@ class AppointmentAdditionalServicesTest extends TestCase
 
         // A single services list holds the main service AND the added one,
         // each with its price; the payment-time add carries the "Added" tag
-        // and its recorded 50% down payment.
+        // and its recorded down payment.
         $this->assertStringContainsString('<span>Addon Massage Probe</span>', $html);
         $this->assertStringContainsString('<span class="text-muted text-nowrap">₱500.00</span>', $html);
         $this->assertStringContainsString('Addon Facial Probe', $html);
         $this->assertStringContainsString('badge text-bg-secondary ms-1">Added</span>', $html);
-        $this->assertStringContainsString('Down payment (50%): ₱150.00', $html);
+        $this->assertStringContainsString('Down payment: ₱150.00', $html);
         $this->assertStringContainsString('<span class="text-muted text-nowrap">₱300.00</span>', $html);
     }
 
@@ -476,11 +477,11 @@ class AppointmentAdditionalServicesTest extends TestCase
 
         $appointment = Appointment::where('walk_in_name', 'Card Split Guest')->latest('id')->firstOrFail();
 
-        // A later payment-time add (with its 50% down payment).
+        // A later payment-time add (with an explicit down payment).
         $this->add($appointment->id, [
             'service_id' => $this->facial->id,
             'personnel_id' => $this->facialStaff->id,
-            'record_dp' => 1,
+            'down_payment' => 150,
             'method' => 'cash',
         ])->assertSessionHas('success');
 
@@ -490,13 +491,13 @@ class AppointmentAdditionalServicesTest extends TestCase
             ->getContent();
 
         // The creation avail is listed plainly: no "Added" tag and no
-        // down-payment line (its ₱200 half would read ₱100.00).
+        // down-payment line.
         $this->assertStringContainsString('Addon Home Probe', $html);
-        $this->assertStringNotContainsString('Down payment (50%): ₱100.00', $html);
+        $this->assertStringNotContainsString('Down payment: ₱20.00', $html);
 
         // Only the payment-time add is tagged, and it shows its own DP (₱150).
         $this->assertSame(1, substr_count($html, 'ms-1">Added</span>'));
-        $this->assertStringContainsString('Down payment (50%): ₱150.00', $html);
+        $this->assertStringContainsString('Down payment: ₱150.00', $html);
     }
 
     public function test_walk_in_services_catalog_carries_real_prices_and_flags_packages(): void
@@ -575,18 +576,18 @@ class AppointmentAdditionalServicesTest extends TestCase
         );
     }
 
-    public function test_add_with_record_dp_records_half_payment_and_grows_balance_by_other_half(): void
+    public function test_add_with_down_payment_records_exact_amount_and_grows_balance(): void
     {
         $appointment = $this->bookAppointment($this->massage); // ₱500
 
         $this->add($appointment->id, [
             'service_id' => $this->facial->id, // ₱300
             'personnel_id' => $this->facialStaff->id,
-            'record_dp' => 1,
+            'down_payment' => 150,
             'method' => 'gcash',
         ])->assertRedirect()->assertSessionHas('success');
 
-        // A Verified kind=branch down payment of exactly 50% (₱150), GCash.
+        // A Verified kind=branch down payment for exactly the entered amount.
         $this->assertDatabaseHas('payments', [
             'appointment_id' => $appointment->id,
             'kind' => 'branch',
@@ -597,14 +598,14 @@ class AppointmentAdditionalServicesTest extends TestCase
         ]);
 
         // booked_price grew by the FULL added price; the balance keeps the
-        // other half (₱650 = ₱500 + ₱300 − ₱150).
+        // remainder (₱650 = ₱500 + ₱300 − ₱150).
         $appointment->refresh();
         $this->assertSame(800.0, (float) $appointment->booked_price);
         $this->assertSame(150.0, $appointment->verifiedPaid());
         $this->assertSame(650.0, $appointment->balanceDue());
     }
 
-    public function test_add_without_record_dp_creates_no_payment(): void
+    public function test_add_without_down_payment_creates_no_payment(): void
     {
         $appointment = $this->bookAppointment($this->massage);
 
@@ -619,7 +620,23 @@ class AppointmentAdditionalServicesTest extends TestCase
         $this->assertSame(800.0, $appointment->balanceDue());
     }
 
-    public function test_record_dp_rounds_half_to_two_decimals(): void
+    public function test_add_with_zero_down_payment_creates_no_payment(): void
+    {
+        $appointment = $this->bookAppointment($this->massage);
+
+        $this->add($appointment->id, [
+            'service_id' => $this->facial->id,
+            'personnel_id' => $this->facialStaff->id,
+            'down_payment' => 0,
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertSame(0, $appointment->payments()->count());
+        $appointment->refresh();
+        $this->assertSame(800.0, (float) $appointment->booked_price);
+        $this->assertSame(800.0, $appointment->balanceDue());
+    }
+
+    public function test_add_down_payment_accepts_two_decimals_and_is_capped_at_price(): void
     {
         $oddService = $this->service('Addon Round Probe', 'Facial', 399);
         $appointment = $this->bookAppointment($this->massage); // ₱500
@@ -627,7 +644,7 @@ class AppointmentAdditionalServicesTest extends TestCase
         $this->add($appointment->id, [
             'service_id' => $oddService->id, // ₱399
             'personnel_id' => $this->facialStaff->id,
-            'record_dp' => 1,
+            'down_payment' => 199.50,
             'method' => 'gcash',
         ])->assertRedirect()->assertSessionHas('success');
 
@@ -641,5 +658,21 @@ class AppointmentAdditionalServicesTest extends TestCase
         $appointment->refresh();
         $this->assertSame(899.0, (float) $appointment->booked_price);
         $this->assertSame(699.5, $appointment->balanceDue());
+
+        // Above the added price -> recorded at the price, not over it.
+        $appointmentTwo = $this->bookAppointment($this->massage, AppointmentStatus::Booked);
+        $appointmentTwo->update(['start_time' => '11:00']);
+
+        $this->add($appointmentTwo->id, [
+            'service_id' => $this->facial->id,
+            'personnel_id' => $this->facialStaff->id,
+            'down_payment' => 999,
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('payments', [
+            'appointment_id' => $appointmentTwo->id,
+            'kind' => 'branch',
+            'amount' => 300.00,
+        ]);
     }
 }

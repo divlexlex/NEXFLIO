@@ -322,13 +322,13 @@ class ManagerUxFixesTest extends TestCase
         $this->actingAs($this->manager)
             ->get(route('admin.services', ['category' => 'Massage']))
             ->assertOk()
-            ->assertSee('UX Test Massage')
-            ->assertDontSee('Manager UX Facial');
+            ->assertSee('<strong>UX Test Massage</strong>', false)
+            ->assertDontSee('<strong>Manager UX Facial</strong>', false);
 
         $this->actingAs($this->manager)->get(route('admin.services'))
             ->assertOk()
-            ->assertSee('UX Test Massage')
-            ->assertDontSee('Manager UX Facial');
+            ->assertSee('<strong>UX Test Massage</strong>', false)
+            ->assertDontSee('<strong>Manager UX Facial</strong>', false);
     }
 
     public function test_appointments_status_filter_persists_in_session(): void

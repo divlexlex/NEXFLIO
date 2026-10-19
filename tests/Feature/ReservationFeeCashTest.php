@@ -13,12 +13,12 @@ use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
- * Reservation fee (down payment) + Cash payment method — end-to-end suite.
+ * Per-service down payment + Cash payment method — end-to-end suite.
  *
- * - Fee fixtures mirror the real catalog: a Head Spa package with
- *   Solo 1899 / Couple 3699 / Barkada 7199 tiers (like Package LIZ), a
- *   variant-less Massage service (guest-count fee), a cheap Head Spa
- *   service (fee capped at price), and a non-fee Nails service (Manicure).
+ * - Every booked service contributes its own configured down_payment (NULL
+ *   means none), capped at its resolved price; extras add theirs too.
+ * - Cash is only allowed when nothing is due online. When a down payment
+ *   applies, an online method is required and pays exactly that amount.
  * - Runs against the isolated sqlite :memory: test database (phpunit.xml),
  *   never the real MySQL database.
  */
@@ -65,7 +65,7 @@ class ReservationFeeCashTest extends TestCase
 
         $this->package = Service::create([
             'name' => 'Package LIZ (test)', 'category' => 'Head Spa', 'description' => 'Test',
-            'price' => 1899, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 1899, 'down_payment' => 500, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
         $this->package->variants()->createMany([
             ['label' => 'Solo', 'price' => 1899, 'guests' => 1, 'sort' => 1],
@@ -76,52 +76,52 @@ class ReservationFeeCashTest extends TestCase
 
         $this->massage = Service::create([
             'name' => 'Swedish Massage (test)', 'category' => 'Massage', 'description' => 'Test',
-            'price' => 599, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 599, 'down_payment' => 300, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
 
         $this->cheapHeadSpa = Service::create([
             'name' => 'Cheap Head Spa (test)', 'category' => 'Head Spa', 'description' => 'Test',
-            'price' => 200, 'duration_minutes' => 30, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 200, 'down_payment' => 500, 'duration_minutes' => 30, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
 
         $this->manicure = Service::create([
             'name' => 'Manicure (test)', 'category' => 'Nails', 'description' => 'Test',
-            'price' => 179, 'duration_minutes' => 45, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 179, 'down_payment' => null, 'duration_minutes' => 45, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
 
         $this->pedicure = Service::create([
             'name' => 'Pedicure Spa (test)', 'category' => 'Nails', 'description' => 'Test',
-            'price' => 450, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 450, 'down_payment' => 225, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
 
         $this->facial = Service::create([
             'name' => 'Signature Facial (test)', 'category' => 'Facial', 'description' => 'Test',
-            'price' => 800, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 800, 'down_payment' => 300, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
 
         $this->royalFacial = Service::create([
             'name' => 'Royal Treatment (test)', 'category' => 'Facial', 'description' => 'Test',
-            'price' => 2500, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 2500, 'down_payment' => 300, 'duration_minutes' => 90, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
 
         $this->gentleCleanse = Service::create([
             'name' => 'Gentle Cleanse (test)', 'category' => 'Facial', 'description' => 'Test',
-            'price' => 300, 'duration_minutes' => 30, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 300, 'down_payment' => 150, 'duration_minutes' => 30, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
 
         $this->quickTrim = Service::create([
             'name' => 'Quick Trim (test)', 'category' => 'Nails', 'description' => 'Test',
-            'price' => 299, 'duration_minutes' => 30, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 299, 'down_payment' => 149.50, 'duration_minutes' => 30, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
 
         $this->spaPlus = Service::create([
             'name' => 'Spa Pedicure Plus (test)', 'category' => 'Nails', 'description' => 'Test',
-            'price' => 500, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
+            'price' => 500, 'down_payment' => 300, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'branch',
         ]);
 
         $this->homeMassage = Service::create([
             'name' => 'Home Massage (test)', 'category' => 'Massage', 'description' => 'Test',
-            'price' => 900, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'home',
+            'price' => 900, 'down_payment' => 300, 'duration_minutes' => 60, 'status' => 'active', 'service_location_type' => 'home',
         ]);
     }
 
@@ -137,8 +137,8 @@ class ReservationFeeCashTest extends TestCase
         ], $overrides);
     }
 
-    // (a) Package LIZ Couple online: fee 500 due now, 3,199 balance.
-    public function test_online_package_booking_charges_only_the_fee(): void
+    // (a) Package LIZ Couple online: configured DP 500 due now, 3,199 balance.
+    public function test_online_package_booking_charges_only_the_down_payment(): void
     {
         Storage::fake('public');
 
@@ -227,9 +227,9 @@ class ReservationFeeCashTest extends TestCase
         $this->assertEquals(300, (float) $second->payment->amount);
     }
 
-    // Cheap service below 500: fee is exactly half the price (200 -> 100),
-    // verify -> down-payment state, settle the rest -> paid in full.
-    public function test_fee_below_500_is_half_the_price(): void
+    // A configured DP is capped at the service's price (500 -> 200), so the
+    // online payment covers the whole booking and nothing is left to settle.
+    public function test_down_payment_is_capped_at_the_booked_price(): void
     {
         Storage::fake('public');
 
@@ -239,19 +239,13 @@ class ReservationFeeCashTest extends TestCase
         )->assertRedirect();
 
         $appointment = Appointment::latest('id')->firstOrFail();
-        $this->assertEquals(100, (float) $appointment->payment->amount);
+        $this->assertEquals(200, (float) $appointment->payment->amount);
 
         $this->actingAs($this->manager)->patch(route('admin.payments.verify', $appointment->payment->id));
         $appointment->refresh();
-        $this->assertSame('Down payment paid — balance ₱100.00', $appointment->paymentState());
+        $this->assertSame('Paid in full', $appointment->paymentState());
 
-        $this->actingAs($this->manager)->post(
-            route('admin.appointments.branch-payment', $appointment->id),
-            ['amount' => 100, 'method' => 'cash']
-        )->assertRedirect()->assertSessionHasNoErrors();
-        $this->assertSame('Paid in full', $appointment->refresh()->paymentState());
-
-        // And settlement is refused when nothing is owed.
+        // Settlement is refused when nothing is owed.
         $this->actingAs($this->manager)->post(
             route('admin.appointments.branch-payment', $appointment->id),
             ['amount' => 10, 'method' => 'cash']
@@ -427,9 +421,8 @@ class ReservationFeeCashTest extends TestCase
         $this->assertSame(0, Appointment::count());
     }
 
-    // (c) Manicure GCash (179): fee is half the price (89.50), verify ->
-    // down-payment state with the remainder still owed.
-    public function test_nails_online_booking_charges_half_price_fee(): void
+    // (c) Manicure has no configured DP (NULL), so online pays the full 179.
+    public function test_no_down_payment_means_online_pays_full_price(): void
     {
         Storage::fake('public');
 
@@ -440,13 +433,13 @@ class ReservationFeeCashTest extends TestCase
 
         $appointment = Appointment::latest('id')->firstOrFail();
         $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
-        $this->assertEquals(89.5, (float) $appointment->payment->amount);
+        $this->assertEquals(179, (float) $appointment->payment->amount);
         $this->assertNull($appointment->guests);
 
         $this->actingAs($this->manager)->patch(route('admin.payments.verify', $appointment->payment->id));
         $appointment->refresh();
         $this->assertSame(AppointmentStatus::Booked, $appointment->status);
-        $this->assertSame('Down payment paid — balance ₱89.50', $appointment->paymentState());
+        $this->assertSame('Paid in full', $appointment->paymentState());
     }
 
     // Pedicure 450: fee is half (225.00).
@@ -613,6 +606,8 @@ class ReservationFeeCashTest extends TestCase
 
     public function test_home_cash_booking_is_a_request_without_proof(): void
     {
+        $this->homeMassage->update(['down_payment' => null]);
+
         $address = [
             'street_address' => '123 Test St', 'barangay' => 'Barangay 1',
             'city_municipality' => 'Test City', 'province' => 'Test Province',
@@ -696,9 +691,8 @@ class ReservationFeeCashTest extends TestCase
         $this->assertEquals(300, (float) $appointment->payment->amount);
     }
 
-    // Kiddie Japanese Head Spa: 599 -> flat 300 fee via the price rule, no
-    // guests involved.
-    public function test_kiddie_flat_fee_charges_300_without_guests(): void
+    // Kiddie Japanese Head Spa keeps the migration's default ₱20 DP.
+    public function test_kiddie_uses_default_down_payment(): void
     {
         Storage::fake('public');
 
@@ -714,7 +708,7 @@ class ReservationFeeCashTest extends TestCase
 
         $appointment = Appointment::latest('id')->firstOrFail();
         $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
-        $this->assertEquals(300, (float) $appointment->payment->amount);
+        $this->assertEquals(20, (float) $appointment->payment->amount);
         $this->assertEquals(599, (float) $appointment->booked_price);
         $this->assertNull($appointment->guests);
     }
@@ -730,7 +724,7 @@ class ReservationFeeCashTest extends TestCase
         $client->get(route('account.booking.branch.details', array_merge($base, ['service' => $kiddie->id])))
             ->assertOk()
             ->assertDontSee('name="guests"', false)
-            ->assertSee('Down payment for this service: ₱300.00');
+            ->assertSee('Down payment for this service: ₱20.00');
 
         // A regular Nails service shows the same computed note, no guests field.
         $client->get(route('account.booking.branch.details', array_merge($base, ['service' => $this->pedicure->id])))
@@ -754,9 +748,10 @@ class ReservationFeeCashTest extends TestCase
         $this->assertNull($appointment->guests);
     }
 
-    public function test_kiddie_cash_is_a_request(): void
+    public function test_kiddie_cash_is_a_request_when_no_down_payment_is_set(): void
     {
         $kiddie = Service::where('name', 'Kiddie Japanese Head Spa')->firstOrFail();
+        $kiddie->update(['down_payment' => null]);
 
         $payload = $this->branchPayload(['service_id' => $kiddie->id, 'method' => 'cash', 'payment_proof' => null]);
         unset($payload['guests']);
@@ -793,17 +788,18 @@ class ReservationFeeCashTest extends TestCase
             ->assertDontSee('name="guests"', false)
             ->assertSee('Down payment for this service: ₱225.00');
 
-        // Review + payment: Price / fee / balance breakdown from the resolver.
+        // Review + payment: per-service DP, balance, and full breakdown.
         $client->get(route('account.booking.branch.review', $base))
             ->assertOk()
-            ->assertSee('Reservation fee (due now)')
+            ->assertSee('Down payment — Swedish Massage (test)')
             ->assertSee('Balance (pay at the branch)')
             ->assertSee('₱300.00');
 
-        // Branch payment step lists every method incl. Cash and hides proof via JS.
+        // Branch payment step hides Cash when a DP is due, still lists
+        // online methods and hides proof via JS.
         $client->get(route('account.booking.branch.payment', $base))
             ->assertOk()
-            ->assertSee('value="cash"', false)
+            ->assertDontSee('value="cash"', false)
             ->assertSee('value="maya"', false)
             ->assertDontSee('name="guests"', false)
             ->assertSee('pay-proof-block');
@@ -814,18 +810,18 @@ class ReservationFeeCashTest extends TestCase
             ->assertDontSee('name="guests"', false)
             ->assertSee('Down payment for this service: ₱300.00');
 
-        // Home review: Price / fee / balance breakdown.
+        // Home review: per-service DP and balance.
         $client->get(route('account.booking.home.review', array_merge($base, ['service' => $this->homeMassage->id], $address)))
             ->assertOk()
-            ->assertSee('Reservation fee (due now)')
+            ->assertSee('Down payment — Home Massage (test)')
             ->assertSee('Balance (pay at the branch)')
             ->assertSee('₱300.00');
 
-        // Home payment step: methods + fee breakdown, no guests carry-through.
+        // Home payment step: DP breakdown, no cash when DP is due, no guests.
         $client->get(route('account.booking.home.payment', array_merge($base, ['service' => $this->homeMassage->id], $address)))
             ->assertOk()
-            ->assertSee('value="cash"', false)
-            ->assertSee('Reservation fee (due now)')
+            ->assertDontSee('value="cash"', false)
+            ->assertSee('Down payment — Home Massage (test)')
             ->assertSee('₱300.00')
             ->assertDontSee('name="guests"', false);
     }

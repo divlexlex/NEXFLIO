@@ -218,7 +218,7 @@
                                             </button>
                                         </div>
                                     @elseif($appointment->status === \App\Enums\AppointmentStatus::Unverified)
-                                        <p class="small nx-text-secondary mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>Requests to reschedule or cancel will be available once your reservation fee is verified.</p>
+                                        <p class="small nx-text-secondary mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>Requests to reschedule or cancel will be available once your payment is verified.</p>
                                     @endif
 
                                     {{-- Rating (Completed cards only — refund/continue buttons above are untouched) --}}

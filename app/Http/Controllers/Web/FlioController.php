@@ -97,7 +97,7 @@ class FlioController extends Controller
         $last90 = Appointment::where('appointment_date', '>=', now()->subDays(90))->get();
 
         // Money — same math as DashboardController::weeklyMetrics()
-        // (completed-service recognized revenue, not verified payments).
+        // (verified payments, Rule A — same as the dashboard).
         $revenueThisWeek = $this->revenue->sumBetween($weekStart);
         $revenueLastWeek = $this->revenue->sumBetween($prevWeekStart, $weekStart->copy()->subSecond());
 

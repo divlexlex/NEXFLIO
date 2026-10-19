@@ -93,6 +93,9 @@ class AppointmentController extends Controller
                     'id' => $position->id,
                     'name' => $position->name,
                 ])->values(),
+                // Configured down payment (null = none) so the add-service
+                // modal can pre-fill the optional amount.
+                'down_payment' => $service->down_payment !== null ? (float) $service->down_payment : null,
                 // Saleable tiers for the add-service modal's variant picker.
                 'variants' => $service->variants->map(fn ($variant) => [
                     'label' => $variant->label,
@@ -812,10 +815,10 @@ class AppointmentController extends Controller
                 'integer',
                 Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
             ],
-            // Optional 50% down payment collected at add time. Only honoured
-            // when the request explicitly carries record_dp (older/API posts
-            // without it behave exactly as before).
-            'record_dp' => ['nullable', 'boolean'],
+            // Optional down payment collected at add time, pre-filled in the
+            // modal from the chosen service's configured amount. Blank or 0
+            // records no payment.
+            'down_payment' => ['nullable', 'numeric', 'min:0'],
             'method' => ['sometimes', Rule::in(array_keys(config('payment.methods', [])))],
         ]);
 
@@ -858,9 +861,11 @@ class AppointmentController extends Controller
             }
         }
 
-        $recordDownPayment = $request->boolean('record_dp');
+        // Never above the added service's price, never negative. Blank/0
+        // records no payment at all.
+        $downPayment = round(min(max(0.0, (float) ($validated['down_payment'] ?? 0)), $price), 2);
 
-        DB::transaction(function () use ($request, $appointment, $service, $variantLabel, $price, $personnelId, $recordDownPayment, $validated) {
+        DB::transaction(function () use ($request, $appointment, $service, $variantLabel, $price, $personnelId, $downPayment, $validated) {
             $appointment->addedServices()->create([
                 'service_id' => $service->id,
                 'variant_label' => $variantLabel,
@@ -875,13 +880,13 @@ class AppointmentController extends Controller
             // recognise the extra amount from here on.
             $appointment->increment('booked_price', $price);
 
-            // 50% down payment collected now — a Verified kind='branch' row.
-            // booked_price already grew by the FULL price, so the balance
-            // keeps the remaining half.
-            if ($recordDownPayment) {
+            // Down payment collected now — a Verified kind='branch' row for
+            // exactly the entered amount. booked_price already grew by the
+            // FULL price, so the balance keeps the remainder.
+            if ($downPayment > 0) {
                 $appointment->payments()->create([
                     'kind' => 'branch',
-                    'amount' => round($price * 0.5, 2),
+                    'amount' => $downPayment,
                     'method' => $validated['method'] ?? 'cash',
                     'status' => PaymentStatus::Verified,
                     'verified_by' => $request->user()->id,
