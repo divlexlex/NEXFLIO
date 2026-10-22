@@ -9,6 +9,7 @@ use App\Http\Controllers\Web\BillingController;
 use App\Http\Controllers\Web\BookingController;
 use App\Http\Controllers\Web\CatalogController;
 use App\Http\Controllers\Web\ClientAccountController;
+use App\Http\Controllers\Web\ClientChatController;
 use App\Http\Controllers\Web\ClientDirectoryController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\EmailVerificationController;
@@ -55,6 +56,11 @@ Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/gallery', [PageController::class, 'gallery'])->name('gallery');
 Route::get('/faqs', [PageController::class, 'faqs'])->name('faqs');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
+
+// Public AI chat — guests and any signed-in role. IP-throttled; no auth.
+Route::post('/chat/ask', [ClientChatController::class, 'ask'])
+    ->middleware('throttle:20,1')
+    ->name('chat.ask');
 
 // Uploaded files (payment proofs, service/promo images) served off the
 // 'public' disk — no public/storage symlink on the production host, so

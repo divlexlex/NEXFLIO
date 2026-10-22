@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Perfect Nails Wellness and Aesthetics')</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -201,31 +202,7 @@
     })();
 </script>
 
-@if(config('services.dialogflow.agent_id'))
-    {{-- Dialogflow ES inquiry bot --}}
-    <script src="https://www.gstatic.com/dialogflow-console/fast/messenger/bootstrap.js?v=1"></script>
-    <df-messenger
-        intent="WELCOME"
-        chat-title="Perfect Nails"
-        agent-id="{{ config('services.dialogflow.agent_id') }}"
-        language-code="en"
-        chat-icon="https://fonts.gstatic.com/s/i/materialicons/spa/v12/24px.svg">
-    </df-messenger>
-    <style>
-        df-messenger {
-            --df-messenger-button-titlebar-color: #3D2817;
-            --df-messenger-send-icon: #9C7A54;
-            position: relative;
-            z-index: 2000;
-        }
-        @media (max-width: 767.98px) {
-            df-messenger {
-                --df-messenger-chat-window-width: min(92vw, 340px);
-                --df-messenger-chat-window-height: min(68dvh, 520px);
-            }
-        }
-    </style>
-@endif
+@include('partials.client-chat')
 
 @stack('scripts')
 <script>

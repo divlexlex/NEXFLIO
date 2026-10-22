@@ -289,4 +289,25 @@ class FlioAdminChatTest extends TestCase
         $this->assertStringNotContainsString('data-flio-widget', $html);
         $this->assertStringNotContainsString('id="flio-panel"', $html);
     }
+
+    public function test_manager_prompt_includes_the_business_only_restriction(): void
+    {
+        config(['services.gemini.key' => 'test-key']);
+        $this->fakeGeminiSuccess();
+
+        $this->actingAs($this->manager)
+            ->postJson(route('admin.flio.ask'), ['question' => 'What is the best recipe for adobo?'])
+            ->assertOk();
+
+        Http::assertSent(function ($request) {
+            $system = $request->data()['systemInstruction']['parts'][0]['text'] ?? '';
+
+            $this->assertStringContainsString(
+                "I can only answer questions about this business's operations.",
+                $system
+            );
+
+            return true;
+        });
+    }
 }
