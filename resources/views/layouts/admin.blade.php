@@ -254,6 +254,7 @@
         .sidebar .text-white-50 { color: var(--nex-sidebar-muted) !important; }
         .sidebar .btn-outline-light { color: var(--nex-sidebar-text); border-color: var(--nex-sidebar-border); }
         .sidebar .btn-outline-light:hover { background: var(--nex-sidebar-active-bg); border-color: var(--nex-sidebar-active-bg); color: var(--nex-sidebar-active-text); }
+        .nx-admin-sidebar-backdrop { display: none; }
 
         /* ------- top header bar (account/theme/logout live here now) ------- */
         .nx-topbar {
@@ -266,6 +267,19 @@
             border-radius: 50%; background: var(--nex-primary-bg); color: var(--nex-primary-text);
             font-size: .8rem; font-weight: 700;
         }
+
+        /* ------- smooth Bootstrap dropdowns ------- */
+        .dropdown-menu {
+            display: block;
+            opacity: 0; visibility: hidden; transform: translateY(6px); pointer-events: none;
+            transition: opacity .2s ease, transform .2s ease, visibility 0s linear .2s;
+        }
+        .dropdown-menu.show {
+            opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto;
+            transition-delay: 0s, 0s, 0s;
+        }
+        .dropdown-toggle::after { transition: transform .2s ease; }
+        .dropdown-toggle.show::after { transform: rotate(180deg); }
 
         /* ------- buttons ------- */
         .btn { font-weight: 600; }
@@ -353,10 +367,32 @@
             --bs-pagination-disabled-border-color: var(--nex-border);
         }
 
-        @media (max-width: 991px) {
-            .sidebar { position: static; width: 100%; height: auto; }
-            .sidebar > .nav { flex: 0 0 auto; overflow-y: visible; overflow-x: hidden; }
-            .main-content { margin-left: 0; }
+        @media (max-width: 991.98px) {
+            .sidebar { position: fixed; top: 0; left: 0; width: 50vw; min-width: 240px; max-width: 320px; height: 100dvh; z-index: 1090; transform: translateX(-105%); visibility: hidden; transition: transform .38s cubic-bezier(.22,.8,.24,1), visibility 0s linear .38s; box-shadow: 0 0 44px rgba(0,0,0,.45); }
+            .sidebar.nx-admin-open { transform: translateX(0); visibility: visible; transition-delay: 0s, 0s; }
+            .sidebar > .nav { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; }
+            .sidebar > a:first-of-type { padding-right: 3.25rem; }
+            .nx-admin-sidebar-close { position: absolute; top: .9rem; right: .9rem; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--nex-sidebar-border); background: transparent; color: var(--nex-sidebar-text); display: inline-flex; align-items: center; justify-content: center; }
+            .nx-admin-sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 1085; border: 0; padding: 0; background: rgba(20,12,7,.55); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .3s ease, visibility 0s linear .3s; }
+            .nx-admin-sidebar-backdrop.nx-admin-open { opacity: 1; visibility: visible; pointer-events: auto; transition-delay: 0s, 0s; }
+            .nx-admin-sidebar-backdrop[hidden] { display: none; }
+            body.nx-admin-drawer-open { overflow: hidden; }
+            .main-content { margin-left: 0; padding: 1rem; }
+            .nx-topbar { position: sticky; top: .75rem; z-index: 1020; flex-wrap: nowrap; }
+            .nx-admin-menu-btn { width: 40px; height: 40px; flex: 0 0 40px; border-radius: .5rem; border: 1px solid var(--nex-border); background: var(--nex-raised); color: var(--nex-text); display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+            #nxClock { flex: 1 1 auto; min-width: 0; font-size: .78rem; line-height: 1.3; }
+            .nx-topbar .dropdown { flex: 0 0 auto; }
+            .nx-topbar .dropdown-toggle { max-width: 11rem; }
+            .nx-topbar .dropdown-toggle .text-start { min-width: 0; }
+            .nx-topbar .dropdown-toggle .text-start > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        }
+
+        @media (max-width: 575.98px) {
+            .nx-topbar .dropdown-toggle .text-start > span:last-child { display: none; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .sidebar, .nx-admin-sidebar-backdrop, .dropdown-menu, .dropdown-toggle::after { transition: none; }
         }
     </style>
     <script>
@@ -370,12 +406,13 @@
 </head>
 <body>
 <div class="d-lg-flex">
-    <aside class="sidebar p-3">
+    <aside class="sidebar p-3" id="adminSidebar">
         <a href="{{ route('admin.dashboard') }}" class="d-block text-white text-decoration-none fs-5 fw-bold mb-4 px-2">
             {{-- Shared by Owner (role 1) and Manager (role 2) — label reflects
                  whoever's actually signed in instead of always saying "Admin". --}}
             NEXFLIO <small class="d-block fs-6 fw-normal opacity-75">Perfect Nails {{ auth()->user()->role_id === \App\Models\User::ROLE_SUPER_ADMIN ? 'Admin' : 'Manager' }}</small>
         </a>
+        <button type="button" id="adminSidebarClose" class="nx-admin-sidebar-close d-lg-none" aria-label="Close admin menu"><i class="bi bi-x-lg"></i></button>
         <ul class="nav flex-column gap-1">
             @php
                 $pendingAppointments = \App\Models\Appointment::where('status', 'unverified')->count();
@@ -480,6 +517,7 @@
             @endif
         </ul>
     </aside>
+    <button type="button" id="adminSidebarBackdrop" class="nx-admin-sidebar-backdrop" aria-label="Close admin menu" hidden></button>
 
     <main class="main-content flex-grow-1">
         @php
@@ -491,6 +529,7 @@
             $topbarRole = (int) $topbarUser->role_id === \App\Models\User::ROLE_SUPER_ADMIN ? 'Owner' : 'Manager';
         @endphp
         <header class="nx-topbar d-flex align-items-center justify-content-between gap-2 mb-3 px-3 py-2">
+            <button type="button" id="adminSidebarToggle" class="nx-admin-menu-btn d-lg-none" aria-controls="adminSidebar" aria-expanded="false" aria-label="Open admin menu"><i class="bi bi-list"></i></button>
             <span id="nxClock" class="small fw-semibold">{{ now()->format('l, F j, Y · g:i:s A') }}</span>
             <div class="dropdown">
                 <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2 dropdown-toggle"
@@ -553,6 +592,58 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Admin sidebar drawer (mobile only).
+    (function () {
+        const sidebar = document.getElementById('adminSidebar');
+        const toggle = document.getElementById('adminSidebarToggle');
+        const closeBtn = document.getElementById('adminSidebarClose');
+        const backdrop = document.getElementById('adminSidebarBackdrop');
+        if (!sidebar || !toggle || !closeBtn || !backdrop) return;
+
+        const openDrawer = () => {
+            if (window.innerWidth >= 992) return;
+            sidebar.classList.add('nx-admin-open');
+            backdrop.hidden = false;
+            backdrop.classList.add('nx-admin-open');
+            document.body.classList.add('nx-admin-drawer-open');
+            toggle.setAttribute('aria-expanded', 'true');
+        };
+
+        const closeDrawer = () => {
+            sidebar.classList.remove('nx-admin-open');
+            backdrop.classList.remove('nx-admin-open');
+            backdrop.hidden = true;
+            document.body.classList.remove('nx-admin-drawer-open');
+            toggle.setAttribute('aria-expanded', 'false');
+        };
+
+        toggle.addEventListener('click', () => {
+            if (sidebar.classList.contains('nx-admin-open')) {
+                closeDrawer();
+            } else {
+                openDrawer();
+            }
+        });
+        closeBtn.addEventListener('click', closeDrawer);
+        backdrop.addEventListener('click', closeDrawer);
+        sidebar.querySelectorAll('.nav-link').forEach((link) => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth < 992) closeDrawer();
+            });
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && sidebar.classList.contains('nx-admin-open')) {
+                closeDrawer();
+            }
+        });
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 992) closeDrawer();
+        });
+
+        closeDrawer();
+    })();
+</script>
 <script>
     (function () {
         const btn = document.getElementById('themeToggle');
