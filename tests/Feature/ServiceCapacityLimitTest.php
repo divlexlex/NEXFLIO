@@ -6,6 +6,7 @@ use App\Enums\AppointmentStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Appointment;
 use App\Models\Payment;
+use App\Models\Position;
 use App\Models\Service;
 use App\Models\StaffProfile;
 use App\Models\User;
@@ -57,6 +58,14 @@ class ServiceCapacityLimitTest extends TestCase
         ]);
 
         return $user;
+    }
+
+    private function ensureAestheticsPosition(): void
+    {
+        Position::updateOrCreate(
+            ['name' => 'Aesthetics Technician'],
+            ['service_category' => 'Aesthetics']
+        );
     }
 
     private function makeService(string $name, string $category, int $duration = 60): Service
@@ -143,7 +152,7 @@ class ServiceCapacityLimitTest extends TestCase
         $this->assertTrue(ServiceCapacity::hasCapacity($headSpa, $date, '12:00'));
     }
 
-    public function test_facial_and_aesthetics_share_one_esthetics_slot(): void
+    public function test_facial_does_not_consume_the_aesthetics_slot(): void
     {
         $facial = $this->makeService('Cap Basic Facial', 'Facial', 45);
         $aesthetic = $this->makeService('Cap Diamond Peel', 'Aesthetics', 45);
@@ -151,19 +160,28 @@ class ServiceCapacityLimitTest extends TestCase
 
         $this->book($facial, $this->staffA, $date, '13:00');
 
-        $this->assertFalse(ServiceCapacity::hasCapacity($facial, $date, '13:00'));
+        // Facial has no bed limit: it blocks neither another Facial nor an
+        // overlapping Aesthetics booking.
+        $this->assertTrue(ServiceCapacity::hasCapacity($facial, $date, '13:00'));
+        $this->assertTrue(ServiceCapacity::hasCapacity($aesthetic, $date, '13:00'));
+
+        // Aesthetics is a single bed: one booking blocks an overlapping
+        // second Aesthetics booking...
+        $this->book($aesthetic, $this->staffB, $date, '13:00');
         $this->assertFalse(ServiceCapacity::hasCapacity($aesthetic, $date, '13:00'));
-        $this->assertTrue(ServiceCapacity::hasCapacity($aesthetic, $date, '14:00'));
+
+        // ...but not a non-overlapping one (the 45-minute slot ends at 13:45).
+        $this->assertTrue(ServiceCapacity::hasCapacity($aesthetic, $date, '13:45'));
     }
 
     public function test_cancelled_appointments_do_not_consume_capacity(): void
     {
-        $facial = $this->makeService('Cap Cancel Facial', 'Facial');
+        $massage = $this->makeService('Cap Cancel Swedish', 'Massage');
         $date = now()->addDay()->toDateString();
 
-        $this->book($facial, $this->staffA, $date, '10:00', AppointmentStatus::Cancelled);
+        $this->book($massage, $this->staffA, $date, '10:00', AppointmentStatus::Cancelled);
 
-        $this->assertTrue(ServiceCapacity::hasCapacity($facial, $date, '10:00'));
+        $this->assertTrue(ServiceCapacity::hasCapacity($massage, $date, '10:00'));
     }
 
     public function test_home_service_is_not_limited_by_branch_beds(): void
@@ -199,17 +217,19 @@ class ServiceCapacityLimitTest extends TestCase
 
     public function test_schedule_hides_full_esthetics_slot(): void
     {
-        $facial = $this->makeService('Cap Slot Facial', 'Facial', 60);
-        // Facial technicians for eligibility.
-        $tech = $this->makeStaff('Capacity', 'Face', 'Facial Technician');
+        $this->ensureAestheticsPosition();
+
+        $aesthetic = $this->makeService('Cap Slot Aesthetics', 'Aesthetics', 60);
+        // Aesthetics technicians for eligibility.
+        $tech = $this->makeStaff('Capacity', 'Aes', 'Aesthetics Technician');
         $date = now()->addDays(2)->toDateString();
 
-        $this->book($facial, $tech, $date, '15:00');
+        $this->book($aesthetic, $tech, $date, '15:00');
 
         $html = $this->actingAs($this->client)->get(route('account.booking.branch.schedule', [
-            'service' => $facial->id,
+            'service' => $aesthetic->id,
             'date' => $date,
-            'personnel' => (string) $this->makeStaff('Capacity', 'FaceTwo', 'Facial Technician')->id,
+            'personnel' => (string) $this->makeStaff('Capacity', 'AesTwo', 'Aesthetics Technician')->id,
         ]))->assertOk()->getContent();
 
         // 15:00 must appear as unavailable (no time=15%3A00 link, or marked unavailable).
@@ -222,17 +242,19 @@ class ServiceCapacityLimitTest extends TestCase
 
     public function test_walk_in_rejects_when_esthetics_full(): void
     {
-        $facial = $this->makeService('Cap Walk Facial', 'Facial');
-        $tech = $this->makeStaff('Capacity', 'WalkFace', 'Facial Technician');
+        $this->ensureAestheticsPosition();
+
+        $aesthetic = $this->makeService('Cap Walk Aesthetics', 'Aesthetics');
+        $tech = $this->makeStaff('Capacity', 'WalkAes', 'Aesthetics Technician');
         $date = now()->toDateString();
 
-        $this->book($facial, $tech, $date, '12:00');
+        $this->book($aesthetic, $tech, $date, '12:00');
 
-        $other = $this->makeStaff('Capacity', 'WalkFace2', 'Facial Technician');
+        $other = $this->makeStaff('Capacity', 'WalkAes2', 'Aesthetics Technician');
 
         $this->actingAs($this->manager)->post(route('admin.appointments.walk-in'), [
             'walk_in_name' => 'Full Room Guest',
-            'service_id' => $facial->id,
+            'service_id' => $aesthetic->id,
             'personnel_id' => $other->id,
             'appointment_date' => $date,
             'start_time' => '12:00',

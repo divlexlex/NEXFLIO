@@ -19,7 +19,7 @@
     @if($isLink) href="{{ $url }}"
     @elseif($fallbackHref) href="{{ $fallbackHref }}" data-bs-toggle="modal" data-bs-target="#bookServiceModal"
     @else type="button" data-bs-toggle="modal" data-bs-target="#getAppModal" @endif
-    class="nx-card d-block h-100 w-100 text-start border-0 bg-transparent p-0"
+    class="nx-card d-block flex-grow-1 w-100 text-start border-0 bg-transparent p-0"
     style="text-decoration:none; color:inherit; cursor:pointer;"
 >
     <div class="nx-card-media" style="height: 180px;">
@@ -39,7 +39,7 @@
         @if(!empty($subtitle))
             <p class="small nx-text-secondary mb-2">{{ $subtitle }}</p>
         @endif
-        <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex justify-content-between align-items-center mt-auto">
             <span class="nx-card-price">₱{{ number_format($price, 2) }}</span>
             <small class="nx-text-accent fw-semibold">{{ $ctaText ?? 'View details' }} <i class="bi bi-arrow-right"></i></small>
         </div>

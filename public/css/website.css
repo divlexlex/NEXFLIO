@@ -269,6 +269,8 @@ button.nx-pill.active {
     background: var(--nx-bg-surface);
     border-radius: var(--nx-radius-lg);
     box-shadow: var(--nx-shadow-card);
+    display: flex;
+    flex-direction: column;
     /* No overflow:hidden here on purpose — combined with border-radius and
        box-shadow on the same element, Chromium can render a faint seam
        around whichever card paints first in a row (compositing-layer-order
@@ -287,11 +289,12 @@ a.nx-card, a.nx-card:hover { text-decoration: none; color: inherit; }
     justify-content: center;
     color: var(--nx-text-secondary);
     overflow: hidden;
+    flex: none;
     border-radius: var(--nx-radius-lg) var(--nx-radius-lg) 0 0;
 }
-.nx-card-media img { width: 100%; height: 100%; object-fit: cover; }
+.nx-card-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-.nx-card-body { padding: 20px 24px 24px; }
+.nx-card-body { padding: 20px 24px 24px; flex: 1; display: flex; flex-direction: column; }
 .nx-card-title { font-size: 20px; color: var(--nx-accent); margin-bottom: 4px; }
 .nx-card-desc { font-size: 14px; color: var(--nx-text-secondary); }
 .nx-card-price { font-size: 14px; font-weight: 600; color: var(--nx-text-primary); }

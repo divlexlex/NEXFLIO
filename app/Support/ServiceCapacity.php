@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
  * Branch resource limits by service category pool:
  *  - Massage beds: 2 concurrent clients
  *  - Head spa beds: 4 concurrent clients
- *  - Esthetics (Facial + Aesthetics): 1 concurrent client
+ *  - Aesthetics: 1 concurrent client (Facial has no bed limit)
  *
  * Capacity is duration-aware: two appointments overlap when their
  * [start, start+duration) windows intersect. Home Service (and any
@@ -107,21 +107,7 @@ class ServiceCapacity
 
     public static function denialMessage(Service $service): string
     {
-        $pools = static::poolsForService($service);
-        $labels = collect($pools)
-            ->map(fn (string $key) => static::pools()[$key]['label'] ?? $key)
-            ->filter()
-            ->values();
-
-        if ($labels->isEmpty()) {
-            return 'That time is fully booked. Please choose another slot.';
-        }
-
-        if ($labels->count() === 1) {
-            return 'All '.$labels->first().' are booked at that time. Please choose another slot.';
-        }
-
-        return 'Not enough capacity ('.$labels->join(', ').') at that time. Please choose another slot.';
+        return 'That time is fully booked. Please choose another slot.';
     }
 
     /**

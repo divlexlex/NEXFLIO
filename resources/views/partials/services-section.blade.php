@@ -58,7 +58,7 @@
                     <div class="tab-pane fade {{ $activeCategory ? '' : 'show active' }}" id="cat-all" role="tabpanel">
                         <div class="row g-3">
                             @foreach($allServices as $service)
-                                <div class="col-md-6 col-lg-4" data-service-name="{{ strtolower($service['name']) }}">
+                                <div class="col-md-6 col-lg-4 d-flex flex-column" data-service-name="{{ strtolower($service['name']) }}">
                                     @include('partials.item-card', [
                                         'url' => route('catalog.service', $service['id']),
                                         'imageUrl' => $service['image_url'],
@@ -68,7 +68,6 @@
                                         'badge' => $service['badge'],
                                         'ctaText' => 'Book',
                                     ])
-                                    @include('partials.package-inclusions', ['service' => $service])
                                 </div>
                             @endforeach
                         </div>
@@ -77,7 +76,7 @@
                     <div class="tab-pane fade {{ $activeCategory === 'Packages' ? 'show active' : '' }}" id="cat-packages" role="tabpanel">
                         <div class="row g-3">
                             @foreach($packageServices as $service)
-                                <div class="col-md-6 col-lg-4" data-service-name="{{ strtolower($service['name']) }}">
+                                <div class="col-md-6 col-lg-4 d-flex flex-column" data-service-name="{{ strtolower($service['name']) }}">
                                     @include('partials.item-card', [
                                         'url' => route('catalog.service', $service['id']),
                                         'imageUrl' => $service['image_url'],
@@ -87,7 +86,6 @@
                                         'badge' => $service['badge'],
                                         'ctaText' => 'Book',
                                     ])
-                                    @include('partials.package-inclusions', ['service' => $service])
                                 </div>
                             @endforeach
                         </div>
@@ -100,7 +98,7 @@
                         <div class="tab-pane fade {{ $activeCategory === $category ? 'show active' : '' }}" id="cat-{{ $loop->index }}" role="tabpanel">
                             <div class="row g-3">
                                 @foreach($services as $service)
-                                    <div class="col-md-6 col-lg-4" data-service-name="{{ strtolower($service['name']) }}">
+                                    <div class="col-md-6 col-lg-4 d-flex flex-column" data-service-name="{{ strtolower($service['name']) }}">
                                         @include('partials.item-card', [
                                             'url' => route('catalog.service', $service['id']),
                                             'imageUrl' => $service['image_url'],
@@ -110,7 +108,6 @@
                                             'badge' => $service['badge'],
                                             'ctaText' => 'Book',
                                         ])
-                                        @include('partials.package-inclusions', ['service' => $service])
                                     </div>
                                 @endforeach
                             </div>

@@ -41,6 +41,8 @@
                     <p class="mb-4" style="max-width: 520px;">{{ $description }}</p>
                 @endif
 
+                @include('partials.package-inclusions', ['service' => $service ?? []])
+
                 @php
                     // Real, server-enforced eligibility (App\Enums\ServiceLocationType)
                     // — not a category-string guess. Absent for promos, which have no

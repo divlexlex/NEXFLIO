@@ -26,6 +26,7 @@ class CatalogController extends Controller
 
         return view('catalog.detail', [
             'type' => 'service',
+            'service' => $service,
             'id' => $service->id,
             'title' => $service->name,
             'category' => $service->category,
