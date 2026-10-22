@@ -3,7 +3,7 @@
 @section('title', 'Sign In')
 
 @section('content')
-<div class="container py-5 d-flex align-items-center" style="min-height: calc(100vh - 80px);">
+<div class="container py-5 d-flex align-items-center nx-auth-wrap" style="min-height: calc(100vh - 80px);">
     <div class="row justify-content-center w-100">
         <div class="col-md-5 col-lg-4">
             <div class="nx-card p-4">

@@ -28,6 +28,21 @@
             </div>
 
             <div class="nx-services-layout">
+                <div class="nx-services-cat-dropdown d-lg-none mb-3">
+                    <label class="nx-eyebrow mb-2">Category</label>
+                    <div class="dropdown">
+                        <button class="nx-cat-btn dropdown-toggle" type="button" id="serviceCategoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span id="serviceCategoryLabel">{{ $activeCategory ?? 'All Services' }}</span>
+                        </button>
+                        <ul class="dropdown-menu nx-cat-menu" aria-labelledby="serviceCategoryDropdown">
+                            <li><button type="button" class="dropdown-item {{ !$activeCategory ? 'active' : '' }}" data-cat-target="#cat-all" data-cat-label="All Services">All Services</button></li>
+                            <li><button type="button" class="dropdown-item {{ $activeCategory === 'Packages' ? 'active' : '' }}" data-cat-target="#cat-packages" data-cat-label="Packages">Packages</button></li>
+                            @foreach($servicesByCategory as $catName => $catServices)
+                                <li><button type="button" class="dropdown-item {{ $activeCategory === $catName ? 'active' : '' }}" data-cat-target="#cat-{{ $loop->index }}" data-cat-label="{{ $catName }}">{{ $catName }}</button></li>
+                            @endforeach
+                        </ul>
+                    </div>
+                </div>
                 <div class="nx-services-sidebar nav" role="tablist" aria-orientation="vertical">
                     <button class="nav-link {{ $activeCategory ? '' : 'active' }}"
                             data-bs-toggle="pill" data-bs-target="#cat-all" type="button" role="tab">
@@ -148,3 +163,22 @@
         </script>
     @endpush
 @endonce
+
+@push('scripts')
+    <script>
+        (function () {
+            var menu = document.querySelector('.nx-cat-menu');
+            if (!menu) return;
+            var label = document.getElementById('serviceCategoryLabel');
+            menu.addEventListener('click', function (e) {
+                var item = e.target.closest('.nx-cat-menu .dropdown-item');
+                if (!item) return;
+                var btn = document.querySelector('[data-bs-target="' + item.dataset.catTarget + '"]');
+                if (btn) btn.click();
+                if (label) label.textContent = item.dataset.catLabel;
+                menu.querySelectorAll('.dropdown-item').forEach(function (el) { el.classList.remove('active'); });
+                item.classList.add('active');
+            });
+        })();
+    </script>
+@endpush

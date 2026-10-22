@@ -67,30 +67,58 @@
 <section class="py-4">
     <div class="container">
         <div class="nx-visit-highlights">
-            <div class="nx-visit-block">
-                <span class="nx-visit-icon"><i class="bi bi-person-walking"></i></span>
-                <div>
-                    <p class="nx-visit-eyebrow">Walk-ins</p>
-                    <p class="nx-visit-main">Walk-ins Welcome</p>
-                    <p class="nx-visit-sub">Subject to availability</p>
+            <div class="nx-visit-track">
+                <div class="nx-visit-group">
+                    <div class="nx-visit-block">
+                        <span class="nx-visit-icon"><i class="bi bi-person-walking"></i></span>
+                        <div>
+                            <p class="nx-visit-eyebrow">Walk-ins</p>
+                            <p class="nx-visit-main">Walk-ins Welcome</p>
+                            <p class="nx-visit-sub">Subject to availability</p>
+                        </div>
+                    </div>
+                    <div class="nx-visit-block">
+                        <span class="nx-visit-icon"><i class="bi bi-house-heart"></i></span>
+                        <div>
+                            <p class="nx-visit-eyebrow">Home Service</p>
+                            <p class="nx-visit-main">Home Service Available</p>
+                            <p class="nx-visit-sub">Coverage confirmed at booking</p>
+                        </div>
+                    </div>
+                    <div class="nx-visit-block">
+                        <span class="nx-visit-icon"><i class="bi bi-clock"></i></span>
+                        <div>
+                            <p class="nx-visit-eyebrow">Hours</p>
+                            <p class="nx-visit-main">Mon–Fri 12PM–1AM</p>
+                            <p class="nx-visit-sub">Sat–Sun 10AM–1AM</p>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="nx-visit-divider"></div>
-            <div class="nx-visit-block">
-                <span class="nx-visit-icon"><i class="bi bi-house-heart"></i></span>
-                <div>
-                    <p class="nx-visit-eyebrow">Home Service</p>
-                    <p class="nx-visit-main">Home Service Available</p>
-                    <p class="nx-visit-sub">Coverage confirmed at booking</p>
-                </div>
-            </div>
-            <div class="nx-visit-divider"></div>
-            <div class="nx-visit-block">
-                <span class="nx-visit-icon"><i class="bi bi-clock"></i></span>
-                <div>
-                    <p class="nx-visit-eyebrow">Hours</p>
-                    <p class="nx-visit-main">10AM&ndash;9PM</p>
-                    <p class="nx-visit-sub">Open daily</p>
+                <div class="nx-visit-group" aria-hidden="true">
+                    <div class="nx-visit-block">
+                        <span class="nx-visit-icon"><i class="bi bi-person-walking"></i></span>
+                        <div>
+                            <p class="nx-visit-eyebrow">Walk-ins</p>
+                            <p class="nx-visit-main">Walk-ins Welcome</p>
+                            <p class="nx-visit-sub">Subject to availability</p>
+                        </div>
+                    </div>
+                    <div class="nx-visit-block">
+                        <span class="nx-visit-icon"><i class="bi bi-house-heart"></i></span>
+                        <div>
+                            <p class="nx-visit-eyebrow">Home Service</p>
+                            <p class="nx-visit-main">Home Service Available</p>
+                            <p class="nx-visit-sub">Coverage confirmed at booking</p>
+                        </div>
+                    </div>
+                    <div class="nx-visit-block">
+                        <span class="nx-visit-icon"><i class="bi bi-clock"></i></span>
+                        <div>
+                            <p class="nx-visit-eyebrow">Hours</p>
+                            <p class="nx-visit-main">Mon–Fri 12PM–1AM</p>
+                            <p class="nx-visit-sub">Sat–Sun 10AM–1AM</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -145,7 +173,7 @@
 
 {{-- RECOMMENDED FOR YOU (dynamic random mix, reshuffles each load) --}}
 @if($recommendations->isNotEmpty())
-<section class="nx-section" style="background: var(--nx-bg-page);">
+<section class="nx-section nx-reco" style="background: var(--nx-bg-page);">
     <div class="container">
         <div class="text-center mb-4">
             <h2 class="nx-section-title mb-2" style="font-size: 34px;">Recommended for You</h2>

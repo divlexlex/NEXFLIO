@@ -90,7 +90,7 @@
      for any signed-in user (Client Website or Management) — the account/
      admin nav already covers those links. The Dialogflow AI widget further
      down is unaffected by this condition. --}}
-@if(auth()->guest() && !request()->routeIs('login', 'login.attempt', 'register', 'register.attempt', 'password.request', 'password.email', 'password.reset', 'password.update', 'verification.show', 'verification.verify', 'verification.resend', 'services', 'packages', 'offers', 'about', 'contact'))
+@if((auth()->guest() && !request()->routeIs('login', 'login.attempt', 'register', 'register.attempt', 'password.request', 'password.email', 'password.reset', 'password.update', 'verification.show', 'verification.verify', 'verification.resend', 'services', 'packages', 'offers', 'about', 'contact', 'catalog.service', 'catalog.promo')) || (auth()->check() && request()->routeIs('landing')))
 <footer class="nx-footer">
     <div class="container d-flex flex-wrap justify-content-between gap-4 py-5">
         <div style="max-width: 320px;">
@@ -215,10 +215,37 @@
         df-messenger {
             --df-messenger-button-titlebar-color: #3D2817;
             --df-messenger-send-icon: #9C7A54;
+            position: relative;
+            z-index: 2000;
+        }
+        @media (max-width: 767.98px) {
+            df-messenger {
+                --df-messenger-chat-window-width: min(92vw, 340px);
+                --df-messenger-chat-window-height: min(68dvh, 520px);
+            }
         }
     </style>
 @endif
 
 @stack('scripts')
+<script>
+    (function () {
+        if (!window.matchMedia('(max-width: 767.98px)').matches || !('IntersectionObserver' in window)) return;
+        var els = document.querySelectorAll('.nx-hero, .nx-section, .nx-footer');
+        if (!els.length) return;
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) {
+                if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+            });
+        }, { threshold: 0.08 });
+        els.forEach(function (el) { el.classList.add('nx-reveal'); io.observe(el); });
+        setTimeout(function () {
+            document.querySelectorAll('.nx-reveal:not(.in)').forEach(function (el) {
+                var r = el.getBoundingClientRect();
+                if (r.top < window.innerHeight) el.classList.add('in');
+            });
+        }, 1200);
+    })();
+</script>
 </body>
 </html>
