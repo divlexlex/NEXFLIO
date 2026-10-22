@@ -235,10 +235,13 @@
     <div class="container">
         <div class="row g-5 align-items-center">
             <div class="col-lg-6">
-                <a href="https://maps.google.com/?q=237+A.+Mabini+St.,+Maypajo,+Caloocan" target="_blank" rel="noopener" class="nx-map-placeholder w-100">
-                    <span class="nx-map-dot"></span>
-                    <span>Map &mdash; 237 A. Mabini St., Maypajo, Caloocan</span>
-                </a>
+                <div class="nx-map-embed w-100">
+                    <iframe src="https://www.google.com/maps?q=Perfect+Nails+Wellness+%26+Aesthetics,+237+A.+Mabini+St.,+Maypajo,+Caloocan&output=embed"
+                        loading="lazy" allowfullscreen
+                        title="Map — Perfect Nails Wellness & Aesthetics, 237 A. Mabini St., Maypajo, Caloocan"
+                        referrerpolicy="no-referrer-when-downgrade"></iframe>
+                    <a href="https://maps.google.com/?q=Perfect+Nails+Wellness+%26+Aesthetics,+237+A.+Mabini+St.,+Maypajo,+Caloocan" target="_blank" rel="noopener" class="nx-map-open">Open in Google Maps</a>
+                </div>
             </div>
             <div class="col-lg-6">
                 <h2 class="mb-4">Visit Our Branch</h2>
