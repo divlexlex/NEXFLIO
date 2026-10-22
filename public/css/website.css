@@ -1362,13 +1362,15 @@ a.nx-calendar-cell:hover { background: var(--nx-bg-surface-muted); color: inheri
         transition: transform .38s cubic-bezier(.32,.72,.24,1);
     }
 
-    .nx-drawer-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-    .nx-drawer-head > * { min-width: 0; }
-    .nx-drawer-head > :first-child { flex: 1; text-align: left; }
-    .nx-drawer-head > .dropdown:first-child { flex: 1 1 auto; }
-    .nx-drawer-head > .dropdown:has(#notificationBell) { flex: none; }
-    .nx-drawer-head .nx-btn { width: 100%; justify-content: flex-start; text-align: left; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .nx-drawer-head .nx-drawer-close { flex: none; }
+    #publicNav { padding-top: 84px; }
+
+    .nx-drawer-head { position: absolute; top: 12px; right: 16px; margin: 0; padding: 0; }
+
+    .nx-nav-account, .nx-nav-guest, .nx-nav-dash { position: absolute; top: 16px; left: 20px; right: 118px; }
+    .nx-nav-account .nx-btn { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nx-nav-bell { position: absolute; top: 14px; right: 62px; }
+    .nx-nav-guest { right: 64px; }
+
     .nx-drawer-close {
         background: transparent;
         border: 1px solid var(--nx-border);
