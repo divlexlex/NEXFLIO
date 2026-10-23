@@ -200,13 +200,18 @@ class RejectedBookingOutcomesTest extends TestCase
         $appointment = $this->pendingBooking();
         $this->reject($appointment, 'invalid_proof');
 
-        $this->actingAs($this->manager)->post(route('admin.appointments.walk-in'), [
+        // Slot taker created directly: the booking is for tomorrow, and a
+        // walk-in can only be placed for today.
+        Appointment::create([
+            'user_id' => null,
             'walk_in_name' => 'Slot Taker',
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
-            'appointment_date' => now()->addDay()->toDateString(),
+            'appointment_date' => $appointment->appointment_date->toDateString(),
             'start_time' => '12:00',
-        ])->assertRedirect();
+            'status' => AppointmentStatus::Booked,
+        ]);
+
 
         $this->actingAs($this->client)->post(
             route('account.bookings.resubmit-proof', $appointment->id),

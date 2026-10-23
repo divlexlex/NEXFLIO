@@ -176,15 +176,17 @@ class PaymentTopupFlowTest extends TestCase
         ]);
         $this->rejectPrimary($appointment, 'insufficient_amount', 200);
 
-        // Someone else takes the exact slot (walk-in performs no collision
-        // check, which is exactly what we need to simulate this).
-        $this->actingAs($this->manager)->post(route('admin.appointments.walk-in'), [
+        // Someone else takes the exact slot. Created directly: the booking
+        // is for tomorrow, and a walk-in can only be placed for today.
+        Appointment::create([
+            'user_id' => null,
             'walk_in_name' => 'Slot Taker',
             'service_id' => Service::where('name', 'Swedish Massage')->firstOrFail()->id,
             'personnel_id' => $this->staff->id,
             'appointment_date' => $date,
             'start_time' => '15:00',
-        ])->assertRedirect()->assertSessionHasNoErrors();
+            'status' => AppointmentStatus::Booked,
+        ]);
 
         $this->actingAs($this->client)->post(
             route('account.bookings.topup.store', $appointment->id),

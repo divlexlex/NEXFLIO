@@ -130,7 +130,7 @@ class WebPortalTest extends TestCase
             'walk_in_phone' => '0917 000 0000',
             'service_id' => $this->service->id,
             'personnel_id' => $this->staff->id,
-            'appointment_date' => now()->addDay()->toDateString(),
+            'appointment_date' => now()->toDateString(),
             'start_time' => '13:00',
         ]);
 

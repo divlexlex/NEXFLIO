@@ -62,7 +62,7 @@ class WalkInMidnightBookingTest extends TestCase
         ]);
 
         // Deterministic day: open noon, shop close 10 PM (online rule).
-        $this->date = now()->addDay()->toDateString();
+        $this->date = now()->toDateString();
         BusinessHours::where('day_of_week', Carbon::parse($this->date)->dayOfWeek)
             ->update(['open_at' => '12:00:00', 'close_at' => '22:00:00', 'is_open' => true]);
 
@@ -91,10 +91,13 @@ class WalkInMidnightBookingTest extends TestCase
 
         // Same 11:00 PM start that walk-in allows — online must still refuse
         // (would finish 1:00 AM, past the 10:00 PM BusinessHours close).
+        $onlineDate = now()->addDay()->toDateString();
+        BusinessHours::where('day_of_week', Carbon::parse($onlineDate)->dayOfWeek)
+            ->update(['open_at' => '12:00:00', 'close_at' => '22:00:00', 'is_open' => true]);
         $this->actingAs($this->client)->post(route('account.booking.branch.store'), [
             'service_id' => $this->twoHour->id,
             'personnel_id' => (string) $this->staff->id,
-            'appointment_date' => $this->date,
+            'appointment_date' => $onlineDate,
             'start_time' => '23:00',
             'method' => 'gcash',
             'guests' => 1,

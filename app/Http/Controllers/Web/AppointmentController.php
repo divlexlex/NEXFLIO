@@ -147,7 +147,7 @@ class AppointmentController extends Controller
             ->get()
             ->keyBy('user_id');
 
-        $appointments = Appointment::with(['service:id,name,duration_minutes', 'user:id,name'])
+        $appointments = Appointment::with(['service:id,name,duration_minutes', 'user:id,name', 'addedServices.service:id,name,duration_minutes'])
             ->whereIn('personnel_id', $staff->pluck('id'))
             ->whereDate('appointment_date', '>=', $weekStart)
             ->whereDate('appointment_date', '<=', $weekEnd)
@@ -372,6 +372,8 @@ class AppointmentController extends Controller
                         'variant' => $row->variant_label,
                         'price' => (float) $row->price,
                         'personnel' => $row->personnel?->name,
+                        'start_time' => $row->start_time?->format('H:i'),
+                        'start_time_label' => $row->startTimeLabel(),
                         // 'creation' avails read as part of the appointment's
                         // services; 'payment' rows are the later "Added" line.
                         'source' => $row->source,
@@ -429,7 +431,7 @@ class AppointmentController extends Controller
                 'required',
                 Rule::exists('services', 'id')->where('status', 'active')->whereNull('deleted_at'),
             ],
-            'appointment_date' => 'required|date|after_or_equal:today',
+            'appointment_date' => 'required|date|date_equals:today',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
             // Optional extra REGULAR services on the same visit (the main row

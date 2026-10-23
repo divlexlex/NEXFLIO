@@ -51,7 +51,7 @@ class WalkInClosingGuardTest extends TestCase
 
         // Open noon; shop BusinessHours close is irrelevant to walk-in finish
         // cutoff (config walk_in.close_at, default 01:00).
-        $this->date = now()->addDay()->toDateString();
+        $this->date = now()->toDateString();
         BusinessHours::where('day_of_week', Carbon::parse($this->date)->dayOfWeek)
             ->update(['open_at' => '12:00:00', 'close_at' => '22:00:00', 'is_open' => true]);
 

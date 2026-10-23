@@ -104,6 +104,16 @@
                                                     <span>{{ $appointment->appointment_date->format('M j, Y') }} · {{ \Carbon\Carbon::parse($appointment->start_time)->format('g:i A') }}</span>
                                                 </div>
                                                 <div class="nx-ms-hovercard-row">
+                                                    <span>Duration</span>
+                                                    <span>{{ $appointment->service?->duration_minutes }} mins</span>
+                                                </div>
+                                                @foreach($appointment->addedServices as $added)
+                                                    <div class="nx-ms-hovercard-row">
+                                                        <span>{{ $added->displayName() }}</span>
+                                                        <span>{{ $added->service?->duration_minutes }} mins</span>
+                                                    </div>
+                                                @endforeach
+                                                <div class="nx-ms-hovercard-row">
                                                     <span>Personnel</span>
                                                     <span>{{ $row['staff']->fullName() }}</span>
                                                 </div>

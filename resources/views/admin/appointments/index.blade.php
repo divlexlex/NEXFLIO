@@ -367,7 +367,7 @@
                     <div class="col mb-2">
                         <label class="form-label">Date</label>
                         <input type="date" name="appointment_date" id="walkin-date" class="form-control"
-                               value="{{ now()->toDateString() }}" min="{{ now()->toDateString() }}" required>
+                               value="{{ now()->toDateString() }}" min="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" required>
                     </div>
                     <div class="col mb-2">
                         <label class="form-label">Time</label>
@@ -875,10 +875,11 @@
                 const line = document.createElement('div');
                 line.className = 'd-flex justify-content-between align-items-start gap-2';
                 const label = row.service + (row.variant ? ' (' + row.variant + ')' : '');
+                const meta = [row.personnel || '—', row.start_time_label || ''].filter(Boolean).join(' · ');
                 line.innerHTML =
                     '<span>' + esc(label) +
                     ' · ₱' + Number(row.price).toLocaleString(undefined, { minimumFractionDigits: 2 }) +
-                    '<br><span class="text-muted">' + esc(row.personnel || '—') + '</span></span>';
+                    '<br><span class="text-muted">' + esc(meta) + '</span></span>';
                 if (p.canAddServices) {
                     const removeBtn = document.createElement('button');
                     removeBtn.type = 'button';

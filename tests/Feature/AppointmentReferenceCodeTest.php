@@ -196,7 +196,7 @@ class AppointmentReferenceCodeTest extends TestCase
             'walk_in_name' => 'Walk-in Client',
             'service_id' => $this->manicure->id,
             'personnel_id' => $staff->id,
-            'appointment_date' => now()->addDay()->toDateString(),
+            'appointment_date' => now()->toDateString(),
             'start_time' => '15:00',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
