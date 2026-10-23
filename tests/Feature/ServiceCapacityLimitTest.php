@@ -152,7 +152,7 @@ class ServiceCapacityLimitTest extends TestCase
         $this->assertTrue(ServiceCapacity::hasCapacity($headSpa, $date, '12:00'));
     }
 
-    public function test_facial_does_not_consume_the_aesthetics_slot(): void
+    public function test_facial_and_aesthetics_share_the_single_esthetics_slot(): void
     {
         $facial = $this->makeService('Cap Basic Facial', 'Facial', 45);
         $aesthetic = $this->makeService('Cap Diamond Peel', 'Aesthetics', 45);
@@ -160,19 +160,21 @@ class ServiceCapacityLimitTest extends TestCase
 
         $this->book($facial, $this->staffA, $date, '13:00');
 
-        // Facial has no bed limit: it blocks neither another Facial nor an
-        // overlapping Aesthetics booking.
-        $this->assertTrue(ServiceCapacity::hasCapacity($facial, $date, '13:00'));
-        $this->assertTrue(ServiceCapacity::hasCapacity($aesthetic, $date, '13:00'));
-
-        // Aesthetics is a single bed: one booking blocks an overlapping
-        // second Aesthetics booking...
-        $this->book($aesthetic, $this->staffB, $date, '13:00');
+        // Facial + Aesthetics share the single esthetics room: a booked
+        // Facial blocks both another Facial and an overlapping Aesthetics
+        // booking.
+        $this->assertFalse(ServiceCapacity::hasCapacity($facial, $date, '13:00'));
         $this->assertFalse(ServiceCapacity::hasCapacity($aesthetic, $date, '13:00'));
 
-        // ...but not a non-overlapping one (the 45-minute slot ends at 13:45).
+        // The room frees up when the facial ends (13:00 + 45m = 13:45)...
         $this->assertTrue(ServiceCapacity::hasCapacity($aesthetic, $date, '13:45'));
+
+        // ...and the reverse holds too: an Aesthetics booking blocks an
+        // overlapping Facial.
+        $this->book($aesthetic, $this->staffB, $date, '14:00');
+        $this->assertFalse(ServiceCapacity::hasCapacity($facial, $date, '14:00'));
     }
+
 
     public function test_cancelled_appointments_do_not_consume_capacity(): void
     {

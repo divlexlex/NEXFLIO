@@ -52,7 +52,7 @@ return [
         'esthetics' => [
             'label' => 'esthetics rooms',
             'limit' => 1,
-            'categories' => ['Aesthetics'],
+            'categories' => ['Facial', 'Aesthetics'],
         ],
     ],
 
