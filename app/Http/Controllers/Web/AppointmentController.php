@@ -373,7 +373,7 @@ class AppointmentController extends Controller
                         'price' => (float) $row->price,
                         'personnel' => $row->personnel?->name,
                         'start_time' => $row->start_time?->format('H:i'),
-                        'start_time_label' => $row->startTimeLabel(),
+                        'start_time_label' => $row->start_time ? \Carbon\Carbon::parse($row->start_time)->format('g:i A') : null,
                         // 'creation' avails read as part of the appointment's
                         // services; 'payment' rows are the later "Added" line.
                         'source' => $row->source,
