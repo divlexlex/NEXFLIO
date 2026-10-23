@@ -104,7 +104,7 @@
                                                     <span>{{ $appointment->appointment_date->format('M j, Y') }} · {{ \Carbon\Carbon::parse($appointment->start_time)->format('g:i A') }}</span>
                                                 </div>
                                                 <div class="nx-ms-hovercard-row">
-                                                    <span>Time</span>
+                                                    <span>Duration</span>
                                                     <span>{{ \Carbon\Carbon::parse($appointment->start_time)->format('g:i A') }} – {{ \Carbon\Carbon::parse($appointment->start_time)->addMinutes($appointment->service?->duration_minutes ?? 0)->format('g:i A') }}</span>
                                                 </div>
                                                 @php($cursor = \Carbon\Carbon::parse($appointment->start_time)->addMinutes($appointment->service?->duration_minutes ?? 0))
