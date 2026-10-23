@@ -10,16 +10,16 @@ use Illuminate\Support\Facades\Hash;
 class StaffEmployeesSeeder extends Seeder
 {
     private const STAFF_LIST = [
-        ['first' => 'Angelica', 'last' => 'Reyes', 'position' => 'Massage Technician', 'pay' => 13500.00],
-        ['first' => 'Bianca', 'last' => 'Santos', 'position' => 'Massage Technician', 'pay' => 13000.00],
-        ['first' => 'Catherine', 'last' => 'Lopez', 'position' => 'Nail Technician', 'pay' => 12500.00],
-        ['first' => 'Danica', 'last' => 'Garcia', 'position' => 'Nail Technician', 'pay' => 12200.00],
-        ['first' => 'Ericka', 'last' => 'Rivera', 'position' => 'Nail Technician', 'pay' => 12000.00],
-        ['first' => 'Fiona', 'last' => 'Cruz', 'position' => 'Facial Technician', 'pay' => 14000.00],
-        ['first' => 'Gwen', 'last' => 'Mendoza', 'position' => 'Facial Technician', 'pay' => 13800.00],
-        ['first' => 'Hazel', 'last' => 'Torres', 'position' => 'Facial Technician', 'pay' => 13600.00],
-        ['first' => 'Irene', 'last' => 'Flores', 'position' => 'Massage Technician', 'pay' => 13200.00],
-        ['first' => 'Jasmine', 'last' => 'Castillo', 'position' => 'Nail Technician', 'pay' => 12400.00],
+        ['first' => 'Angelica', 'last' => 'Reyes', 'position' => 'Massage Technician', 'daily' => 570.00],
+        ['first' => 'Bianca', 'last' => 'Santos', 'position' => 'Massage Technician', 'daily' => 550.00],
+        ['first' => 'Catherine', 'last' => 'Lopez', 'position' => 'Nail Technician', 'daily' => 530.00],
+        ['first' => 'Danica', 'last' => 'Garcia', 'position' => 'Nail Technician', 'daily' => 510.00],
+        ['first' => 'Ericka', 'last' => 'Rivera', 'position' => 'Nail Technician', 'daily' => 500.00],
+        ['first' => 'Fiona', 'last' => 'Cruz', 'position' => 'Facial Technician', 'daily' => 600.00],
+        ['first' => 'Gwen', 'last' => 'Mendoza', 'position' => 'Facial Technician', 'daily' => 590.00],
+        ['first' => 'Hazel', 'last' => 'Torres', 'position' => 'Facial Technician', 'daily' => 580.00],
+        ['first' => 'Irene', 'last' => 'Flores', 'position' => 'Massage Technician', 'daily' => 560.00],
+        ['first' => 'Jasmine', 'last' => 'Castillo', 'position' => 'Nail Technician', 'daily' => 520.00],
     ];
 
     public function run(): void
@@ -62,7 +62,7 @@ class StaffEmployeesSeeder extends Seeder
             StaffProfile::query()->updateOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'base_pay'          => $data['pay'],
+                    'daily_base_pay'    => $data['daily'],
                     'commission_rate'   => 10.00,
                     'position'          => $data['position'],
                     'employment_status' => 'active',

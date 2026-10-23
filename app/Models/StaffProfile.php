@@ -13,6 +13,7 @@ class StaffProfile extends Model
     protected $fillable = [
         'user_id',
         'base_pay',
+        'daily_base_pay',
         'commission_rate',
         'position',
         'is_on_break',
@@ -25,6 +26,7 @@ class StaffProfile extends Model
     {
         return [
             'base_pay' => 'decimal:2',
+            'daily_base_pay' => 'decimal:2',
             'commission_rate' => 'decimal:2',
             'is_on_break' => 'boolean',
             'break_started_at' => 'datetime',

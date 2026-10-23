@@ -106,7 +106,7 @@ class EmployeeController extends Controller
 
             StaffProfile::create([
                 'user_id'           => $user->id,
-                'base_pay'          => $validated['base_pay'],
+                'daily_base_pay'    => $validated['daily_base_pay'],
                 'commission_rate'   => $validated['commission_rate'],
                 'position'          => $validated['position'],
                 'employment_status' => 'active',
@@ -130,7 +130,7 @@ class EmployeeController extends Controller
         $user = User::where('role_id', User::ROLE_STAFF)->with('staffProfile')->findOrFail($id);
 
         $validated = $request->validate([
-            'base_pay'          => 'required|numeric|min:0',
+            'daily_base_pay'    => 'required|numeric|min:0',
             'commission_rate'   => 'required|numeric|min:0|max:100',
             'position'          => ['required', Rule::exists('positions', 'name')],
             'employment_status' => ['required', Rule::in(['active', 'inactive', 'terminated'])],

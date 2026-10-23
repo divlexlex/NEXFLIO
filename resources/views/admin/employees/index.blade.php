@@ -89,7 +89,7 @@
                     <th>Name</th>
                     <th>Username</th>
                     <th>Position</th>
-                    <th>Base Pay</th>
+                    <th>Daily Base Pay</th>
                     <th>Rate</th>
                     <th>Status</th>
                     <th>Break</th>
@@ -108,7 +108,7 @@
                         </td>
                         <td><code>{{ $employee->username ?? '—' }}</code></td>
                         <td>{{ $profile->position ?? '—' }}</td>
-                        <td>₱{{ number_format($profile->base_pay ?? 0, 2) }}</td>
+                        <td>₱{{ number_format($profile->daily_base_pay ?? 0, 2) }}</td>
                         <td>{{ number_format($profile->commission_rate ?? 10, 1) }}%</td>
                         <td>
                             <span class="badge {{ ($profile->employment_status ?? 'active') === 'active' ? 'text-bg-success' : 'text-bg-secondary' }}">
@@ -143,7 +143,7 @@
                                     data-bs-toggle="modal" data-bs-target="#editEmployeeModal"
                                     data-id="{{ $employee->id }}"
                                     data-name="{{ $employee->fullName() }}"
-                                    data-base="{{ $profile->base_pay ?? 0 }}"
+                                    data-daily="{{ $profile->daily_base_pay ?? 0 }}"
                                     data-rate="{{ $profile->commission_rate ?? 10 }}"
                                     data-position="{{ $profile->position }}"
                                     data-status="{{ $profile->employment_status ?? 'active' }}">
@@ -213,8 +213,8 @@
                 </div>
                 <div class="row">
                     <div class="col-md-6 mb-2">
-                        <label class="form-label">Monthly Base Pay (₱) <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" name="base_pay" class="form-control" min="0" required>
+                        <label class="form-label">Daily Base Pay (₱) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" name="daily_base_pay" class="form-control" min="0" required>
                     </div>
                     <div class="col-md-6 mb-2">
                         <label class="form-label">Commission Rate (%) <span class="text-danger">*</span></label>
@@ -243,8 +243,8 @@
             <div class="modal-body">
                 <div class="row">
                     <div class="col mb-2">
-                        <label class="form-label">Monthly base pay (₱)</label>
-                        <input type="number" step="0.01" name="base_pay" id="edit-emp-base" class="form-control" min="0" required>
+                        <label class="form-label">Daily base pay (₱)</label>
+                        <input type="number" step="0.01" name="daily_base_pay" id="edit-emp-daily" class="form-control" min="0" required>
                     </div>
                     <div class="col mb-2">
                         <label class="form-label">Commission rate (%)</label>
@@ -342,7 +342,7 @@
         const btn = event.relatedTarget;
         document.getElementById('editEmployeeForm').action = "{{ url('admin/employees') }}/" + btn.dataset.id;
         document.getElementById('edit-emp-name').textContent = btn.dataset.name;
-        document.getElementById('edit-emp-base').value = btn.dataset.base;
+        document.getElementById('edit-emp-daily').value = btn.dataset.daily;
         document.getElementById('edit-emp-rate').value = btn.dataset.rate;
         document.getElementById('edit-emp-position').value = btn.dataset.position || '';
         document.getElementById('edit-emp-status').value = btn.dataset.status;

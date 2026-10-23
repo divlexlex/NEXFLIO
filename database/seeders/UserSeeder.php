@@ -49,7 +49,7 @@ class UserSeeder extends Seeder
         StaffProfile::query()->updateOrCreate(
             ['user_id' => $staffUser->id],
             [
-                'base_pay'          => 12000.00,
+                'daily_base_pay'    => 500.00,
                 'commission_rate'   => 10.00,
                 'position'          => 'Massage Technician',
                 'employment_status' => 'active',

@@ -10,6 +10,7 @@ use App\Models\Commission;
 use App\Models\LeaveRequest;
 use App\Models\StaffShiftAssignment;
 use App\Services\AppointmentService;
+use App\Services\WeeklyPayrollService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -18,15 +19,23 @@ use Illuminate\Support\Facades\Hash;
  * Self-service Staff (role 3) portal — one dashboard page covering the same
  * ground the mobile app's equivalent API endpoints already cover
  * (App\Http\Controllers\API\AttendanceController / LeaveController): clock
- * in/out, today's + upcoming assigned appointments, this month's
- * commissions, and their own leave request history/submission. Admin/Manager
+ * in/out, today's + upcoming assigned appointments, this week's
+ * pay and commissions, and their own leave request history/submission. Admin/Manager
  * review of leave requests is unchanged (App\Http\Controllers\Web\LeaveController).
  */
 class StaffController extends Controller
 {
-    public function dashboard(Request $request)
+    public function dashboard(Request $request, WeeklyPayrollService $payroll)
     {
         $user = $request->user();
+
+        // This week's pay (Sun–Sat): daily base pay × days attended +
+        // this week's commissions — same WeeklyPayrollService the admin
+        // Billing page and the pay API use.
+        [$weekStart, $weekEnd] = $payroll->weekRange(now()->toDateString());
+        $weeklyPay = $payroll->forStaff($user, $weekStart);
+        $weeklyPay['week_start'] = $weekStart;
+        $weeklyPay['week_end'] = $weekEnd;
         $today = now()->toDateString();
 
         $todaysAppointments = $user->assignedAppointments()
@@ -47,10 +56,7 @@ class StaffController extends Controller
             'todayAttendance' => Attendance::where('user_id', $user->id)->whereDate('work_date', $today)->first(),
             'todaysAppointments' => $todaysAppointments,
             'upcomingAppointments' => $upcomingAppointments,
-            'commissionsThisMonth' => Commission::where('user_id', $user->id)
-                ->whereYear('earned_at', now()->year)
-                ->whereMonth('earned_at', now()->month)
-                ->sum('amount'),
+            'weeklyPay' => $weeklyPay,
             'recentCommissions' => Commission::where('user_id', $user->id)
                 ->with('appointment.service:id,name')
                 ->latest('earned_at')

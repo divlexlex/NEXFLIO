@@ -69,7 +69,7 @@ class PositionManagementTest extends TestCase
             'last_name' => 'Artist',
             'contact_number' => '09171234567',
             'position' => 'Nail Technician',
-            'base_pay' => 12000,
+            'daily_base_pay' => 12000,
             'commission_rate' => 10,
             'hired_at' => now()->toDateString(),
         ], $overrides);

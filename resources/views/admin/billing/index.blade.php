@@ -6,6 +6,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0">Billing &amp; Payroll</h1>
     <form method="GET" class="d-flex align-items-center gap-2">
+        <input type="hidden" name="week" value="{{ $week }}">
         <label class="small text-muted">Month</label>
         <input type="month" name="month" value="{{ $month }}" class="form-control form-control-sm w-auto"
                onchange="this.form.submit()">
@@ -22,29 +23,39 @@
     </div>
     <div class="col-md-6">
         <div class="card p-3">
-            <div class="text-muted small">Payroll (base + commission) · {{ $month }}</div>
+            <div class="text-muted small">Weekly Payroll (daily base × attendance + commission) · {{ \Carbon\Carbon::parse($weekStart)->format('M j') }} – {{ \Carbon\Carbon::parse($weekEnd)->format('M j, Y') }}</div>
             <div class="fs-2 fw-bold">₱{{ number_format($payrollTotal, 2) }}</div>
         </div>
     </div>
 </div>
 
 <div class="card p-3 mb-4">
-    <h2 class="h6 text-muted mb-3">Staff Payroll — base pay + 10% commission per completed service</h2>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h2 class="h6 text-muted mb-0">Staff Payroll — daily base pay × days attended + commission per completed service (weekly)</h2>
+        <form method="GET" class="d-flex align-items-center gap-2">
+            <input type="hidden" name="month" value="{{ $month }}">
+            <label class="small text-muted">Week</label>
+            <input type="date" name="week" value="{{ $week }}" class="form-control form-control-sm w-auto"
+                   onchange="this.form.submit()">
+        </form>
+    </div>
     <div class="table-responsive">
         <table class="table align-middle">
             <thead>
-                <tr><th>Staff</th><th>Base Pay</th><th>Commission</th><th class="text-end">Total</th></tr>
+                <tr><th>Staff</th><th>Daily Base Pay</th><th>Days Present</th><th>Base Total</th><th>Commission</th><th class="text-end">Total</th></tr>
             </thead>
             <tbody>
                 @forelse($staffPayroll as $row)
                     <tr>
                         <td>{{ $row['user']->name }}</td>
-                        <td>₱{{ number_format($row['base_pay'], 2) }}</td>
+                        <td>₱{{ number_format($row['daily_base_pay'], 2) }}</td>
+                        <td>{{ $row['days_present'] }}</td>
+                        <td>₱{{ number_format($row['base_total'], 2) }}</td>
                         <td>₱{{ number_format($row['commission'], 2) }}</td>
                         <td class="text-end fw-bold">₱{{ number_format($row['total'], 2) }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="4" class="text-center text-muted py-4">No staff on record.</td></tr>
+                    <tr><td colspan="6" class="text-center text-muted py-4">No staff on record.</td></tr>
                 @endforelse
             </tbody>
         </table>

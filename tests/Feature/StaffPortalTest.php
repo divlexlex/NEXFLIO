@@ -38,7 +38,7 @@ class StaffPortalTest extends TestCase
         $this->actingAs($this->staff)->get('/staff/dashboard')
             ->assertOk()
             ->assertSee('Time In')
-            ->assertSee('Commissions This Month');
+            ->assertSee("This Week's Pay");
     }
 
     public function test_non_staff_cannot_reach_the_staff_dashboard(): void
@@ -148,7 +148,7 @@ class StaffPortalTest extends TestCase
         $response->assertSessionHasErrors('start_date');
     }
 
-    public function test_commissions_this_month_total_is_correct(): void
+    public function test_weekly_pay_total_is_correct(): void
     {
         $appointment = Appointment::create([
             'user_id' => $this->client->id,

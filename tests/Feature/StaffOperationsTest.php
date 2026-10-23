@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
+use App\Models\Attendance;
 use App\Models\Commission;
 use App\Models\Inventory;
 use App\Models\LeaveRequest;
@@ -244,18 +245,29 @@ class StaffOperationsTest extends TestCase
 
     // ===== Commission view =====
 
-    public function test_staff_sees_base_pay_plus_commission_total(): void
+    public function test_staff_sees_weekly_pay_daily_base_times_attendance_plus_commission(): void
     {
         $appointment = $this->bookedAppointment();
         $this->actingAs($this->staff, 'sanctum')->postJson("/api/appointments/{$appointment->id}/start")->assertOk();
         $this->actingAs($this->staff, 'sanctum')->postJson("/api/appointments/{$appointment->id}/complete")->assertOk();
 
+        // One attended day this week (today, open shift) at the seeded
+        // daily rate of 500: base 500 + the 75 commission from above.
+        Attendance::create([
+            'user_id' => $this->staff->id,
+            'work_date' => now()->toDateString(),
+            'time_in' => now(),
+            'time_out' => null,
+        ]);
+
         $response = $this->actingAs($this->staff, 'sanctum')->getJson('/api/my-commissions');
         $response->assertOk();
 
-        $this->assertSame('12000.00', $response->json('base_pay'));
+        $this->assertSame('500.00', $response->json('daily_base_pay'));
+        $this->assertSame(1, $response->json('days_present'));
+        $this->assertSame('500.00', $response->json('base_total'));
         $this->assertSame('75.00', $response->json('commission_total'));
-        $this->assertSame('12075.00', $response->json('grand_total'));
+        $this->assertSame('575.00', $response->json('grand_total'));
         $this->assertCount(1, $response->json('entries'));
     }
 

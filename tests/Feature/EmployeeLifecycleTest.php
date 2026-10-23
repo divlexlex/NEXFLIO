@@ -45,7 +45,7 @@ class EmployeeLifecycleTest extends TestCase
         $this->actingAs($this->owner)->patch(
             route('admin.employees.update', $this->staff->id),
             [
-                'base_pay' => 12000,
+                'daily_base_pay' => 12000,
                 'commission_rate' => 10,
                 'position' => 'Massage Technician',
                 'employment_status' => 'terminated',

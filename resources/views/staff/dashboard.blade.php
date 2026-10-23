@@ -72,9 +72,9 @@
     {{-- EARNINGS --}}
     <div class="col-md-6">
         <div class="card p-3 h-100">
-            <h2 class="h6 text-uppercase text-muted mb-3">Commissions This Month</h2>
-            <p class="display-6 mb-0">₱{{ number_format($commissionsThisMonth, 2) }}</p>
-            <p class="text-muted small mb-0">Based on your completed appointments this month.</p>
+            <h2 class="h6 text-uppercase text-muted mb-3">This Week's Pay</h2>
+            <p class="display-6 mb-0">₱{{ number_format($weeklyPay['total'], 2) }}</p>
+            <p class="text-muted small mb-0">Daily ₱{{ number_format($weeklyPay['daily_base_pay'], 2) }} × {{ $weeklyPay['days_present'] }} day(s) attended = ₱{{ number_format($weeklyPay['base_total'], 2) }} + ₱{{ number_format($weeklyPay['commission'], 2) }} commission · {{ \Carbon\Carbon::parse($weeklyPay['week_start'])->format('M j') }} – {{ \Carbon\Carbon::parse($weeklyPay['week_end'])->format('M j, Y') }}</p>
         </div>
     </div>
 </div>

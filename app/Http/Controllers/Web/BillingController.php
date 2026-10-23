@@ -4,16 +4,17 @@ namespace App\Http\Controllers\Web;
 
 use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
-use App\Models\Commission;
 use App\Models\Payment;
-use App\Models\User;
 use App\Services\RevenueRecognitionService;
+use App\Services\WeeklyPayrollService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class BillingController extends Controller
 {
     public function __construct(
         private readonly RevenueRecognitionService $revenue,
+        private readonly WeeklyPayrollService $payroll,
     ) {
     }
 
@@ -24,25 +25,22 @@ class BillingController extends Controller
         $year = (int) $year;
         $mon = (int) $mon;
 
-        // Per-staff payroll for the month: fixed base + commission ledger sum.
-        $staff = User::where('role_id', User::ROLE_STAFF)
-            ->with('staffProfile')
-            ->orderBy('name')
-            ->get()
-            ->map(function (User $member) use ($year, $mon) {
-                $commission = (float) Commission::where('user_id', $member->id)
-                    ->whereYear('earned_at', $year)
-                    ->whereMonth('earned_at', $mon)
-                    ->sum('amount');
-                $basePay = (float) ($member->staffProfile?->base_pay ?? 0);
-
-                return [
-                    'user' => $member,
-                    'base_pay' => $basePay,
-                    'commission' => round($commission, 2),
-                    'total' => round($basePay + $commission, 2),
-                ];
-            });
+        // Staff payroll is WEEKLY (2026-10-24): daily base pay × days
+        // attended that week + that week's commissions, computed by
+        // WeeklyPayrollService. ?week= accepts any date inside the wanted
+        // week (Sunday–Saturday) and is normalized to its Sunday; an
+        // invalid or missing value falls back to the current week.
+        $weekParam = $request->query('week');
+        $weekDate = now()->toDateString();
+        if (is_string($weekParam) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $weekParam)) {
+            try {
+                $weekDate = Carbon::createFromFormat('Y-m-d', $weekParam)->toDateString();
+            } catch (\Throwable $e) {
+                $weekDate = now()->toDateString();
+            }
+        }
+        [$weekStart, $weekEnd] = $this->payroll->weekRange($weekDate);
+        $staff = $this->payroll->forAllStaff($weekStart);
 
         // Collection ledger for the month (verified payments) — separate from
         // revenue (Rule A counts these same verified payments, minus any on Cancelled appointments).
@@ -55,6 +53,9 @@ class BillingController extends Controller
 
         return view('admin.billing.index', [
             'month' => $month,
+            'week' => $weekStart,
+            'weekStart' => $weekStart,
+            'weekEnd' => $weekEnd,
             'staffPayroll' => $staff,
             'payments' => $payments,
             'revenueTotal' => $this->revenue->sumForMonth($year, $mon),

@@ -20,7 +20,7 @@ class StoreEmployeeRequest extends FormRequest
             'middle_name'     => 'nullable|string|max:100',
             'contact_number'  => ['required', 'string', 'regex:/^(09\d{9}|\+639\d{9})$/'],
             'position'        => ['required', Rule::exists('positions', 'name')],
-            'base_pay'        => 'required|numeric|min:0',
+            'daily_base_pay'  => 'required|numeric|min:0',
             'commission_rate' => 'required|numeric|min:0|max:100',
             'hired_at'        => 'required|date',
         ];

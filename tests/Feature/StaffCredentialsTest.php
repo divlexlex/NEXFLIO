@@ -28,7 +28,7 @@ class StaffCredentialsTest extends TestCase
             'last_name'        => 'Dela Cruz',
             'contact_number'   => '09171234567',
             'position'         => 'Nail Technician',
-            'base_pay'         => 12000,
+            'daily_base_pay'   => 12000,
             'commission_rate'  => 10,
             'hired_at'         => now()->toDateString(),
         ], $overrides);

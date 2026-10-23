@@ -37,7 +37,7 @@ class EmployeeController extends Controller
 
             StaffProfile::create([
                 'user_id'           => $user->id,
-                'base_pay'          => $validated['base_pay'],
+                'daily_base_pay'    => $validated['daily_base_pay'],
                 'commission_rate'   => $validated['commission_rate'] ?? 10.00,
                 'position'          => $validated['position'],
                 'employment_status' => 'active',
