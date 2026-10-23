@@ -51,7 +51,12 @@
                     @foreach($appointment->addedServices as $added)
                         <div class="nx-review-row">
                             <span class="nx-review-label">Extra service</span>
-                            <span class="nx-review-value">{{ $added->displayName() }} — ₱{{ number_format((float) $added->price, 2) }}</span>
+                            <span class="nx-review-value">
+                                {{ $added->displayName() }}
+                                · {{ $added->personnel?->name ?? 'No preferred personnel' }}
+                                · {{ $added->startTimeLabel() ?? 'Time to confirm' }}
+                                — ₱{{ number_format((float) $added->price, 2) }}
+                            </span>
                         </div>
                     @endforeach
                     @if($appointment->price !== null)

@@ -20,6 +20,7 @@ class AppointmentAddedService extends Model
         'variant_label',
         'price',
         'personnel_id',
+        'start_time',
         'added_by',
         'source',
     ];
@@ -51,7 +52,14 @@ class AppointmentAddedService extends Model
     {
         return [
             'price' => 'decimal:2',
+            'start_time' => 'datetime:H:i',
         ];
+    }
+
+    /** Its own start time when the online wizard gave it one, else null. */
+    public function startTimeLabel(): ?string
+    {
+        return $this->start_time?->format('g:i A');
     }
 
     public function appointment()

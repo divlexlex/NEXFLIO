@@ -67,7 +67,12 @@
                         @foreach(($extras ?? []) as $extra)
                             <div class="nx-review-row">
                                 <span class="nx-review-label">Extra service</span>
-                                <span class="nx-review-value">{{ $extra['service']->name }}@if($extra['variant_label']) — {{ $extra['variant_label'] }}@endif — ₱{{ number_format($extra['price'], 2) }}</span>
+                                <span class="nx-review-value">
+                                    {{ $extra['service']->name }}@if($extra['variant_label']) — {{ $extra['variant_label'] }}@endif
+                                    · {{ $extra['personnel_name'] ?? 'No preferred personnel' }}
+                                    · {{ \App\Support\BookingExtras::startTimeLabel($extra['start_time'] ?? null) ?? 'Time to confirm' }}
+                                    · ₱{{ number_format($extra['price'], 2) }}
+                                </span>
                             </div>
                         @endforeach
                         <div class="nx-review-row">
@@ -146,7 +151,7 @@
                         </div>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                            <a href="{{ route('account.booking.home.review', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'extras' => ! empty($extras) ? collect($extras)->map(fn ($extra) => array_filter(['service_id' => $extra['service']->id, 'variant_label' => $extra['variant_label'], 'personnel_id' => $extra['personnel_id']], fn ($value) => $value !== null && $value !== ''))->all() : null], $address)) }}" class="nx-btn nx-btn-outline">
+                            <a href="{{ route('account.booking.home.review', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'extras' => ! empty($extras) ? collect($extras)->map(fn ($extra) => array_filter(['service_id' => $extra['service']->id, 'variant_label' => $extra['variant_label'], 'personnel_id' => $extra['personnel_id'], 'start_time' => $extra['start_time'] ?? null], fn ($value) => $value !== null && $value !== ''))->all() : null], $address)) }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

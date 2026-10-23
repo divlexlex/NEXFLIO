@@ -126,7 +126,8 @@ class TimeDisplayFormatTest extends TestCase
             ->getContent();
 
         $this->assertStringContainsString('2:00 PM', $html);
-        $this->assertStringNotContainsString('14:00', $html);
+        $this->assertStringContainsString('data-slot-time="14:00"', $html);
+        $this->assertStringNotContainsString('>14:00<', $html);
     }
 
     public function test_notification_mails_use_twelve_hour_time(): void

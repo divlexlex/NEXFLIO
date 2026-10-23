@@ -196,7 +196,7 @@ class HomeServiceBookingTest extends TestCase
         $response->assertDontSee('book a Home Service visit through the Perfect Nails app');
     }
 
-    public function test_home_service_detail_matches_branch_card_and_extras_layout(): void
+    public function test_home_service_detail_has_service_card_without_extras_picker(): void
     {
         $this->makeHomeExtra('Extra Visual Massage', 400, 30, 50);
 
@@ -209,15 +209,14 @@ class HomeServiceBookingTest extends TestCase
         $response->assertSee('Service Details');
         $response->assertSee('Step 1 of 6');
         $response->assertSee('Down payment: ₱300.00');
-        $response->assertSee('Avail Services');
-        $response->assertSee('(add 1 or more service)');
-        $response->assertSee('Add more services to this same visit');
-        $response->assertSee('Add another service');
-        $response->assertSee('data-extra-service', false);
-        $response->assertSee('data-extra-variant', false);
-        $response->assertSee('data-extra-personnel', false);
-        $response->assertSee('data-extra-remove', false);
-        $response->assertSee('Extra Visual Massage');
+        // Extras moved to the Schedule step: the service-detail step must not
+        // offer the old inline AVAIL SERVICES picker anymore.
+        $response->assertDontSee('Avail Services');
+        $response->assertDontSee('Add more services to this same visit');
+        $response->assertDontSee('data-extra-service', false);
+        $response->assertDontSee('data-extra-variant', false);
+        $response->assertDontSee('data-extra-personnel', false);
+        $response->assertDontSee('data-extra-remove', false);
         $response->assertSee(route('account.booking.home.address'), false);
         $response->assertSee('name="service" value="'.$this->homeService->id.'"', false);
     }
@@ -228,7 +227,7 @@ class HomeServiceBookingTest extends TestCase
         $staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
 
         $extras = [
-            ['service_id' => $extra->id, 'personnel_id' => $staff->id],
+            ['service_id' => $extra->id, 'personnel_id' => $staff->id, 'start_time' => '14:00'],
         ];
         $address = [
             'street_address' => '1 Test St.',
@@ -390,7 +389,7 @@ class HomeServiceBookingTest extends TestCase
 
         $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
             'extras' => [
-                ['service_id' => $extra->id, 'personnel_id' => $staff->id],
+                ['service_id' => $extra->id, 'personnel_id' => $staff->id, 'start_time' => '14:00'],
             ],
         ]));
 
@@ -408,6 +407,7 @@ class HomeServiceBookingTest extends TestCase
         $this->assertSame('booking', $row->source);
         $this->assertEquals(400, (float) $row->price);
         $this->assertSame($staff->id, $row->personnel_id);
+        $this->assertSame('14:00', $row->start_time->format('H:i'));
 
         $this->assertSame(1, $appointment->payments()->count());
         $this->assertEquals(40, (float) $appointment->payment->amount);
@@ -429,7 +429,7 @@ class HomeServiceBookingTest extends TestCase
         $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
             'method' => 'cash',
             'payment_proof' => null,
-            'extras' => [['service_id' => $extra->id]],
+            'extras' => [['service_id' => $extra->id, 'start_time' => '14:00']],
         ]));
 
         $response->assertSessionHasErrors('method');
@@ -448,7 +448,7 @@ class HomeServiceBookingTest extends TestCase
         $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
             'method' => 'cash',
             'payment_proof' => null,
-            'extras' => [['service_id' => $extra->id]],
+            'extras' => [['service_id' => $extra->id, 'start_time' => '14:00']],
         ]));
 
         $response->assertSessionHasNoErrors();
@@ -467,7 +467,7 @@ class HomeServiceBookingTest extends TestCase
         Storage::fake('public');
 
         $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
-            'extras' => [['service_id' => $this->branchService->id]],
+            'extras' => [['service_id' => $this->branchService->id, 'start_time' => '14:00']],
         ]));
 
         $response->assertSessionHasErrors('extras.0.service_id');
@@ -482,7 +482,7 @@ class HomeServiceBookingTest extends TestCase
         $package = $this->makeHomeExtra('Home Test Package', 2000, 60, null, 'Packages', 'home');
 
         $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
-            'extras' => [['service_id' => $package->id]],
+            'extras' => [['service_id' => $package->id, 'start_time' => '14:00']],
         ]));
 
         $response->assertSessionHasErrors('extras.0.service_id');
@@ -492,7 +492,8 @@ class HomeServiceBookingTest extends TestCase
         $this->assertSame(0, Appointment::count());
     }
 
-    // The exact-slot collision check also covers the extra's personnel.
+    // The exact-slot collision check also covers the extra's personnel at the
+    // extra's OWN start time.
     public function test_home_store_rejects_when_extra_personnel_is_already_booked_at_that_slot(): void
     {
         Storage::fake('public');
@@ -513,16 +514,17 @@ class HomeServiceBookingTest extends TestCase
         $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
             'appointment_date' => $date,
             'start_time' => '13:00',
-            'extras' => [['service_id' => $extra->id, 'personnel_id' => $staff->id]],
+            'extras' => [['service_id' => $extra->id, 'personnel_id' => $staff->id, 'start_time' => '13:00']],
         ]));
 
-        $response->assertSessionHasErrors('start_time');
-        $response->assertSessionHasErrors(['start_time' => 'That slot was just taken. Please choose a different time.']);
+        $response->assertSessionHasErrors('extras.0.personnel_id');
+        $response->assertSessionHasErrors(['extras.0.personnel_id' => 'That slot was just taken.']);
         $this->assertSame(1, Appointment::count());
     }
 
-    // Visit duration is main + every extra: fitting alone is not enough.
-    public function test_home_booking_with_extras_must_fit_business_hours(): void
+    // Each service's OWN window must fit business hours; extras no longer
+    // extend the main service's window.
+    public function test_home_booking_validates_each_service_window_against_business_hours(): void
     {
         Storage::fake('public');
 
@@ -535,10 +537,10 @@ class HomeServiceBookingTest extends TestCase
             'start_time' => '20:00',
             'method' => 'cash',
             'payment_proof' => null,
-            'extras' => [['service_id' => $extra->id]],
+            'extras' => [['service_id' => $extra->id, 'start_time' => '21:00']],
         ]));
 
-        $response->assertSessionHasErrors('start_time');
+        $response->assertSessionHasErrors('extras.0.start_time');
         $this->assertSame(0, Appointment::count());
     }
 }

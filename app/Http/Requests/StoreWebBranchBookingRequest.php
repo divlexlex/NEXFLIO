@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\AppointmentStatus;
 use App\Enums\ServiceLocationType;
 use App\Models\Appointment;
+use App\Models\AppointmentAddedService;
 use App\Models\BusinessHours;
 use App\Models\Service;
 use App\Models\User;
@@ -107,6 +108,9 @@ class StoreWebBranchBookingRequest extends FormRequest
                 'nullable',
                 Rule::exists('users', 'id')->where('role_id', User::ROLE_STAFF)->whereNull('deleted_at'),
             ],
+            // Every added service now has its OWN start time (validated
+            // per-segment below against its own duration/personnel/capacity).
+            'extras.*.start_time' => ['required', 'date_format:H:i'],
             'appointment_date' => 'required|date|after_or_equal:tomorrow',
             'start_time' => 'required|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
@@ -140,36 +144,239 @@ class StoreWebBranchBookingRequest extends FormRequest
                 return;
             }
 
-            $staffIds = $this->collisionStaffIds();
-            if ($staffIds === []) {
-                return;
+            $this->validateSegments($validator, $extras);
+        });
+    }
+
+    /**
+     * Validate every service in the booking as its own segment: the main
+     * service (the request's start_time) and every extra (its OWN start_time).
+     * Each segment must fit business hours, avoid personnel overlap and fit
+     * its resource pool at ITS window. Earlier segments in this same request
+     * also occupy personnel and capacity, in order.
+     *
+     * @param  list<array{service: Service, variant_label: string|null, price: float, personnel_id: int|null, start_time: string|null}>  $extras
+     */
+    private function validateSegments(Validator $validator, array $extras): void
+    {
+        $service = $this->resolveService();
+        if (! $service) {
+            return;
+        }
+
+        $date = (string) $this->input('appointment_date');
+        // Seats come from the chosen variant (packages), never from a raw
+        // browser-sent guests count.
+        $variant = $this->input('variant_id')
+            ? $service->variants->firstWhere('id', (int) $this->input('variant_id'))
+            : null;
+        $segments = [[
+            'service' => $service,
+            'start' => (string) $this->input('start_time'),
+            'duration' => max(1, (int) ($service->duration_minutes ?: 30)),
+            'personnel' => $this->mainPersonnelIds(),
+            'seats' => ServiceCapacity::seatsNeeded($variant?->guests),
+            'window_key' => 'start_time',
+            'personnel_key' => 'start_time',
+            'main' => true,
+        ]];
+
+        foreach ($extras as $index => $extra) {
+            $segments[] = [
+                'service' => $extra['service'],
+                'start' => (string) ($extra['start_time'] ?? ''),
+                'duration' => max(1, (int) ($extra['service']->duration_minutes ?: 30)),
+                'personnel' => $extra['personnel_id'] ? [(int) $extra['personnel_id']] : [],
+                'seats' => 1,
+                'window_key' => "extras.{$index}.start_time",
+                'personnel_key' => "extras.{$index}.personnel_id",
+                'main' => false,
+            ];
+        }
+
+        $earlier = [];
+
+        foreach ($segments as $segment) {
+            $start = trim((string) $segment['start']);
+            if (! preg_match('/^\d{1,2}:\d{2}/', $start)) {
+                continue;
             }
+            $start = substr($start, 0, 5);
+            $startMinute = $this->minutesOf($start);
 
-            $taken = Appointment::query()
-                ->whereDate('appointment_date', $this->input('appointment_date'))
-                ->where('start_time', $this->input('start_time'))
-                ->whereNotIn('status', [
-                    AppointmentStatus::Cancelled->value,
-                    AppointmentStatus::NoShow->value,
-                ])
-                ->where(function ($query) use ($staffIds) {
-                    $query->whereIn('personnel_id', $staffIds)
-                        ->orWhereHas('personnelAssignments', function ($assignments) use ($staffIds) {
-                            $assignments->whereIn('user_id', $staffIds);
-                        });
-                })
-                ->exists();
-
-            if ($taken) {
+            $fits = BusinessHours::startFitsOnDate($date, $start, $segment['duration']);
+            if (! $fits) {
                 $validator->errors()->add(
-                    'start_time',
-                    'That slot was just taken. Please choose a different time.'
+                    $segment['window_key'],
+                    'That time is past shop closing. Please choose an earlier slot, or book for another day.'
                 );
             }
 
-            $this->validateWithinBusinessHours($validator, $extras);
-            $this->validateServiceCapacity($validator);
-        });
+            $conflict = $segment['personnel'] !== [] && (
+                $this->overlapsExisting($date, $startMinute, $segment['duration'], $segment['personnel'])
+                || $this->overlapsEarlier($startMinute, $segment['duration'], $segment['personnel'], $earlier)
+            );
+
+            if ($conflict) {
+                $validator->errors()->add(
+                    $segment['personnel_key'],
+                    $segment['main']
+                        ? 'That slot was just taken. Please choose a different time.'
+                        : 'That slot was just taken.'
+                );
+            }
+
+            if ($fits && ! $conflict) {
+                $this->validateSegmentCapacity($validator, $date, $segment, $startMinute, $earlier);
+            }
+
+            $earlier[] = [
+                'service' => $segment['service'],
+                'start' => $startMinute,
+                'duration' => $segment['duration'],
+                'personnel' => $segment['personnel'],
+                'seats' => $segment['seats'],
+            ];
+        }
+    }
+
+    /** @return list<int> */
+    private function mainPersonnelIds(): array
+    {
+        $assignments = $this->input('package_assignments');
+        if (is_array($assignments)) {
+            return collect($assignments)->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+        }
+
+        $personnelId = $this->integer('personnel_id');
+
+        return $personnelId ? [$personnelId] : [];
+    }
+
+    /**
+     * @param  list<int>  $personnelIds
+     */
+    private function overlapsExisting(string $date, int $startMinute, int $duration, array $personnelIds): bool
+    {
+        $endMinute = $startMinute + $duration;
+
+        $appointments = Appointment::query()
+            ->with(['service:id,duration_minutes', 'personnelAssignments:id,appointment_id,user_id'])
+            ->whereDate('appointment_date', $date)
+            ->whereNotIn('status', [
+                AppointmentStatus::Cancelled->value,
+                AppointmentStatus::NoShow->value,
+            ])
+            ->where(function ($query) use ($personnelIds) {
+                $query->whereIn('personnel_id', $personnelIds)
+                    ->orWhereHas('personnelAssignments', fn ($assignments) => $assignments->whereIn('user_id', $personnelIds));
+            })
+            ->get(['id', 'service_id', 'personnel_id', 'start_time']);
+
+        foreach ($appointments as $appointment) {
+            $ids = collect([$appointment->personnel_id])
+                ->merge($appointment->personnelAssignments->pluck('user_id'))
+                ->filter()
+                ->map(fn ($id) => (int) $id);
+
+            if ($ids->intersect($personnelIds)->isEmpty()) {
+                continue;
+            }
+
+            $existingStart = $this->minutesOf((string) $appointment->start_time);
+            $existingDuration = max(1, (int) ($appointment->service?->duration_minutes ?: 30));
+
+            if ($startMinute < $existingStart + $existingDuration && $endMinute > $existingStart) {
+                return true;
+            }
+        }
+
+        $added = AppointmentAddedService::query()
+            ->with(['service:id,duration_minutes', 'appointment:id,start_time'])
+            ->whereIn('personnel_id', $personnelIds)
+            ->whereHas('appointment', function ($query) use ($date) {
+                $query->whereDate('appointment_date', $date)
+                    ->whereNotIn('status', [
+                        AppointmentStatus::Cancelled->value,
+                        AppointmentStatus::NoShow->value,
+                    ]);
+            })
+            ->get(['id', 'appointment_id', 'service_id', 'personnel_id', 'start_time']);
+
+        foreach ($added as $row) {
+            // Its own start_time when the booking wizard gave it one; a NULL
+            // row keeps the legacy interpretation (it rides on its parent
+            // appointment's start).
+            $rowStart = $row->start_time
+                ? $this->minutesOf($row->start_time->format('H:i'))
+                : $this->minutesOf((string) $row->appointment?->start_time);
+
+            $existingDuration = max(1, (int) ($row->service?->duration_minutes ?: 30));
+
+            if ($startMinute < $rowStart + $existingDuration && $endMinute > $rowStart) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<int>  $personnelIds
+     * @param  list<array{service: Service, start: int, duration: int, personnel: list<int>, seats: int}>  $earlier
+     */
+    private function overlapsEarlier(int $startMinute, int $duration, array $personnelIds, array $earlier): bool
+    {
+        $endMinute = $startMinute + $duration;
+
+        foreach ($earlier as $previous) {
+            if (array_intersect($personnelIds, $previous['personnel']) === []) {
+                continue;
+            }
+
+            if ($startMinute < $previous['start'] + $previous['duration'] && $endMinute > $previous['start']) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array{service: Service, duration: int, seats: int, window_key: string}  $segment
+     * @param  list<array{service: Service, start: int, duration: int, personnel: list<int>, seats: int}>  $earlier
+     */
+    private function validateSegmentCapacity(Validator $validator, string $date, array $segment, int $startMinute, array $earlier): void
+    {
+        $endMinute = $startMinute + max(1, $segment['duration']);
+
+        foreach (ServiceCapacity::poolsForService($segment['service']) as $poolKey) {
+            $limit = (int) (ServiceCapacity::pools()[$poolKey]['limit'] ?? 0);
+            if ($limit < 1) {
+                continue;
+            }
+
+            $used = ServiceCapacity::usedSeats($date, $startMinute, $segment['duration'], $poolKey);
+
+            $earlierSeats = 0;
+            foreach ($earlier as $previous) {
+                if (! in_array($poolKey, ServiceCapacity::poolsForService($previous['service']), true)) {
+                    continue;
+                }
+                if ($startMinute < $previous['start'] + $previous['duration'] && $endMinute > $previous['start']) {
+                    $earlierSeats += $previous['seats'];
+                }
+            }
+
+            if (($used + $earlierSeats + $segment['seats']) > $limit) {
+                $validator->errors()->add(
+                    $segment['window_key'],
+                    ServiceCapacity::denialMessage($segment['service'])
+                );
+
+                return;
+            }
+        }
     }
 
     private function resolveService(): ?Service
@@ -187,7 +394,7 @@ class StoreWebBranchBookingRequest extends FormRequest
      * is added under the offending `extras.N.*` key, so the wizard shows its
      * normal inline message and nothing is written.
      *
-     * @return list<array{service: \App\Models\Service, variant_label: string|null, price: float, personnel_id: int|null}>
+     * @return list<array{service: \App\Models\Service, variant_label: string|null, price: float, personnel_id: int|null, start_time: string|null}>
      */
     private function validateExtras(Validator $validator): array
     {
@@ -209,46 +416,6 @@ class StoreWebBranchBookingRequest extends FormRequest
         }
     }
 
-    /**
-     * @param  list<array{service: \App\Models\Service}>  $extras
-     */
-    private function validateWithinBusinessHours(Validator $validator, array $extras = []): void
-    {
-        $service = $this->resolveService();
-        $date = $this->input('appointment_date');
-        $time = $this->input('start_time');
-        if (! $service || ! $date || ! $time) {
-            return;
-        }
-
-        // One visit: the main service plus every extra must finish by the
-        // shop's closing time, using the same shared window rule.
-        $duration = (int) $service->duration_minutes
-            + array_sum(array_map(fn (array $extra) => (int) $extra['service']->duration_minutes, $extras));
-
-        if (! BusinessHours::startFitsOnDate($date, $time, $duration)) {
-            $validator->errors()->add(
-                'start_time',
-                'That time is past shop closing. Please choose an earlier slot, or book for another day.'
-            );
-        }
-    }
-
-    private function validateServiceCapacity(Validator $validator): void
-    {
-        $service = $this->resolveService();
-        $date = $this->input('appointment_date');
-        $time = $this->input('start_time');
-        if (! $service || ! $date || ! $time || $validator->errors()->has('start_time')) {
-            return;
-        }
-
-        $guests = $this->integer('guests') ?: null;
-        if (! ServiceCapacity::hasCapacity($service, $date, $time, $guests)) {
-            $validator->errors()->add('start_time', ServiceCapacity::denialMessage($service));
-        }
-    }
-
     private function validatePackageStaff(Validator $validator): void
     {
         $service = $this->resolveService();
@@ -260,51 +427,6 @@ class StoreWebBranchBookingRequest extends FormRequest
         if (! is_array($selection) || ! PackageStaffSelection::isComplete($service, $selection)) {
             $validator->errors()->add('staff', 'Please choose Spa Personnel for every role in this package.');
         }
-    }
-
-    /** @return list<int> */
-    private function collisionStaffIds(): array
-    {
-        $assignments = $this->input('package_assignments');
-        if (is_array($assignments)) {
-            return collect($assignments)
-                ->filter()
-                ->map(fn ($id) => (int) $id)
-                ->merge($this->extraPersonnelIds())
-                ->unique()
-                ->values()
-                ->all();
-        }
-
-        $personnelId = $this->integer('personnel_id');
-
-        return collect($personnelId ? [$personnelId] : [])
-            ->merge($this->extraPersonnelIds())
-            ->unique()
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Personnel chosen for the extra services — they occupy the same slot,
-     * so the exact-slot double-booking check must consider them too.
-     *
-     * @return list<int>
-     */
-    private function extraPersonnelIds(): array
-    {
-        $rows = $this->input('extras', []);
-        if (! is_array($rows)) {
-            return [];
-        }
-
-        return collect($rows)
-            ->pluck('personnel_id')
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
     }
 
     /**
@@ -356,6 +478,14 @@ class StoreWebBranchBookingRequest extends FormRequest
                 'Cash is not available because this booking requires a down payment. Please pay the down payment online with proof.'
             );
         }
+    }
+
+    /** 'H:i' or 'H:i:s' clock time as minutes from midnight for window math. */
+    private function minutesOf(string $time): int
+    {
+        $parsed = \Illuminate\Support\Carbon::parse($time);
+
+        return ((int) $parsed->hour) * 60 + ((int) $parsed->minute);
     }
 
 }

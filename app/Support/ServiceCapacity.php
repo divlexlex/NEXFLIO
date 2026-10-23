@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
+use App\Models\AppointmentAddedService;
 use App\Models\Service;
 use Illuminate\Support\Carbon;
 
@@ -164,6 +165,42 @@ class ServiceCapacity
 
             if ($startMinute < $existingEnd && $endMinute > $existingStart) {
                 $used += static::seatsNeeded($appointment->guests);
+            }
+        }
+
+        // Online multi-service bookings: each added service occupies its OWN
+        // window when it has a start_time. NULL rows keep today's handling
+        // (they are already represented by their parent appointment above).
+        $added = AppointmentAddedService::query()
+            ->with(['service:id,category,duration_minutes,package_details'])
+            ->where('source', 'booking')
+            ->whereNotNull('start_time')
+            ->whereHas('appointment', function ($query) use ($date) {
+                $query->whereDate('appointment_date', $date)
+                    ->whereNotIn('status', [
+                        AppointmentStatus::Cancelled->value,
+                        AppointmentStatus::NoShow->value,
+                    ]);
+            })
+            ->whereHas('service', fn ($query) => $query->whereIn('category', $categories))
+            ->get(['id', 'service_id', 'start_time']);
+
+        foreach ($added as $row) {
+            $service = $row->service;
+            if (! $service) {
+                continue;
+            }
+
+            if (! in_array($poolKey, static::poolsForService($service), true)) {
+                continue;
+            }
+
+            $addedStart = ((int) $row->start_time->hour) * 60 + ((int) $row->start_time->minute);
+            $addedDuration = max(1, (int) ($service->duration_minutes ?: 30));
+            $addedEnd = $addedStart + $addedDuration;
+
+            if ($startMinute < $addedEnd && $endMinute > $addedStart) {
+                $used += static::seatsNeeded(null);
             }
         }
 

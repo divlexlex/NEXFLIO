@@ -30,6 +30,9 @@
         @if(!empty($extra['personnel_id']))
             <input type="hidden" name="extras[{{ $index }}][personnel_id]" value="{{ $extra['personnel_id'] }}">
         @endif
+        @if(!empty($extra['start_time']))
+            <input type="hidden" name="extras[{{ $index }}][start_time]" value="{{ $extra['start_time'] }}">
+        @endif
     @endforeach
 @endif
 @if(!empty($address))

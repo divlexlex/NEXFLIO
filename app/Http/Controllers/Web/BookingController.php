@@ -115,54 +115,9 @@ class BookingController extends Controller
     {
         $service = Service::bookableAtBranch()->with(['variants', 'positions'])->findOrFail($id);
 
-        // Extra services the client may add to the same visit: real active
-        // branch-bookable REGULAR services (never packages). Packages stay a
-        // main-service choice only, exactly like the walk-in extras rule.
-        $extraServices = Service::bookableAtBranch()
-            ->with('variants')
-            ->orderBy('name')
-            ->get()
-            ->reject(fn (Service $candidate) => $candidate->isPackageForExtras())
-            ->map(fn (Service $candidate) => [
-                'id' => $candidate->id,
-                'name' => $candidate->name,
-                'category' => $candidate->category,
-                'price' => (float) $candidate->price,
-                'down_payment' => $candidate->down_payment !== null ? (float) $candidate->down_payment : null,
-                'duration_minutes' => (int) $candidate->duration_minutes,
-                // Position names that may perform it — the same
-                // category→position mapping the main service uses.
-                'positions' => Position::namesForServiceCategory((string) $candidate->category),
-                'variants' => $candidate->variants->map(fn ($variant) => [
-                    'label' => $variant->label,
-                    'price' => (float) $variant->price,
-                ])->values(),
-            ])
-            ->values();
-
-        // Eligibility pool for the extras' personnel picks — the same
-        // category→position mapping the main service uses, filtered to
-        // active, non-break staff. Date-aware availability is applied on the
-        // schedule step, where the date is known.
-        $staffCatalog = User::where('role_id', User::ROLE_STAFF)
-            ->whereHas('staffProfile', fn ($query) => $query
-                ->where('employment_status', 'active')
-                ->where('is_on_break', false))
-            ->with('staffProfile:id,user_id,position')
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn (User $member) => [
-                'id' => $member->id,
-                'name' => $member->name,
-                'position' => $member->staffProfile?->position,
-            ])
-            ->values();
-
+        // Added services are now chosen on the Schedule step, not here.
         return view('account.booking.service-detail', [
             'service' => $service,
-            'extraServices' => $extraServices,
-            'staffCatalog' => $staffCatalog,
-            'eligiblePositionNames' => Position::namesForServiceCategory($service->category),
         ]);
     }
 
@@ -183,7 +138,14 @@ class BookingController extends Controller
 
         $extras = $this->extrasFromRequest($request);
 
-        return view('account.booking.schedule', $this->scheduleViewData($request, $service, $date, $variant, $extras));
+        return view('account.booking.schedule', $this->scheduleViewData(
+            $request,
+            $service,
+            $date,
+            $variant,
+            $extras,
+            ServiceLocationType::bookableAtBranch()
+        ));
     }
 
     public function details(Request $request)
@@ -359,6 +321,7 @@ class BookingController extends Controller
                     'variant_label' => $extra['variant_label'],
                     'price' => $extra['price'],
                     'personnel_id' => $extra['personnel_id'],
+                    'start_time' => $extra['start_time'],
                     'added_by' => $request->user()->id,
                     'source' => 'booking',
                 ]);
@@ -450,49 +413,9 @@ class BookingController extends Controller
     {
         $service = Service::bookableAtHome()->with(['variants', 'positions'])->findOrFail($id);
 
-        // Extra services the client may add to the same Home Service visit:
-        // real active home-bookable REGULAR services (never packages).
-        $extraServices = Service::bookableAtHome()
-            ->with('variants')
-            ->orderBy('name')
-            ->get()
-            ->reject(fn (Service $candidate) => $candidate->isPackageForExtras())
-            ->map(fn (Service $candidate) => [
-                'id' => $candidate->id,
-                'name' => $candidate->name,
-                'category' => $candidate->category,
-                'price' => (float) $candidate->price,
-                'down_payment' => $candidate->down_payment !== null ? (float) $candidate->down_payment : null,
-                'duration_minutes' => (int) $candidate->duration_minutes,
-                'positions' => Position::namesForServiceCategory((string) $candidate->category),
-                'variants' => $candidate->variants->map(fn ($variant) => [
-                    'label' => $variant->label,
-                    'price' => (float) $variant->price,
-                ])->values(),
-            ])
-            ->values();
-
-        // Eligibility pool for the extras' personnel picks — same
-        // category→position mapping, active non-break staff.
-        $staffCatalog = User::where('role_id', User::ROLE_STAFF)
-            ->whereHas('staffProfile', fn ($query) => $query
-                ->where('employment_status', 'active')
-                ->where('is_on_break', false))
-            ->with('staffProfile:id,user_id,position')
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn (User $member) => [
-                'id' => $member->id,
-                'name' => $member->name,
-                'position' => $member->staffProfile?->position,
-            ])
-            ->values();
-
+        // Added services are now chosen on the Schedule step, not here.
         return view('account.booking.home.service-detail', [
             'service' => $service,
-            'extraServices' => $extraServices,
-            'staffCatalog' => $staffCatalog,
-            'eligiblePositionNames' => Position::namesForServiceCategory($service->category),
         ]);
     }
 
@@ -547,7 +470,14 @@ class BookingController extends Controller
         $extras = $this->extrasFromRequest($request);
 
         return view('account.booking.home.schedule', array_merge(
-            $this->scheduleViewData($request, $service, $date, null, $extras),
+            $this->scheduleViewData(
+                $request,
+                $service,
+                $date,
+                null,
+                $extras,
+                ServiceLocationType::bookableAtHome()
+            ),
             ['address' => $this->addressFieldsFromRequest($request)]
         ));
     }
@@ -726,6 +656,7 @@ class BookingController extends Controller
                     'variant_label' => $extra['variant_label'],
                     'price' => $extra['price'],
                     'personnel_id' => $extra['personnel_id'],
+                    'start_time' => $extra['start_time'],
                     'added_by' => $request->user()->id,
                     'source' => 'booking',
                 ]);
@@ -861,7 +792,6 @@ class BookingController extends Controller
         $service = $serviceId
             ? Service::with('positions')->find($serviceId)
             : null;
-        $extraDuration = array_sum(array_map(fn (array $extra) => (int) $extra['service']->duration_minutes, $extras));
 
         try {
             $request->validate([
@@ -870,20 +800,6 @@ class BookingController extends Controller
             ], [], [
                 'date' => 'date', 'time' => 'time',
             ]);
-
-            // The whole visit (main + extras) must fit inside the shop's
-            // closing time — the same window rule store() enforces. Only
-            // checked when extras are present, so a single-service booking
-            // behaves exactly as before.
-            if ($extras !== [] && $service && ! BusinessHours::startFitsOnDate(
-                (string) $date,
-                (string) $time,
-                (int) ($service->duration_minutes ?? 0) + $extraDuration
-            )) {
-                throw ValidationException::withMessages([
-                    'time' => 'That time is past shop closing. Please choose an earlier slot, or book for another day.',
-                ]);
-            }
 
             if ($service?->requiresMultiStaff()) {
                 $staff = PackageStaffSelection::fromRequest($request, $service);
@@ -1006,12 +922,11 @@ class BookingController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function scheduleViewData(Request $request, Service $service, string $date, ?ServiceVariant $variant = null, array $extras = []): array
+    private function scheduleViewData(Request $request, Service $service, string $date, ?ServiceVariant $variant = null, array $extras = [], array $locationTypes = []): array
     {
         $eligiblePersonnel = $this->eligiblePersonnel($date, $service);
         $eligibleIds = $eligiblePersonnel->pluck('id');
         $isMultiStaff = $service->requiresMultiStaff();
-        $extraDuration = array_sum(array_map(fn (array $extra) => (int) $extra['service']->duration_minutes, $extras));
 
         $personnelParam = $request->query('personnel'); // null | 'any' | numeric id
         $staffSelection = PackageStaffSelection::fromRequest($request, $service);
@@ -1033,8 +948,8 @@ class BookingController extends Controller
             if (PackageStaffSelection::isComplete($service, $staffSelection)) {
                 $concrete = PackageStaffSelection::concreteIds($staffSelection);
                 $slots = $concrete === []
-                    ? $this->buildSlotGrid($service, $date, 'any', $eligibleIds, $capacityGuests, $extraDuration)
-                    : $this->buildSlotGridForStaff($service, $date, $concrete, $capacityGuests, $extraDuration);
+                    ? $this->buildSlotGrid($service, $date, 'any', $eligibleIds, $capacityGuests)
+                    : $this->buildSlotGridForStaff($service, $date, $concrete, $capacityGuests);
             }
 
             // Carry a sentinel so downstream steps that still read `personnel`
@@ -1051,9 +966,11 @@ class BookingController extends Controller
 
             $slots = [];
             if ($personnelParam) {
-                $slots = $this->buildSlotGrid($service, $date, $personnelParam, $eligibleIds, $capacityGuests, $extraDuration);
+                $slots = $this->buildSlotGrid($service, $date, $personnelParam, $eligibleIds, $capacityGuests);
             }
         }
+
+        [$slotOptions, $closeMinute] = $this->clientSlotOptions($date);
 
         return [
             'service' => $service,
@@ -1069,9 +986,88 @@ class BookingController extends Controller
             'slots' => $slots,
             'selectedTime' => $request->query('time'),
             'extras' => $extras,
-            'extraDuration' => $extraDuration,
-            'totalDuration' => (int) ($service->duration_minutes ?? 0) + $extraDuration,
+            'serviceCatalog' => $this->serviceCatalog($date, $locationTypes),
+            'slotOptions' => $slotOptions,
+            'closeMinute' => $closeMinute,
         ];
+    }
+
+    /**
+     * Full 30-minute slot list (open → close) for the client-side added-service
+     * cards, plus the close minute so the script can hide starts that would
+     * overrun it for that service's duration. Server validation stays
+     * authoritative (per-segment in the wizard request).
+     *
+     * @return array{0: list<array{time: string, label: string, minute: int}>, 1: int|null}
+     */
+    private function clientSlotOptions(string $date): array
+    {
+        $window = BusinessHours::windowForDay((int) Carbon::parse($date)->dayOfWeek);
+        if ($window === null) {
+            return [[], null];
+        }
+
+        [$openMinute, $closeMinute] = $window;
+        $options = [];
+
+        for ($minute = $openMinute; $minute < 1440 && $minute < $closeMinute; $minute += self::SLOT_STEP_MINUTES) {
+            $time = sprintf('%02d:%02d', intdiv($minute, 60), $minute % 60);
+            $options[] = [
+                'time' => $time,
+                'label' => Carbon::parse($time)->format('g:i A'),
+                'minute' => $minute,
+            ];
+        }
+
+        return [$options, $closeMinute];
+    }
+
+    /**
+     * Every service an added card may pick, with the per-service personnel
+     * pool for THIS date, variant options, duration, price and down payment.
+     * Same source/look as the site-wide booking modal: active, regular
+     * (non-package) services bookable in this flow.
+     *
+     * @param  list<int|string>  $locationTypes
+     * @return array<int, array<string, mixed>>
+     */
+    private function serviceCatalog(string $date, array $locationTypes): array
+    {
+        if ($locationTypes === []) {
+            $locationTypes = ServiceLocationType::bookableAtBranch();
+        }
+
+        return Service::query()
+            ->where('status', 'active')
+            ->whereIn('service_location_type', $locationTypes)
+            ->whereNull('deleted_at')
+            ->with('variants')
+            ->orderBy('name')
+            ->get()
+            ->reject(fn (Service $candidate) => $candidate->isPackageForExtras())
+            ->mapWithKeys(function (Service $candidate) use ($date) {
+                $personnel = $this->eligiblePersonnel($date, $candidate)
+                    ->map(fn (User $member) => ['id' => $member->id, 'name' => $member->name])
+                    ->values()
+                    ->all();
+
+                return [$candidate->id => [
+                    'id' => $candidate->id,
+                    'name' => $candidate->name,
+                    'category' => $candidate->category,
+                    'price' => (float) $candidate->price,
+                    'down_payment' => $candidate->down_payment !== null ? (float) $candidate->down_payment : null,
+                    'duration_minutes' => (int) $candidate->duration_minutes,
+                    'image_url' => $candidate->image_url,
+                    'variants' => $candidate->variants->map(fn ($option) => [
+                        'id' => $option->id,
+                        'label' => $option->label,
+                        'price' => (float) $option->price,
+                    ])->values()->all(),
+                    'personnel' => $personnel,
+                ]];
+            })
+            ->all();
     }
 
     /**
@@ -1079,11 +1075,11 @@ class BookingController extends Controller
      *
      * @param  list<int>  $userIds
      */
-    private function buildSlotGridForStaff(Service $service, string $date, array $userIds, ?int $guests = null, int $extraDuration = 0): array
+    private function buildSlotGridForStaff(Service $service, string $date, array $userIds, ?int $guests = null): array
     {
         $grids = [];
         foreach ($userIds as $userId) {
-            $grids[] = collect($this->buildSlotGrid($service, $date, (string) $userId, collect($userIds), $guests, $extraDuration))
+            $grids[] = collect($this->buildSlotGrid($service, $date, (string) $userId, collect($userIds), $guests))
                 ->keyBy('time');
         }
 
@@ -1186,14 +1182,12 @@ class BookingController extends Controller
      *
      * Past times are dropped when $date is today.
      */
-    private function buildSlotGrid(Service $service, string $date, string $personnelParam, $eligibleIds, ?int $guests = null, int $extraDuration = 0): array
+    private function buildSlotGrid(Service $service, string $date, string $personnelParam, $eligibleIds, ?int $guests = null): array
     {
         $duration = $service->duration_minutes ?: 30;
-        // The whole visit — main service plus every extra — is what has to
-        // fit inside business hours and inside a blocked window. Capacity
-        // pools stay per service (the main service's own duration), exactly
-        // as before.
-        $visitDuration = $duration + max(0, $extraDuration);
+        // Every service has its own window now — the main card only needs to
+        // fit its OWN duration, never a sequential chain of extras.
+        $visitDuration = $duration;
         $dayOfWeek = (int) Carbon::parse($date)->dayOfWeek;
 
         // Business-hours window for this day, via the ONE shared rule
@@ -1417,9 +1411,9 @@ class BookingController extends Controller
      * Extras carried through the wizard's query string. Display-only at this
      * stage: an unparseable/invalid row is simply dropped, never trusted —
      * store() re-resolves everything from the DB. Rows are carried as
-     * extras[N][service_id|variant_label|personnel_id].
+     * extras[N][service_id|variant_label|personnel_id|start_time].
      *
-     * @return list<array{service: Service, variant_label: string|null, price: float, personnel_id: int|null}>
+     * @return list<array{service: Service, variant_label: string|null, price: float, personnel_id: int|null, start_time: string|null}>
      */
     private function extrasFromRequest(Request $request): array
     {
@@ -1450,7 +1444,7 @@ class BookingController extends Controller
      * Resolved extras back in query-string row shape, so a redirect or a
      * wizard link can carry them forward without exposing prices.
      *
-     * @param  list<array{service: Service, variant_label: string|null, price: float, personnel_id: int|null}>  $extras
+     * @param  list<array{service: Service, variant_label: string|null, price: float, personnel_id: int|null, start_time: string|null}>  $extras
      * @return list<array<string, mixed>>
      */
     private function extrasQueryRows(array $extras): array
@@ -1459,6 +1453,7 @@ class BookingController extends Controller
             'service_id' => $extra['service']->id,
             'variant_label' => $extra['variant_label'],
             'personnel_id' => $extra['personnel_id'],
+            'start_time' => $extra['start_time'],
         ], fn ($value) => $value !== null && $value !== ''))->values()->all();
     }
 

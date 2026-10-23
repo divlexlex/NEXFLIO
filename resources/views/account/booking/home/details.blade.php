@@ -40,12 +40,17 @@
                     <form method="GET" action="{{ route('account.booking.home.review') }}">
                         @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? [], 'extras' => $extras, 'address' => $address])
 
-                        @if(! empty($extras))
+                        @foreach(($extras ?? []) as $extra)
                             <div class="nx-review-row">
-                                <span class="nx-review-label">Extra services</span>
-                                <span class="nx-review-value">{{ collect($extras)->map(fn ($extra) => $extra['service']->name . ($extra['variant_label'] ? ' — ' . $extra['variant_label'] : '') . ' (₱' . number_format($extra['price'], 2) . ')')->implode(', ') }}</span>
+                                <span class="nx-review-label">Extra service</span>
+                                <span class="nx-review-value">
+                                    {{ $extra['service']->name }}@if($extra['variant_label']) — {{ $extra['variant_label'] }}@endif
+                                    · {{ $extra['personnel_name'] ?? 'No preferred personnel' }}
+                                    · {{ \App\Support\BookingExtras::startTimeLabel($extra['start_time'] ?? null) ?? 'Time to confirm' }}
+                                    · ₱{{ number_format($extra['price'], 2) }}
+                                </span>
                             </div>
-                        @endif
+                        @endforeach
 
                         @if($service->variants->isEmpty())
                             <p class="small nx-text-secondary mt-2 mb-3">
@@ -57,7 +62,7 @@
                         <textarea name="notes" id="notes" rows="4" maxlength="1000" class="form-control" placeholder="Landmarks, gate/unit access instructions, or anything the specialist should know?">{{ $notes }}</textarea>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                            <a href="{{ route('account.booking.home.schedule', array_merge(['service' => $service->id, 'date' => $date, 'extras' => ! empty($extras) ? collect($extras)->map(fn ($extra) => array_filter(['service_id' => $extra['service']->id, 'variant_label' => $extra['variant_label'], 'personnel_id' => $extra['personnel_id']], fn ($value) => $value !== null && $value !== ''))->all() : null], $address)) }}" class="nx-btn nx-btn-outline">
+                            <a href="{{ route('account.booking.home.schedule', array_merge(['service' => $service->id, 'date' => $date, 'extras' => ! empty($extras) ? collect($extras)->map(fn ($extra) => array_filter(['service_id' => $extra['service']->id, 'variant_label' => $extra['variant_label'], 'personnel_id' => $extra['personnel_id'], 'start_time' => $extra['start_time'] ?? null], fn ($value) => $value !== null && $value !== ''))->all() : null], $address)) }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

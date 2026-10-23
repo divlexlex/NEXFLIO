@@ -143,8 +143,8 @@ class DownPaymentPerServiceTest extends TestCase
             route('account.booking.branch.store'),
             $this->payload($main, [
                 'extras' => [
-                    ['service_id' => $firstExtra->id],
-                    ['service_id' => $secondExtra->id],
+                    ['service_id' => $firstExtra->id, 'start_time' => '15:00'],
+                    ['service_id' => $secondExtra->id, 'start_time' => '16:00'],
                 ],
             ])
         )->assertRedirect()->assertSessionHasNoErrors();
@@ -211,18 +211,28 @@ class DownPaymentPerServiceTest extends TestCase
         $this->assertStringContainsString('data-down-payment="175.25"', $html);
     }
 
-    public function test_service_detail_shows_main_and_extra_down_payments(): void
+    public function test_service_detail_shows_main_down_payment_and_schedule_catalog_has_extras(): void
     {
         $main = $this->service('Detail DP Main', 500, 20);
         $this->service('Detail DP Extra', 300, 50.5);
         $this->service('Detail No DP Extra', 200, null);
 
-        $html = $this->actingAs($this->client)
+        $detail = $this->actingAs($this->client)
             ->get(route('account.booking.branch.service.show', $main->id))
+            ->assertOk()
+            ->assertSee('Down payment: ₱20.00')
+            ->assertDontSee('data-extra-service', false);
+
+        // The extras catalog now lives on the Schedule step.
+        $html = $this->actingAs($this->client)
+            ->get(route('account.booking.branch.schedule', [
+                'service' => $main->id,
+                'date' => $this->date,
+                'personnel' => 'any',
+            ]))
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('Down payment: ₱20.00', $html);
         $this->assertStringContainsString('"down_payment":50.5', $html);
         $this->assertStringContainsString('"down_payment":null', $html);
 

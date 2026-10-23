@@ -120,10 +120,10 @@ class WeeklyRosterBookingTest extends TestCase
             'service' => $this->service->id, 'date' => $date, 'personnel' => (string) $this->amStaff->id,
         ]))->assertOk()->getContent();
 
-        $this->assertStringContainsString('time=10%3A00', $html);
-        $this->assertStringContainsString('time=15%3A30', $html);
-        $this->assertStringNotContainsString('time=16%3A00', $html);
-        $this->assertStringNotContainsString('time=20%3A30', $html);
+        $this->assertStringContainsString('data-slot-time="10:00"', $html);
+        $this->assertStringContainsString('data-slot-time="15:30"', $html);
+        $this->assertStringNotContainsString('data-slot-time="16:00"', $html);
+        $this->assertStringNotContainsString('data-slot-time="20:30"', $html);
     }
 
     // A week with no roster: everyone listed, business-hours slots.
@@ -154,8 +154,8 @@ class WeeklyRosterBookingTest extends TestCase
         ]))->assertOk()->getContent();
 
         // No StaffSchedule rows exist, so business hours rule the day.
-        $this->assertStringContainsString('time=16%3A00', $slotsHtml);
-        $this->assertStringContainsString('time=20%3A00', $slotsHtml);
+        $this->assertStringContainsString('data-slot-time="16:00"', $slotsHtml);
+        $this->assertStringContainsString('data-slot-time="20:00"', $slotsHtml);
     }
 
     // An empty save clears the roster; the week falls back to the legacy

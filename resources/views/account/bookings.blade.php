@@ -86,7 +86,7 @@
                                     </div>
                                     @if($appointment->addedServices->isNotEmpty())
                                         <p class="small nx-text-secondary mb-1">
-                                            <i class="bi bi-plus-circle me-2"></i>{{ $appointment->addedServices->map(fn ($added) => $added->displayName())->implode(', ') }}
+                                            <i class="bi bi-plus-circle me-2"></i>{{ $appointment->addedServices->map(fn ($added) => $added->displayName() . ($added->personnel ? ' with ' . $added->personnel->name : '') . ($added->startTimeLabel() ? ' at ' . $added->startTimeLabel() : ''))->implode(', ') }}
                                         </p>
                                     @endif
                                     <p class="small nx-text-secondary mb-1">

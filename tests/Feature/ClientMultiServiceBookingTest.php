@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\AppointmentAddedService;
 use App\Models\Service;
 use App\Models\User;
+use App\Support\ServiceCapacity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -84,8 +86,8 @@ class ClientMultiServiceBookingTest extends TestCase
         $this->store([
             'service_id' => $main->id,
             'extras' => [
-                ['service_id' => $manicure->id],
-                ['service_id' => $tiered->id, 'variant_label' => 'Deluxe'],
+                ['service_id' => $manicure->id, 'start_time' => '14:00'],
+                ['service_id' => $tiered->id, 'variant_label' => 'Deluxe', 'start_time' => '15:00'],
             ],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
@@ -105,15 +107,33 @@ class ClientMultiServiceBookingTest extends TestCase
         $byService = $appointment->addedServices->keyBy('service_id');
         $this->assertEquals(399, (float) $byService[$manicure->id]->price);
         $this->assertNull($byService[$manicure->id]->variant_label);
+        $this->assertSame('14:00', $byService[$manicure->id]->start_time->format('H:i'));
         $this->assertEquals(1200, (float) $byService[$tiered->id]->price);
         $this->assertSame('Deluxe', $byService[$tiered->id]->variant_label);
+        $this->assertSame('15:00', $byService[$tiered->id]->start_time->format('H:i'));
 
-        // Wizard UI: the "+ Add another service" control is offered and the
-        // extras catalog never offers packages.
+        // Product rule: extras are no longer picked on the service-detail step.
+        // The list builder (add-another popups) lives on the Schedule step and
+        // its catalog never offers packages.
         $this->actingAs($this->client)
             ->get(route('account.booking.branch.service.show', $main->id))
             ->assertOk()
+            ->assertDontSee('Avail Services')
+            ->assertDontSee('data-extra-service', false);
+
+        $this->actingAs($this->client)
+            ->get(route('account.booking.branch.schedule', [
+                'service' => $main->id,
+                'date' => $this->date,
+                'personnel' => 'any',
+            ]))
+            ->assertOk()
             ->assertSee('Add another service')
+            ->assertSee('id="servicePickerModal"', false)
+            ->assertSee('id="addAnotherModal"', false)
+            ->assertSee('id="svcCardMain"', false)
+            ->assertSee('id="scheduleActionBar"', false)
+            ->assertSee('data-personnel-name', false)
             ->assertDontSee('"name":"Perfect Package"', false);
     }
 
@@ -130,8 +150,8 @@ class ClientMultiServiceBookingTest extends TestCase
 
         $this->store([
             'extras' => [
-                ['service_id' => $manicure->id],
-                ['service_id' => $facial->id],
+                ['service_id' => $manicure->id, 'start_time' => '14:00'],
+                ['service_id' => $facial->id, 'start_time' => '15:00'],
             ],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
@@ -149,8 +169,8 @@ class ClientMultiServiceBookingTest extends TestCase
             'variant_id' => $couple->id,
             'start_time' => '14:00',
             'extras' => [
-                ['service_id' => $manicure->id],
-                ['service_id' => $facial->id],
+                ['service_id' => $manicure->id, 'start_time' => '15:00'],
+                ['service_id' => $facial->id, 'start_time' => '16:00'],
             ],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
@@ -168,7 +188,7 @@ class ClientMultiServiceBookingTest extends TestCase
 
         // Client-sent price is ignored.
         $this->store([
-            'extras' => [['service_id' => $manicure->id, 'price' => 1]],
+            'extras' => [['service_id' => $manicure->id, 'start_time' => '14:00', 'price' => 1]],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $appointment = Appointment::latest('id')->firstOrFail();
@@ -177,7 +197,7 @@ class ClientMultiServiceBookingTest extends TestCase
         // Package as an extra is refused.
         $this->store([
             'start_time' => '15:00',
-            'extras' => [['service_id' => $package->id, 'variant_label' => 'Solo']],
+            'extras' => [['service_id' => $package->id, 'variant_label' => 'Solo', 'start_time' => '15:00']],
         ])->assertSessionHasErrors('extras.0.service_id');
 
         $this->assertSame(1, Appointment::count());
@@ -189,34 +209,35 @@ class ClientMultiServiceBookingTest extends TestCase
 
         $this->store([
             'start_time' => '16:00',
-            'extras' => [['service_id' => $tiered->id, 'variant_label' => 'Nope']],
+            'extras' => [['service_id' => $tiered->id, 'variant_label' => 'Nope', 'start_time' => '16:00']],
         ])->assertSessionHasErrors('extras.0.variant_label');
 
         $this->assertSame(1, Appointment::count());
         $this->assertSame(1, AppointmentAddedService::count());
     }
 
-    // 4. Visit length = main + Σ extras drives the business-hours window.
-    public function test_total_duration_past_closing_is_refused_and_shorter_extra_succeeds(): void
+    // 4. Each service's OWN window must fit closing time. The extras no
+    // longer extend the main service's window; they are validated separately.
+    public function test_each_service_window_is_validated_against_closing(): void
     {
         $long = $this->service('Extra Long Massage', 'Massage', 500, 120);
         $short = $this->service('Extra Short Massage', 'Massage', 300, 30);
         $staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
 
-        // 60 + 120 = 180 mins from 20:00 -> 23:00, past the 22:00 close.
+        // Main 20:00-21:00 is fine, but its own 21:00 start runs to 23:00.
         $this->store([
             'personnel_id' => (string) $staff->id,
             'start_time' => '20:00',
-            'extras' => [['service_id' => $long->id]],
-        ])->assertSessionHasErrors('start_time');
+            'extras' => [['service_id' => $long->id, 'start_time' => '21:00']],
+        ])->assertSessionHasErrors('extras.0.start_time');
 
         $this->assertSame(0, Appointment::count());
 
-        // 60 + 30 = 90 mins from 20:00 -> 21:30, fits.
+        // Same main, but the short extra at 21:00 ends 21:30, before closing.
         $this->store([
             'personnel_id' => (string) $staff->id,
             'start_time' => '20:00',
-            'extras' => [['service_id' => $short->id]],
+            'extras' => [['service_id' => $short->id, 'start_time' => '21:00']],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame(1, Appointment::count());
@@ -237,7 +258,7 @@ class ClientMultiServiceBookingTest extends TestCase
             'variant_id' => $couple->id,
             'method' => 'cash',
             'payment_proof' => null,
-            'extras' => [['service_id' => $manicure->id]],
+            'extras' => [['service_id' => $manicure->id, 'start_time' => '14:00']],
         ])->assertSessionHasErrors('method');
 
         $this->assertSame(0, Appointment::count());
@@ -248,7 +269,7 @@ class ClientMultiServiceBookingTest extends TestCase
         $this->store([
             'method' => 'cash',
             'payment_proof' => null,
-            'extras' => [['service_id' => $manicure->id]],
+            'extras' => [['service_id' => $manicure->id, 'start_time' => '14:00']],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $appointment = Appointment::latest('id')->firstOrFail();
@@ -288,7 +309,107 @@ class ClientMultiServiceBookingTest extends TestCase
         $this->assertSame(0, $homeAppointment->addedServices()->count());
     }
 
-    // 7. My Bookings lists every extra; the Payments card gives booking
+    // 7. Each extra keeps its own personnel and start time, and the exact-slot
+    // conflict check runs against the extra's own window.
+    public function test_extra_personnel_and_start_time_are_persisted_and_collision_checked(): void
+    {
+        $staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
+        $main = Service::where('name', 'Swedish Massage')->firstOrFail();
+        $extra = $this->service('Extra Focus Massage', 'Massage', 300, 30);
+
+        $this->store([
+            'personnel_id' => (string) $staff->id,
+            'start_time' => '13:00',
+            'extras' => [[
+                'service_id' => $extra->id,
+                'personnel_id' => $staff->id,
+                'start_time' => '14:00',
+            ]],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $row = Appointment::latest('id')->firstOrFail()->addedServices()->firstOrFail();
+        $this->assertSame($staff->id, $row->personnel_id);
+        $this->assertSame('14:00', $row->start_time->format('H:i'));
+
+        // A second request whose extra collides with the first main service's
+        // staff/window is rejected on the extra's own personnel key.
+        $this->store([
+            'start_time' => '15:00',
+            'extras' => [[
+                'service_id' => $extra->id,
+                'personnel_id' => $staff->id,
+                'start_time' => '13:00',
+            ]],
+        ])->assertSessionHasErrors([
+            'extras.0.personnel_id' => 'That slot was just taken.',
+        ]);
+
+        $this->assertSame(1, Appointment::count());
+        $this->assertSame(1, AppointmentAddedService::count());
+        $this->assertSame($main->id, Appointment::firstOrFail()->service_id);
+    }
+
+    // 8. A booking-added row occupies branch capacity at ITS own window, not
+    // just the parent appointment's window.
+    public function test_booking_added_service_occupies_its_own_capacity_window(): void
+    {
+        $main = $this->service('Capacity Facial Main', 'Facial', 500, 30);
+        $extra = $this->service('Capacity Facial Extra', 'Facial', 300, 30);
+
+        $this->store([
+            'service_id' => $main->id,
+            'start_time' => '10:00',
+            'extras' => [['service_id' => $extra->id, 'start_time' => '12:00']],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $response = $this->store([
+            'service_id' => $main->id,
+            'start_time' => '12:00',
+        ]);
+
+        $response->assertSessionHasErrors([
+            'start_time' => ServiceCapacity::denialMessage($main),
+        ]);
+        $this->assertSame(1, Appointment::count());
+    }
+
+    // 9. Legacy walk-in creation and Payments rows have NULL start_time and
+    // must never claim their own capacity window.
+    public function test_creation_and_payment_rows_without_start_time_do_not_consume_capacity(): void
+    {
+        $facial = $this->service('Capacity Legacy Facial', 'Facial', 300, 30);
+
+        $appointment = Appointment::create([
+            'user_id' => $this->client->id,
+            'service_id' => $facial->id,
+            'personnel_id' => null,
+            'appointment_date' => $this->date,
+            'start_time' => '10:00',
+            'status' => AppointmentStatus::Booked,
+        ]);
+
+        foreach (['creation', 'payment'] as $source) {
+            AppointmentAddedService::create([
+                'appointment_id' => $appointment->id,
+                'service_id' => $facial->id,
+                'price' => 300,
+                'personnel_id' => null,
+                'start_time' => null,
+                'added_by' => $this->manager->id,
+                'source' => $source,
+            ]);
+        }
+
+        $this->store([
+            'service_id' => $facial->id,
+            'start_time' => '12:00',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame(2, Appointment::count());
+        $this->assertSame(2, AppointmentAddedService::whereNull('start_time')->count());
+    }
+
+    // 10. My Bookings lists every extra; the Payments card gives booking
     // extras no "Added" tag and no DP sub-line.
     public function test_booking_extras_render_in_my_bookings_and_without_payment_tags(): void
     {
@@ -297,8 +418,8 @@ class ClientMultiServiceBookingTest extends TestCase
 
         $this->store([
             'extras' => [
-                ['service_id' => $manicure->id],
-                ['service_id' => $facial->id],
+                ['service_id' => $manicure->id, 'start_time' => '14:00'],
+                ['service_id' => $facial->id, 'start_time' => '15:00'],
             ],
         ])->assertRedirect()->assertSessionHasNoErrors();
 

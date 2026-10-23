@@ -169,10 +169,10 @@ class BusinessHoursOvernightTest extends TestCase
 
         $html = $this->slotHtml($this->nextWeekday(1), $service, $staff); // Monday
 
-        $this->assertStringContainsString('time=21%3A00', $html); // 9:00 PM — last start
-        $this->assertStringNotContainsString('time=21%3A30', $html); // would finish after 10 PM
-        $this->assertStringNotContainsString('time=22%3A00', $html); // not at/after closing
-        $this->assertStringNotContainsString('time=10%3A00', $html); // opens at noon, not 10 AM
+        $this->assertStringContainsString('data-slot-time="21:00"', $html); // 9:00 PM — last start
+        $this->assertStringNotContainsString('data-slot-time="21:30"', $html); // would finish after 10 PM
+        $this->assertStringNotContainsString('data-slot-time="22:00"', $html); // not at/after closing
+        $this->assertStringNotContainsString('data-slot-time="10:00"', $html); // opens at noon, not 10 AM
     }
 
     public function test_two_hour_service_last_start_is_8pm(): void
@@ -182,8 +182,8 @@ class BusinessHoursOvernightTest extends TestCase
 
         $html = $this->slotHtml($this->nextWeekday(1), $service, $staff);
 
-        $this->assertStringContainsString('time=20%3A00', $html); // 8:00 PM — last start
-        $this->assertStringNotContainsString('time=20%3A30', $html); // would finish after 10 PM
+        $this->assertStringContainsString('data-slot-time="20:00"', $html); // 8:00 PM — last start
+        $this->assertStringNotContainsString('data-slot-time="20:30"', $html); // would finish after 10 PM
     }
 
     public function test_weekend_slots_open_in_the_morning(): void
@@ -193,9 +193,9 @@ class BusinessHoursOvernightTest extends TestCase
 
         $html = $this->slotHtml($this->nextWeekday(6), $service, $staff); // Saturday
 
-        $this->assertStringContainsString('time=10%3A00', $html);
-        $this->assertStringContainsString('time=21%3A00', $html);
-        $this->assertStringNotContainsString('time=22%3A00', $html);
+        $this->assertStringContainsString('data-slot-time="10:00"', $html);
+        $this->assertStringContainsString('data-slot-time="21:00"', $html);
+        $this->assertStringNotContainsString('data-slot-time="22:00"', $html);
     }
 
     public function test_overnight_hours_still_allow_late_starts_when_configured(): void
@@ -207,8 +207,8 @@ class BusinessHoursOvernightTest extends TestCase
 
         $html = $this->slotHtml($this->nextWeekday(1), $service, $staff);
 
-        $this->assertStringContainsString('time=23%3A30', $html);
-        $this->assertStringNotContainsString('time=00%3A00', $html);
+        $this->assertStringContainsString('data-slot-time="23:30"', $html);
+        $this->assertStringNotContainsString('data-slot-time="00:00"', $html);
     }
 
     public function test_same_day_close_last_start(): void
@@ -219,8 +219,8 @@ class BusinessHoursOvernightTest extends TestCase
 
         $html = $this->slotHtml($this->nextWeekday(3), $service, $staff); // Wednesday
 
-        $this->assertStringContainsString('time=17%3A00', $html); // 5:00 PM — last start
-        $this->assertStringNotContainsString('time=17%3A30', $html);
+        $this->assertStringContainsString('data-slot-time="17:00"', $html); // 5:00 PM — last start
+        $this->assertStringNotContainsString('data-slot-time="17:30"', $html);
     }
 
     // ---------- D) Lock-after-save ----------

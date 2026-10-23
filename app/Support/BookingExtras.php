@@ -20,9 +20,9 @@ use Illuminate\Validation\ValidationException;
  *  - its personnel must follow the same category→position eligibility rule
  *    the main service uses.
  *
- * The visit runs on the main booking's date and start time, so its total
- * duration is the main service's duration plus every extra's duration — the
- * value the business-hours window check must use.
+ * Every service in the visit has its OWN personnel and start time, validated
+ * as separate segments by the wizard request. There is no combined visit
+ * duration anymore; `totalDuration()` remains only for legacy callers.
  */
 class BookingExtras
 {
@@ -32,7 +32,7 @@ class BookingExtras
      * offending row so the wizard shows its normal inline error.
      *
      * @param  array<int, mixed>  $rows
-     * @return list<array{service: Service, variant_label: string|null, price: float, down_payment: float, personnel_id: int|null}>
+     * @return list<array{service: Service, variant_label: string|null, price: float, down_payment: float, personnel_id: int|null, personnel_name: string|null, start_time: string|null}>
      *
      * @throws ValidationException
      */
@@ -56,7 +56,7 @@ class BookingExtras
      * can show its normal inline error for that row.
      *
      * @param  array<string, mixed>  $row
-     * @return array{service: Service, variant_label: string|null, price: float, down_payment: float, personnel_id: int|null}
+     * @return array{service: Service, variant_label: string|null, price: float, down_payment: float, personnel_id: int|null, personnel_name: string|null, start_time: string|null}
      *
      * @throws ValidationException
      */
@@ -99,6 +99,12 @@ class BookingExtras
             ? (int) $row['personnel_id']
             : null;
 
+        // Every service in the new multi-service model has its own start time.
+        // It is carried through resolution untouched (validated by the wizard
+        // request); a missing/malformed value stays null so the schedule step
+        // can still render a tampered row's other fields.
+        $startTime = static::normaliseStartTime($row['start_time'] ?? null);
+
         $allowedPositions = Position::namesForServiceCategory((string) $service->category);
         if ($personnelId !== null) {
             if ($allowedPositions === []) {
@@ -118,13 +124,46 @@ class BookingExtras
             }
         }
 
+        $personnelName = $personnelId !== null
+            ? User::whereKey($personnelId)->value('name')
+            : null;
+
         return [
             'service' => $service,
             'variant_label' => $variantLabel,
             'price' => $price,
             'down_payment' => static::downPaymentForService($service, $price),
             'personnel_id' => $personnelId,
+            'personnel_name' => $personnelName,
+            'start_time' => $startTime,
         ];
+    }
+
+    /** Optional per-extra 'H:i' clock time, normalised or null when absent. */
+    private static function normaliseStartTime(mixed $value): ?string
+    {
+        if (! is_string($value) || ! preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', trim($value), $parts)) {
+            return null;
+        }
+
+        $hour = (int) $parts[1];
+        $minute = (int) $parts[2];
+
+        if ($hour > 23 || $minute > 59) {
+            return null;
+        }
+
+        return sprintf('%02d:%02d', $hour, $minute);
+    }
+
+    /** Human label for a per-extra start time, or null when absent. */
+    public static function startTimeLabel(?string $startTime): ?string
+    {
+        if ($startTime === null || $startTime === '') {
+            return null;
+        }
+
+        return \Illuminate\Support\Carbon::parse($startTime)->format('g:i A');
     }
 
     /**

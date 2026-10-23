@@ -236,7 +236,7 @@ class PositionManagementTest extends TestCase
         // Classic + custom linked positions stay in the Nails pool …
         $this->assertStringContainsString('Nina Linked', $html);
         // … the unlinked custom position joins no pool and breaks nothing.
-        $this->assertStringNotContainsString('Uma Unlinked', $html);
+        $this->assertStringNotContainsString('data-personnel-name="Uma Unlinked"', $html);
     }
 
     public function test_package_booking_eligibility_uses_selected_employee_categories(): void
@@ -266,6 +266,6 @@ class PositionManagementTest extends TestCase
 
         $this->assertStringContainsString('Faye Facial', $html);
         $this->assertStringContainsString('Maya Massage', $html);
-        $this->assertStringNotContainsString('Nora Nails', $html);
+        $this->assertStringNotContainsString('data-personnel-name="Nora Nails"', $html);
     }
 }

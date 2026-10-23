@@ -24,7 +24,7 @@
                     <div class="row g-2">
                         <div class="col-sm-6 col-lg-4">
                             <label class="nx-select-card d-flex align-items-center gap-2 {{ $selected === 'any' ? 'is-selected' : '' }}">
-                                <input type="radio" name="staff[{{ $position->id }}]" value="any"
+                                <input type="radio" name="staff[{{ $position->id }}]" value="any" data-personnel-name="No preferred personnel"
                                        {{ $selected === 'any' ? 'checked' : '' }}
                                        onchange="this.form.submit()">
                                 <span>No preference<br><small class="nx-text-secondary">Manager assigns</small></span>
@@ -34,6 +34,7 @@
                             <div class="col-sm-6 col-lg-4">
                                 <label class="nx-select-card d-flex align-items-center gap-2 {{ (string) $selected === (string) $person->id ? 'is-selected' : '' }}">
                                     <input type="radio" name="staff[{{ $position->id }}]" value="{{ $person->id }}"
+                                           data-personnel-name="{{ $person->name }}"
                                            {{ (string) $selected === (string) $person->id ? 'checked' : '' }}
                                            onchange="this.form.submit()">
                                     <span>{{ $person->name }}</span>
@@ -52,18 +53,18 @@
         <div class="row g-2">
             <div class="col-sm-6 col-lg-4">
                 <label class="nx-select-card d-flex align-items-center gap-2 {{ $personnelParam === 'any' ? 'is-selected' : '' }}">
-                    <input type="radio" name="personnel" value="any" {{ $personnelParam === 'any' ? 'checked' : '' }} onchange="this.form.submit()">
+                    <input type="radio" name="personnel" value="any" data-personnel-name="No preferred personnel" {{ $personnelParam === 'any' ? 'checked' : '' }} onchange="this.form.submit()">
                     <span>No preferred personnel<br><small class="nx-text-secondary">Manager will assign staff</small></span>
                 </label>
             </div>
             @foreach($eligiblePersonnel as $person)
                 <div class="col-sm-6 col-lg-4">
                     <label class="nx-select-card d-flex align-items-center gap-2 {{ (string) $personnelParam === (string) $person->id ? 'is-selected' : '' }}">
-                        <input type="radio" name="personnel" value="{{ $person->id }}" {{ (string) $personnelParam === (string) $person->id ? 'checked' : '' }} onchange="this.form.submit()">
+                        <input type="radio" name="personnel" value="{{ $person->id }}" data-personnel-name="{{ $person->name }}" {{ (string) $personnelParam === (string) $person->id ? 'checked' : '' }} onchange="this.form.submit()">
                         <span>{{ $person->name }}</span>
                     </label>
                 </div>
             @endforeach
         </div>
-    @endif
+@endif
 @endif
