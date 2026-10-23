@@ -104,14 +104,18 @@
                                                     <span>{{ $appointment->appointment_date->format('M j, Y') }} · {{ \Carbon\Carbon::parse($appointment->start_time)->format('g:i A') }}</span>
                                                 </div>
                                                 <div class="nx-ms-hovercard-row">
-                                                    <span>Duration</span>
-                                                    <span>{{ $appointment->service?->duration_minutes }} mins</span>
+                                                    <span>Time</span>
+                                                    <span>{{ \Carbon\Carbon::parse($appointment->start_time)->format('g:i A') }} – {{ \Carbon\Carbon::parse($appointment->start_time)->addMinutes($appointment->service?->duration_minutes ?? 0)->format('g:i A') }}</span>
                                                 </div>
+                                                @php($cursor = \Carbon\Carbon::parse($appointment->start_time)->addMinutes($appointment->service?->duration_minutes ?? 0))
                                                 @foreach($appointment->addedServices as $added)
+                                                    @php($addedStart = !empty($added->start_time) ? \Carbon\Carbon::parse($added->start_time) : $cursor)
+                                                    @php($addedEnd = $addedStart->copy()->addMinutes($added->service?->duration_minutes ?? 0))
                                                     <div class="nx-ms-hovercard-row">
                                                         <span>{{ $added->displayName() }}</span>
-                                                        <span>{{ $added->service?->duration_minutes }} mins</span>
+                                                        <span>{{ $addedStart->format('g:i A') }} – {{ $addedEnd->format('g:i A') }}</span>
                                                     </div>
+                                                    @php($cursor = $addedEnd)
                                                 @endforeach
                                                 <div class="nx-ms-hovercard-row">
                                                     <span>Personnel</span>
