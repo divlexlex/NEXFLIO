@@ -448,10 +448,51 @@ class BookingController extends Controller
 
     public function homeServiceShow($id)
     {
-        $service = Service::bookableAtHome()->findOrFail($id);
+        $service = Service::bookableAtHome()->with(['variants', 'positions'])->findOrFail($id);
+
+        // Extra services the client may add to the same Home Service visit:
+        // real active home-bookable REGULAR services (never packages).
+        $extraServices = Service::bookableAtHome()
+            ->with('variants')
+            ->orderBy('name')
+            ->get()
+            ->reject(fn (Service $candidate) => $candidate->isPackageForExtras())
+            ->map(fn (Service $candidate) => [
+                'id' => $candidate->id,
+                'name' => $candidate->name,
+                'category' => $candidate->category,
+                'price' => (float) $candidate->price,
+                'down_payment' => $candidate->down_payment !== null ? (float) $candidate->down_payment : null,
+                'duration_minutes' => (int) $candidate->duration_minutes,
+                'positions' => Position::namesForServiceCategory((string) $candidate->category),
+                'variants' => $candidate->variants->map(fn ($variant) => [
+                    'label' => $variant->label,
+                    'price' => (float) $variant->price,
+                ])->values(),
+            ])
+            ->values();
+
+        // Eligibility pool for the extras' personnel picks — same
+        // category→position mapping, active non-break staff.
+        $staffCatalog = User::where('role_id', User::ROLE_STAFF)
+            ->whereHas('staffProfile', fn ($query) => $query
+                ->where('employment_status', 'active')
+                ->where('is_on_break', false))
+            ->with('staffProfile:id,user_id,position')
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (User $member) => [
+                'id' => $member->id,
+                'name' => $member->name,
+                'position' => $member->staffProfile?->position,
+            ])
+            ->values();
 
         return view('account.booking.home.service-detail', [
             'service' => $service,
+            'extraServices' => $extraServices,
+            'staffCatalog' => $staffCatalog,
+            'eligiblePositionNames' => Position::namesForServiceCategory($service->category),
         ]);
     }
 
@@ -475,6 +516,7 @@ class BookingController extends Controller
 
         return view('account.booking.home.address', [
             'service' => $service,
+            'homeExtrasQuery' => $request->query('extras', []),
             'client' => $user,
             'defaultAddress' => $defaultAddress,
             'sourceClientAddressId' => $request->query('source_client_address_id', $defaultAddress?->id),
@@ -483,6 +525,7 @@ class BookingController extends Controller
             'cityMunicipality' => $request->query('city_municipality', $defaultAddress?->city_municipality),
             'province' => $request->query('province', $defaultAddress?->province),
             'postalCode' => $request->query('postal_code', $defaultAddress?->postal_code),
+            'extras' => $this->extrasFromRequest($request),
         ]);
     }
 
@@ -501,8 +544,10 @@ class BookingController extends Controller
         $date = $request->query('date') ?: now()->toDateString();
         $date = $this->clampDate($date);
 
+        $extras = $this->extrasFromRequest($request);
+
         return view('account.booking.home.schedule', array_merge(
-            $this->scheduleViewData($request, $service, $date),
+            $this->scheduleViewData($request, $service, $date, null, $extras),
             ['address' => $this->addressFieldsFromRequest($request)]
         ));
     }
@@ -519,7 +564,9 @@ class BookingController extends Controller
             return $addressError;
         }
 
-        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.home.schedule');
+        $extras = $this->extrasFromRequest($request);
+
+        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.home.schedule', $extras);
         if ($scheduleError) {
             return $scheduleError;
         }
@@ -536,6 +583,7 @@ class BookingController extends Controller
             'personnelLabel' => $this->personnelLabelFor($service, $request),
             'client' => Auth::user(),
             'notes' => $request->query('notes'),
+            'extras' => $extras,
         ]);
     }
 
@@ -551,7 +599,9 @@ class BookingController extends Controller
             return $addressError;
         }
 
-        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.home.schedule');
+        $extras = $this->extrasFromRequest($request);
+
+        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.home.schedule', $extras);
         if ($scheduleError) {
             return $scheduleError;
         }
@@ -568,7 +618,8 @@ class BookingController extends Controller
             'personnelLabel' => $this->personnelLabelFor($service, $request),
             'notes' => $request->query('notes'),
             'client' => Auth::user(),
-            ...$this->feeQuote($service, null),
+            'extras' => $extras,
+            ...$this->feeQuote($service, null, $extras),
         ]);
     }
 
@@ -584,7 +635,9 @@ class BookingController extends Controller
             return $addressError;
         }
 
-        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.home.schedule');
+        $extras = $this->extrasFromRequest($request);
+
+        $scheduleError = $this->validateScheduleSelection($request, 'account.booking.home.schedule', $extras);
         if ($scheduleError) {
             return $scheduleError;
         }
@@ -599,7 +652,8 @@ class BookingController extends Controller
             'personnel' => $request->query('personnel'),
             'staff' => $staff,
             'notes' => $request->query('notes'),
-            ...$this->feeQuote($service, null),
+            'extras' => $extras,
+            ...$this->feeQuote($service, null, $extras),
         ]);
     }
 
@@ -621,14 +675,20 @@ class BookingController extends Controller
         $variant = isset($validated['variant_id'])
             ? $service->variants->firstWhere('id', (int) $validated['variant_id'])
             : null;
-        $price = (float) ($variant?->price ?? $service->price);
+        $mainPrice = (float) ($variant?->price ?? $service->price);
+
+        // Extra services in the SAME visit, re-resolved from the DB here so
+        // prices are never taken from the browser.
+        $extras = BookingExtras::resolve($validated['extras'] ?? []);
+        $extrasTotal = BookingExtras::totalPrice($extras);
+        $price = round($mainPrice + $extrasTotal, 2);
 
         $method = $validated['method'] ?? 'gcash';
         $isCash = $method === 'cash';
-        $fee = BookingExtras::downPaymentForService($service, $price);
+        $fee = BookingExtras::downPayment($service, $mainPrice, $extras);
         $packageAssignments = $validated['package_assignments'] ?? null;
 
-        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $method, $isCash, $fee, $packageAssignments) {
+        $appointment = DB::transaction(function () use ($request, $validated, $service, $variant, $price, $extras, $method, $isCash, $fee, $packageAssignments) {
             $appointment = Appointment::create([
                 'user_id' => $request->user()->id,
                 'service_id' => $validated['service_id'],
@@ -653,6 +713,22 @@ class BookingController extends Controller
 
             if (is_array($packageAssignments)) {
                 $appointment->syncPersonnelAssignments($packageAssignments);
+            }
+
+            // Each extra is an appointment_added_services row under the SAME
+            // Appointment ID — one appointment, one reference code. Its
+            // price is already folded into booked_price above; source
+            // 'booking' marks it as part of the client's original avail (not
+            // a later Payments add).
+            foreach ($extras as $extra) {
+                $appointment->addedServices()->create([
+                    'service_id' => $extra['service']->id,
+                    'variant_label' => $extra['variant_label'],
+                    'price' => $extra['price'],
+                    'personnel_id' => $extra['personnel_id'],
+                    'added_by' => $request->user()->id,
+                    'source' => 'booking',
+                ]);
             }
 
             // Online with a down payment => only that amount is charged now
@@ -692,11 +768,11 @@ class BookingController extends Controller
             'Booking received',
             $isCash
                 ? "We received your Cash Home Service booking for {$appointment->displayServiceName()}. "
-                    . 'The branch will confirm your booking — please pay ₱'.number_format($price, 2).' at the spa.'
+                    . 'The branch will confirm your booking — please pay ₱'.number_format($price, 2).' to the specialist at your home.'
                 : ($fee > 0
                     ? "We received your Home Service booking for {$appointment->displayServiceName()}. "
                         . 'Your down payment of ₱'.number_format($fee, 2).' is pending verification — '
-                        . 'the ₱'.number_format($price - $fee, 2).' balance is payable at the branch.'
+                        . 'the ₱'.number_format($price - $fee, 2).' balance is payable to the specialist at your home.'
                     : "We received your Home Service booking for {$appointment->displayServiceName()}. "
                         . 'Your payment of ₱'.number_format($price, 2).' is pending verification.'),
             new BookingReceivedMail($appointment),
@@ -798,8 +874,7 @@ class BookingController extends Controller
             // The whole visit (main + extras) must fit inside the shop's
             // closing time — the same window rule store() enforces. Only
             // checked when extras are present, so a single-service booking
-            // (and the Home flow, which never has extras) behaves exactly as
-            // before.
+            // behaves exactly as before.
             if ($extras !== [] && $service && ! BusinessHours::startFitsOnDate(
                 (string) $date,
                 (string) $time,
@@ -872,8 +947,13 @@ class BookingController extends Controller
                 'province' => 'required|string',
             ]);
         } catch (ValidationException $e) {
+            $extras = $this->extrasFromRequest($request);
+
             return redirect()
-                ->route('account.booking.home.address', ['service' => $request->query('service')])
+                ->route('account.booking.home.address', array_filter([
+                    'service' => $request->query('service'),
+                    'extras' => $extras !== [] ? $this->extrasQueryRows($extras) : null,
+                ]))
                 ->withErrors($e->errors());
         }
 
@@ -1364,6 +1444,22 @@ class BookingController extends Controller
         }
 
         return $extras;
+    }
+
+    /**
+     * Resolved extras back in query-string row shape, so a redirect or a
+     * wizard link can carry them forward without exposing prices.
+     *
+     * @param  list<array{service: Service, variant_label: string|null, price: float, personnel_id: int|null}>  $extras
+     * @return list<array<string, mixed>>
+     */
+    private function extrasQueryRows(array $extras): array
+    {
+        return collect($extras)->map(fn (array $extra) => array_filter([
+            'service_id' => $extra['service']->id,
+            'variant_label' => $extra['variant_label'],
+            'personnel_id' => $extra['personnel_id'],
+        ], fn ($value) => $value !== null && $value !== ''))->values()->all();
     }
 
     /**

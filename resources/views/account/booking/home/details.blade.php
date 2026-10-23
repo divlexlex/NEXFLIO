@@ -8,20 +8,19 @@
 @section('title', 'Book Home Service — Appointment Details')
 
 @section('content')
-<header class="nx-hero">
-    <div class="container py-5">
-        <p class="nx-eyebrow mb-2">Home Service</p>
-        <h1 class="mb-0">Appointment Details</h1>
-    </div>
-</header>
-
-<section class="nx-section" style="background: var(--nx-bg-page); padding-top: 40px;">
+<section class="nx-booking-floating-section">
     <div class="container">
-        @include('partials.booking.progress', ['step' => 4, 'steps' => $homeSteps])
-
         <div class="row justify-content-center">
-            <div class="col-lg-7">
+            <div class="col-12 col-md-10 col-lg-7">
                 <div class="nx-booking-panel">
+                    <div class="nx-booking-panel-header">
+                        <div>
+                            <p class="nx-eyebrow mb-1">HOME SERVICE</p>
+                            <h1 class="h5 mb-0">Appointment Details</h1>
+                        </div>
+                        @include('partials.booking.progress-compact', ['step' => 4, 'steps' => $homeSteps])
+                    </div>
+
                     <p class="nx-eyebrow mb-3">Your Information</p>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Name</span>
@@ -39,11 +38,18 @@
                     <hr class="my-4" style="border-color: var(--nx-border);">
 
                     <form method="GET" action="{{ route('account.booking.home.review') }}">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? [], 'address' => $address])
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? [], 'extras' => $extras, 'address' => $address])
+
+                        @if(! empty($extras))
+                            <div class="nx-review-row">
+                                <span class="nx-review-label">Extra services</span>
+                                <span class="nx-review-value">{{ collect($extras)->map(fn ($extra) => $extra['service']->name . ($extra['variant_label'] ? ' — ' . $extra['variant_label'] : '') . ' (₱' . number_format($extra['price'], 2) . ')')->implode(', ') }}</span>
+                            </div>
+                        @endif
 
                         @if($service->variants->isEmpty())
                             <p class="small nx-text-secondary mt-2 mb-3">
-                                Down payment for this service: ₱{{ number_format(\App\Support\BookingExtras::downPaymentForService($service, (float) $service->price), 2) }} — deducted from your total, balance paid at the branch.
+                                Down payment for this service: ₱{{ number_format(\App\Support\BookingExtras::downPaymentForService($service, (float) $service->price), 2) }} — deducted from your total, balance paid to the specialist at your home.@if(! empty($extras)) Each extra adds its own configured down payment.@endif
                             </p>
                         @endif
 
@@ -51,7 +57,7 @@
                         <textarea name="notes" id="notes" rows="4" maxlength="1000" class="form-control" placeholder="Landmarks, gate/unit access instructions, or anything the specialist should know?">{{ $notes }}</textarea>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                            <a href="{{ route('account.booking.home.schedule', array_merge(['service' => $service->id, 'date' => $date], $address)) }}" class="nx-btn nx-btn-outline">
+                            <a href="{{ route('account.booking.home.schedule', array_merge(['service' => $service->id, 'date' => $date, 'extras' => ! empty($extras) ? collect($extras)->map(fn ($extra) => array_filter(['service_id' => $extra['service']->id, 'variant_label' => $extra['variant_label'], 'personnel_id' => $extra['personnel_id']], fn ($value) => $value !== null && $value !== ''))->all() : null], $address)) }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

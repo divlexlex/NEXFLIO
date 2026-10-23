@@ -9,16 +9,18 @@
 @section('title', 'Book Home Service — Select a Service')
 
 @section('content')
-<header class="nx-hero">
-    <div class="container py-5">
-        <p class="nx-eyebrow mb-2">Home Service</p>
-        <h1 class="mb-0">Select a Service</h1>
-    </div>
-</header>
-
-<section class="nx-section" style="background: var(--nx-bg-page); padding-top: 40px;">
+<section class="nx-booking-floating-section">
     <div class="container">
-        @include('partials.booking.progress', ['step' => 1, 'steps' => $homeSteps])
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-10 col-lg-8">
+                <div class="nx-booking-panel">
+                    <div class="nx-booking-panel-header">
+                        <div>
+                            <p class="nx-eyebrow mb-1">HOME SERVICE</p>
+                            <h1 class="h5 mb-0">Select a Service</h1>
+                        </div>
+                        @include('partials.booking.progress-compact', ['step' => 1, 'steps' => $homeSteps])
+                    </div>
 
         @if($servicesByCategory->isEmpty())
             <div class="nx-card p-5 text-center">
@@ -54,6 +56,9 @@
                 </div>
             @endforeach
         @endif
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 @endsection

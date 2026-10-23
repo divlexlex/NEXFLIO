@@ -11,45 +11,41 @@
 @section('title', 'Book Home Service — Payment')
 
 @section('content')
-<header class="nx-hero">
-    <div class="container py-5">
-        <p class="nx-eyebrow mb-2">Home Service</p>
-        <h1 class="mb-0">Proof of Payment</h1>
-    </div>
-</header>
-
-<section class="nx-section" style="background: var(--nx-bg-page); padding-top: 40px;">
+<section class="nx-booking-floating-section">
     <div class="container">
-        @include('partials.booking.progress', ['step' => 6, 'steps' => $homeSteps])
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-10 col-lg-7">
 
-        @if($errors->any())
-            <div class="row justify-content-center">
-                <div class="col-lg-7">
+                @if($errors->any())
                     <div class="alert alert-danger">
                         @foreach($errors->all() as $error)
                             <div>{{ $error }}</div>
                         @endforeach
                     </div>
-                </div>
-            </div>
-        @endif
+                @endif
 
-        <div class="row justify-content-center">
-            <div class="col-lg-7">
                 <div class="nx-booking-panel">
+                    <div class="nx-booking-panel-header">
+                        <div>
+                            <p class="nx-eyebrow mb-1">HOME SERVICE</p>
+                            <h1 class="h5 mb-0">Proof of Payment</h1>
+                        </div>
+                        @include('partials.booking.progress-compact', ['step' => 6, 'steps' => $homeSteps])
+                    </div>
+
                     <p class="nx-text-secondary mb-4" id="pay-lead-online">
                         @if($requiresDownPayment)
-                            Send the down payment of <strong>₱{{ number_format($fee, 2) }}</strong> via GCash, Maya, GoTyme, bank transfer or card, then upload a screenshot or
+                            Send the down payment of <strong>₱{{ number_format($fee, 2) }}</strong> via GCash, Maya, GoTyme or bank transfer, then upload a screenshot or
                             photo of the receipt below. Our team verifies payments manually — you'll be
                             notified as soon as your payment is confirmed. The remaining
-                            <strong>₱{{ number_format($balance, 2) }}</strong> balance is settled after your appointment.
+                            <strong>₱{{ number_format($balance, 2) }}</strong> balance is settled with the specialist at your home.
                         @else
                             Nothing is due online right now. Pay <strong>₱{{ number_format($price, 2) }}</strong> in full online with proof, or choose <strong>Cash</strong> to pay the full amount on appointment day.
                         @endif
                     </p>
                     <p class="nx-text-secondary mb-4 d-none" id="pay-lead-cash">
                         No payment needed now — your booking is confirmed immediately and the amount is
-                        payable at the branch.
+                        payable to the specialist at your home.
                     </p>
 
                     <form method="POST" action="{{ route('account.booking.home.store') }}" enctype="multipart/form-data">
@@ -62,22 +58,38 @@
                             <input type="hidden" name="staff[{{ $positionId }}]" value="{{ $value }}">
                         @endforeach
                         @if($notes)<input type="hidden" name="notes" value="{{ $notes }}">@endif
-                        @include('partials.booking.carry-fields', ['address' => $address])
+                        @include('partials.booking.carry-fields', ['extras' => $extras ?? [], 'address' => $address])
 
                         <div class="nx-review-row">
                             <span class="nx-review-label">Service</span>
                             <span class="nx-review-value">{{ $service->name }}</span>
                         </div>
+                        @foreach(($extras ?? []) as $extra)
+                            <div class="nx-review-row">
+                                <span class="nx-review-label">Extra service</span>
+                                <span class="nx-review-value">{{ $extra['service']->name }}@if($extra['variant_label']) — {{ $extra['variant_label'] }}@endif — ₱{{ number_format($extra['price'], 2) }}</span>
+                            </div>
+                        @endforeach
                         <div class="nx-review-row">
                             <span class="nx-review-label">Price</span>
                             <span class="nx-review-value">₱{{ number_format($price, 2) }}</span>
                         </div>
                         <div class="nx-review-row">
                             <span class="nx-review-label">Down payment — {{ $service->name }}</span>
-                            <span class="nx-review-value">{{ $fee > 0 ? '₱'.number_format($fee, 2) : 'None' }}</span>
+                            <span class="nx-review-value">{{ $mainFee > 0 ? '₱'.number_format($mainFee, 2) : 'None' }}</span>
+                        </div>
+                        @foreach(($extras ?? []) as $extra)
+                            <div class="nx-review-row">
+                                <span class="nx-review-label">Down payment — {{ $extra['service']->name }}@if($extra['variant_label']) ({{ $extra['variant_label'] }})@endif</span>
+                                <span class="nx-review-value">{{ ($extra['down_payment'] ?? 0) > 0 ? '₱'.number_format($extra['down_payment'], 2) : 'None' }}</span>
+                            </div>
+                        @endforeach
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Down payment (due now, total)</span>
+                            <span class="nx-review-value">₱{{ number_format($fee, 2) }}</span>
                         </div>
                         <div class="nx-review-row mb-4">
-                            <span class="nx-review-label">Balance (pay at the branch)</span>
+                            <span class="nx-review-label">Balance (pay to the specialist at your home)</span>
                             <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
                         </div>
 
@@ -89,7 +101,7 @@
                             @endforeach
                         </select>
                         @if($requiresDownPayment)
-                            <p class="small nx-text-secondary mb-4">A down payment is required for this booking and must be paid online with proof of payment — Cash is not available. The remaining balance is paid at the branch on your appointment day.</p>
+                            <p class="small nx-text-secondary mb-4">A down payment is required for this booking and must be paid online with proof of payment — Cash is not available. The remaining balance is paid to the specialist at your home on your appointment day.</p>
                         @endif
 
                         <div id="pay-proof-block">
@@ -130,11 +142,11 @@
                         <div class="alert alert-info d-none" id="pay-cash-note">
                             <i class="bi bi-cash-coin me-1"></i>
                             Paying in cash — nothing to upload. This submits a booking request: the branch will
-                            confirm your booking, and the full amount is payable at the spa.
+                            confirm your booking, and the full amount is payable to the specialist at your home.
                         </div>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                            <a href="{{ route('account.booking.home.review', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes], $address)) }}" class="nx-btn nx-btn-outline">
+                            <a href="{{ route('account.booking.home.review', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'notes' => $notes, 'extras' => ! empty($extras) ? collect($extras)->map(fn ($extra) => array_filter(['service_id' => $extra['service']->id, 'variant_label' => $extra['variant_label'], 'personnel_id' => $extra['personnel_id']], fn ($value) => $value !== null && $value !== ''))->all() : null], $address)) }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

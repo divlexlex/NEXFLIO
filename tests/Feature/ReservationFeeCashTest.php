@@ -814,7 +814,7 @@ class ReservationFeeCashTest extends TestCase
         $client->get(route('account.booking.home.review', array_merge($base, ['service' => $this->homeMassage->id], $address)))
             ->assertOk()
             ->assertSee('Down payment — Home Massage (test)')
-            ->assertSee('Balance (pay at the branch)')
+            ->assertSee('Balance (pay to the specialist at your home)')
             ->assertSee('₱300.00');
 
         // Home payment step: DP breakdown, no cash when DP is due, no guests.

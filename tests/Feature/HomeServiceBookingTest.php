@@ -64,6 +64,43 @@ class HomeServiceBookingTest extends TestCase
         ]);
     }
 
+    private function makeHomeExtra(
+        string $name = 'Extra Home Massage',
+        float $price = 400,
+        int $duration = 30,
+        ?float $downPayment = null,
+        string $category = 'Massage',
+        string $location = 'home'
+    ): Service {
+        return Service::create([
+            'name' => $name,
+            'category' => $category,
+            'description' => 'Test extra',
+            'price' => $price,
+            'down_payment' => $downPayment,
+            'duration_minutes' => $duration,
+            'status' => 'active',
+            'service_location_type' => $location,
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function homePayload(array $overrides = []): array
+    {
+        return array_merge([
+            'service_id' => $this->homeService->id,
+            'personnel_id' => 'any',
+            'appointment_date' => now()->addDay()->toDateString(),
+            'start_time' => '13:00',
+            'method' => 'gcash',
+            'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
+            'street_address' => '1 Test St.',
+            'barangay' => 'Barangay 1',
+            'city_municipality' => 'Test City',
+            'province' => 'Test Province',
+        ], $overrides);
+    }
+
     // 1. Guest + a real service's detail page -> Book -> Guest modal.
     // The whole catalog is real, DB-backed Service rows — this is checked on
     // the detail page, which is what a Guest actually reaches from a
@@ -136,22 +173,89 @@ class HomeServiceBookingTest extends TestCase
     }
 
     // 5. General "Book Appointment" CTA for an authenticated Client -> no
-    // modal, booking start chooser with Home Service enabled (no longer
-    // "Coming soon").
-    // Home Service is intentionally stubbed to "Coming Soon" on this page
-    // (and on the "Book an Appointment" floating-card modal) for now — a
-    // deliberate UI scoping decision, not a regression. The route/controller
-    // behind it (account.booking.home.service) is untouched and still fully
-    // functional; see test_home_service_booking_creates_real_records_and_preserves_address_history
-    // below, which books through it directly rather than via this entry page.
-    public function test_booking_start_page_offers_branch_booking_and_stubs_home_service(): void
+    // modal, booking start chooser offering BOTH real flows (Branch and Home
+    // Service) with no "Coming Soon" stub.
+    public function test_booking_start_page_offers_branch_and_home_booking(): void
     {
         $response = $this->actingAs($this->client)->get(route('account.booking.start'));
 
         $response->assertOk();
-        $response->assertSee('Coming Soon');
         $response->assertSee(route('account.booking.branch.service'), false);
-        $response->assertDontSee(route('account.booking.home.service'), false);
+        $response->assertSee(route('account.booking.home.service'), false);
+        $response->assertDontSee('Coming Soon');
+    }
+
+    // The site-wide "Book an Appointment" modal must offer the real Home
+    // Service grid (home-bookable records only), not the old app stub.
+    public function test_service_picker_modal_offers_home_services(): void
+    {
+        $response = $this->actingAs($this->client)->get(route('account.booking.start'));
+
+        $response->assertOk();
+        $response->assertSee(route('account.booking.home.service.show', $this->homeService->id), false);
+        $response->assertDontSee('book a Home Service visit through the Perfect Nails app');
+    }
+
+    public function test_home_service_detail_matches_branch_card_and_extras_layout(): void
+    {
+        $this->makeHomeExtra('Extra Visual Massage', 400, 30, 50);
+
+        $response = $this->actingAs($this->client)
+            ->get(route('account.booking.home.service.show', $this->homeService->id));
+
+        $response->assertOk();
+        $response->assertSee('nx-booking-floating-section', false);
+        $response->assertSee('Home Service');
+        $response->assertSee('Service Details');
+        $response->assertSee('Step 1 of 6');
+        $response->assertSee('Down payment: ₱300.00');
+        $response->assertSee('Avail Services');
+        $response->assertSee('(add 1 or more service)');
+        $response->assertSee('Add more services to this same visit');
+        $response->assertSee('Add another service');
+        $response->assertSee('data-extra-service', false);
+        $response->assertSee('data-extra-variant', false);
+        $response->assertSee('data-extra-personnel', false);
+        $response->assertSee('data-extra-remove', false);
+        $response->assertSee('Extra Visual Massage');
+        $response->assertSee(route('account.booking.home.address'), false);
+        $response->assertSee('name="service" value="'.$this->homeService->id.'"', false);
+    }
+
+    public function test_home_wizard_steps_render_with_extras(): void
+    {
+        $extra = $this->makeHomeExtra('Extra Wizard Massage', 400, 30, null);
+        $staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
+
+        $extras = [
+            ['service_id' => $extra->id, 'personnel_id' => $staff->id],
+        ];
+        $address = [
+            'street_address' => '1 Test St.',
+            'barangay' => 'Barangay 1',
+            'city_municipality' => 'Test City',
+            'province' => 'Test Province',
+            'postal_code' => '1000',
+        ];
+        $base = ['service' => $this->homeService->id, 'extras' => $extras];
+        $date = now()->addDay()->toDateString();
+
+        $this->actingAs($this->client)
+            ->get(route('account.booking.home.service.show', ['id' => $this->homeService->id, 'extras' => $extras]))
+            ->assertOk();
+
+        $this->get(route('account.booking.home.address', $base))->assertOk();
+
+        $schedule = array_merge($base, $address, [
+            'date' => $date,
+            'personnel' => 'any',
+        ]);
+        $this->get(route('account.booking.home.schedule', $schedule))->assertOk();
+
+        $selection = array_merge($schedule, ['time' => '13:00']);
+        $this->get(route('account.booking.home.details', $selection))->assertOk();
+        $this->get(route('account.booking.home.review', $selection))->assertOk();
+        $this->get(route('account.booking.home.payment', $selection))->assertOk();
     }
 
     // 6. A non-existent service id can never produce a fake booking: hitting
@@ -271,5 +375,170 @@ class HomeServiceBookingTest extends TestCase
 
         $response->assertSessionHasErrors('service_id');
         $this->assertDatabaseCount('appointments', 0);
+    }
+
+    // Extras parity: main + one extra becomes ONE appointment, ONE reference
+    // code and a source='booking' added-services row; the single payment is
+    // the sum of both configured down payments.
+    public function test_home_service_booking_with_extras_creates_one_appointment_with_added_services(): void
+    {
+        Storage::fake('public');
+
+        $this->homeService->update(['down_payment' => 20]);
+        $extra = $this->makeHomeExtra('Extra Home Massage', 400, 30, 20);
+        $staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
+
+        $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
+            'extras' => [
+                ['service_id' => $extra->id, 'personnel_id' => $staff->id],
+            ],
+        ]));
+
+        $response->assertSessionHasNoErrors();
+        $response->assertRedirect();
+
+        $this->assertSame(1, Appointment::count());
+        $appointment = Appointment::with(['addedServices', 'payment', 'address'])->firstOrFail();
+
+        $this->assertEquals(900 + 400, (float) $appointment->booked_price);
+        $this->assertNotNull($appointment->reference_code);
+
+        $row = $appointment->addedServices->firstOrFail();
+        $this->assertSame($extra->id, $row->service_id);
+        $this->assertSame('booking', $row->source);
+        $this->assertEquals(400, (float) $row->price);
+        $this->assertSame($staff->id, $row->personnel_id);
+
+        $this->assertSame(1, $appointment->payments()->count());
+        $this->assertEquals(40, (float) $appointment->payment->amount);
+        $this->assertSame(PaymentStatus::Pending, $appointment->payment->status);
+
+        $this->assertInstanceOf(AppointmentAddress::class, $appointment->address);
+        $this->assertSame('1 Test St.', $appointment->address->street_address);
+    }
+
+    // Cash is refused when an EXTRA (not the main service) raises a down
+    // payment, and a refusal writes nothing.
+    public function test_home_store_rejects_cash_when_extras_raise_a_down_payment(): void
+    {
+        Storage::fake('public');
+
+        $this->homeService->update(['down_payment' => null]);
+        $extra = $this->makeHomeExtra('Extra Down Payment', 400, 30, 20);
+
+        $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
+            'method' => 'cash',
+            'payment_proof' => null,
+            'extras' => [['service_id' => $extra->id]],
+        ]));
+
+        $response->assertSessionHasErrors('method');
+        $this->assertSame(0, Appointment::count());
+    }
+
+    // Cash stays available when NOTHING is due online, and the single payment
+    // is the whole visit (main + extra) with no proof uploaded.
+    public function test_home_store_allows_cash_when_no_down_payment_is_due(): void
+    {
+        Storage::fake('public');
+
+        $this->homeService->update(['down_payment' => null]);
+        $extra = $this->makeHomeExtra('Extra No Down Payment', 400, 30, null);
+
+        $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
+            'method' => 'cash',
+            'payment_proof' => null,
+            'extras' => [['service_id' => $extra->id]],
+        ]));
+
+        $response->assertSessionHasNoErrors();
+        $response->assertRedirect();
+
+        $appointment = Appointment::with('payment')->firstOrFail();
+        $this->assertSame(AppointmentStatus::Unverified, $appointment->status);
+        $this->assertSame('cash', $appointment->payment->method);
+        $this->assertEquals(900 + 400, (float) $appointment->payment->amount);
+        $this->assertNull($appointment->payment->proof_path);
+    }
+
+    // A branch-only service can never be slipped in as a Home extra.
+    public function test_home_store_rejects_a_branch_only_extra_service(): void
+    {
+        Storage::fake('public');
+
+        $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
+            'extras' => [['service_id' => $this->branchService->id]],
+        ]));
+
+        $response->assertSessionHasErrors('extras.0.service_id');
+        $this->assertSame(0, Appointment::count());
+    }
+
+    // Packages remain a main-service choice only.
+    public function test_home_store_rejects_a_package_as_extra(): void
+    {
+        Storage::fake('public');
+
+        $package = $this->makeHomeExtra('Home Test Package', 2000, 60, null, 'Packages', 'home');
+
+        $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
+            'extras' => [['service_id' => $package->id]],
+        ]));
+
+        $response->assertSessionHasErrors('extras.0.service_id');
+        $response->assertSessionHasErrors([
+            'extras.0.service_id' => 'Packages cannot be added as extra services — pick a regular service.',
+        ]);
+        $this->assertSame(0, Appointment::count());
+    }
+
+    // The exact-slot collision check also covers the extra's personnel.
+    public function test_home_store_rejects_when_extra_personnel_is_already_booked_at_that_slot(): void
+    {
+        Storage::fake('public');
+
+        $staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
+        $extra = $this->makeHomeExtra('Extra Collision', 400, 30, null);
+        $date = now()->addDay()->toDateString();
+
+        Appointment::create([
+            'user_id' => $this->clientB->id,
+            'service_id' => $this->homeService->id,
+            'personnel_id' => $staff->id,
+            'appointment_date' => $date,
+            'start_time' => '13:00',
+            'status' => AppointmentStatus::Booked,
+        ]);
+
+        $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
+            'appointment_date' => $date,
+            'start_time' => '13:00',
+            'extras' => [['service_id' => $extra->id, 'personnel_id' => $staff->id]],
+        ]));
+
+        $response->assertSessionHasErrors('start_time');
+        $response->assertSessionHasErrors(['start_time' => 'That slot was just taken. Please choose a different time.']);
+        $this->assertSame(1, Appointment::count());
+    }
+
+    // Visit duration is main + every extra: fitting alone is not enough.
+    public function test_home_booking_with_extras_must_fit_business_hours(): void
+    {
+        Storage::fake('public');
+
+        $this->homeService->update(['duration_minutes' => 60, 'down_payment' => null]);
+        $extra = $this->makeHomeExtra('Extra Long Home Massage', 500, 120, null);
+        $staff = User::where('email', 'staff@nexflio.test')->firstOrFail();
+
+        $response = $this->actingAs($this->client)->post(route('account.booking.home.store'), $this->homePayload([
+            'personnel_id' => (string) $staff->id,
+            'start_time' => '20:00',
+            'method' => 'cash',
+            'payment_proof' => null,
+            'extras' => [['service_id' => $extra->id]],
+        ]));
+
+        $response->assertSessionHasErrors('start_time');
+        $this->assertSame(0, Appointment::count());
     }
 }

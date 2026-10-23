@@ -8,20 +8,19 @@
 @section('title', 'Book Home Service — Review')
 
 @section('content')
-<header class="nx-hero">
-    <div class="container py-5">
-        <p class="nx-eyebrow mb-2">Home Service</p>
-        <h1 class="mb-0">Review Your Booking</h1>
-    </div>
-</header>
-
-<section class="nx-section" style="background: var(--nx-bg-page); padding-top: 40px;">
+<section class="nx-booking-floating-section">
     <div class="container">
-        @include('partials.booking.progress', ['step' => 5, 'steps' => $homeSteps])
-
         <div class="row justify-content-center">
-            <div class="col-lg-7">
+            <div class="col-12 col-md-10 col-lg-7">
                 <div class="nx-booking-panel">
+                    <div class="nx-booking-panel-header">
+                        <div>
+                            <p class="nx-eyebrow mb-1">HOME SERVICE</p>
+                            <h1 class="h5 mb-0">Review Your Booking</h1>
+                        </div>
+                        @include('partials.booking.progress-compact', ['step' => 5, 'steps' => $homeSteps])
+                    </div>
+
                     <p class="nx-eyebrow mb-3">Booking Summary</p>
 
                     <div class="nx-review-row">
@@ -33,21 +32,39 @@
                         <span class="nx-review-value">{{ $service->name }}</span>
                     </div>
                     @include('partials.package-inclusions', ['service' => $service])
+                    @foreach(($extras ?? []) as $extra)
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Extra service</span>
+                            <span class="nx-review-value">{{ $extra['service']->name }}@if($extra['variant_label']) — {{ $extra['variant_label'] }}@endif — ₱{{ number_format($extra['price'], 2) }}</span>
+                        </div>
+                    @endforeach
                     <div class="nx-review-row">
                         <span class="nx-review-label">Price</span>
                         <span class="nx-review-value">₱{{ number_format($price, 2) }}</span>
                     </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Down payment — {{ $service->name }}</span>
-                        <span class="nx-review-value">{{ $fee > 0 ? '₱'.number_format($fee, 2) : 'None' }}</span>
+                        <span class="nx-review-value">{{ $mainFee > 0 ? '₱'.number_format($mainFee, 2) : 'None' }}</span>
                     </div>
+                    @foreach(($extras ?? []) as $extra)
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Down payment — {{ $extra['service']->name }}@if($extra['variant_label']) ({{ $extra['variant_label'] }})@endif</span>
+                            <span class="nx-review-value">{{ ($extra['down_payment'] ?? 0) > 0 ? '₱'.number_format($extra['down_payment'], 2) : 'None' }}</span>
+                        </div>
+                    @endforeach
+                    @if(! empty($extras))
+                        <div class="nx-review-row">
+                            <span class="nx-review-label">Down payment (due now, total)</span>
+                            <span class="nx-review-value">₱{{ number_format($fee, 2) }}</span>
+                        </div>
+                    @endif
                     <div class="nx-review-row">
-                        <span class="nx-review-label">Balance (pay at the branch)</span>
+                        <span class="nx-review-label">Balance (pay to the specialist at your home)</span>
                         <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
                     </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Duration</span>
-                        <span class="nx-review-value">{{ $service->duration_minutes }} mins</span>
+                        <span class="nx-review-value">{{ $service->duration_minutes + collect($extras ?? [])->sum(fn ($extra) => (int) $extra['service']->duration_minutes) }} mins</span>
                     </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Date</span>
@@ -80,19 +97,19 @@
                         <i class="bi bi-info-circle me-1"></i>
                         @if($requiresDownPayment)
                             Only the ₱{{ number_format($fee, 2) }} down payment is due online now — the
-                            ₱{{ number_format($balance, 2) }} balance is paid at the branch. Please send proof
+                            ₱{{ number_format($balance, 2) }} balance is paid to the specialist at your home. Please send proof
                             of payment to confirm your reservation. Down payments are deducted from the total
                             cost of services. Thank you and we look forward to pamper you!
                         @else
                             Nothing is due online right now. Choose <strong>Cash</strong> on the next step to pay
-                            ₱{{ number_format($price, 2) }} in full on appointment day, or pay the full amount
+                            ₱{{ number_format($price, 2) }} in full to the specialist at your home on appointment day, or pay the full amount
                             online with proof to secure your slot. Thank you and we look forward to pamper you!
                         @endif
                     </div>
 
                     <form method="GET" action="{{ route('account.booking.home.payment') }}" class="d-flex justify-content-between flex-wrap gap-2 mt-4">
-                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? [], 'notes' => $notes, 'address' => $address])
-                        <a href="{{ route('account.booking.home.details', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel], $address)) }}" class="nx-btn nx-btn-outline">
+                        @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? [], 'notes' => $notes, 'extras' => $extras ?? [], 'address' => $address])
+                        <a href="{{ route('account.booking.home.details', array_merge(['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? null, 'extras' => ! empty($extras) ? collect($extras)->map(fn ($extra) => array_filter(['service_id' => $extra['service']->id, 'variant_label' => $extra['variant_label'], 'personnel_id' => $extra['personnel_id']], fn ($value) => $value !== null && $value !== ''))->all() : null], $address)) }}" class="nx-btn nx-btn-outline">
                             <i class="bi bi-arrow-left me-1"></i>Back
                         </a>
                         <button type="submit" class="nx-btn nx-btn-primary">

@@ -15,32 +15,28 @@
 @section('title', 'Book Home Service — Address')
 
 @section('content')
-<header class="nx-hero">
-    <div class="container py-5">
-        <p class="nx-eyebrow mb-2">Home Service</p>
-        <h1 class="mb-0">Client &amp; Address Details</h1>
-    </div>
-</header>
-
-<section class="nx-section" style="background: var(--nx-bg-page); padding-top: 40px;">
+<section class="nx-booking-floating-section">
     <div class="container">
-        @include('partials.booking.progress', ['step' => 2, 'steps' => $homeSteps])
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-10 col-lg-7">
 
-        @if($errors->any())
-            <div class="row justify-content-center">
-                <div class="col-lg-7">
+                @if($errors->any())
                     <div class="alert alert-danger">
                         @foreach($errors->all() as $error)
                             <div>{{ $error }}</div>
                         @endforeach
                     </div>
-                </div>
-            </div>
-        @endif
+                @endif
 
-        <div class="row justify-content-center">
-            <div class="col-lg-7">
                 <div class="nx-booking-panel">
+                    <div class="nx-booking-panel-header">
+                        <div>
+                            <p class="nx-eyebrow mb-1">HOME SERVICE</p>
+                            <h1 class="h5 mb-0">Client &amp; Address Details</h1>
+                        </div>
+                        @include('partials.booking.progress-compact', ['step' => 2, 'steps' => $homeSteps])
+                    </div>
+
                     <p class="nx-eyebrow mb-3">Your Information</p>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Name</span>
@@ -73,6 +69,7 @@
                     <form method="GET" action="{{ route('account.booking.home.schedule') }}">
                         <input type="hidden" name="service" value="{{ $service->id }}">
                         <input type="hidden" name="source_client_address_id" value="{{ $sourceClientAddressId }}">
+                        @include('partials.booking.carry-extras', ['extras' => $extras ?? []])
 
                         <div class="mb-3">
                             <label for="street_address" class="form-label">Street / House / Unit / Building</label>
@@ -112,7 +109,7 @@
                         </div>
 
                         <div class="d-flex justify-content-between flex-wrap gap-2">
-                            <a href="{{ route('account.booking.home.service.show', $service->id) }}" class="nx-btn nx-btn-outline">
+                            <a href="{{ route('account.booking.home.service.show', array_filter(['id' => $service->id, 'extras' => $homeExtrasQuery !== [] ? $homeExtrasQuery : null])) }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

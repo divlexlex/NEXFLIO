@@ -9,11 +9,10 @@
        - Branch Booking: real, working — category pills + service grid
          (same pattern as partials/services-section.blade.php), picking a
          service navigates straight into the real Step 2 (Date & Time) page.
-       - Home Service: intentionally stubbed to "Coming Soon" for now — the
-         Phase 3B backend/routes still exist and work (see
-         BookingController's home.* methods, tests/Feature/HomeServiceBookingTest),
-         just not surfaced through this entry point yet. Not removed, just
-         not linked here.
+       - Home Service: real, working — the same category pills + service
+          grid, using only real Home-Service-bookable Service records
+          (Service::bookableAtHome()); picking one navigates straight into
+          the real Home Service wizard.
 
      Included once, site-wide, from layouts.public (gated to authenticated
      Clients only — see there) so every "Book an Appointment" trigger across
@@ -25,10 +24,16 @@
 
      Queries here directly rather than via a passed-in variable, since this
      partial is included from the shared layout, not from a specific
-     controller action — same real, active, branch-bookable Service records
-     BookingController@serviceIndex uses (App\Models\Service::bookableAtBranch()). --}}
+     controller action — the same real, active Service records
+     BookingController@serviceIndex / @homeServiceIndex use
+     (App\Models\Service::bookableAtBranch() / bookableAtHome()). --}}
 @php
     $modalServicesByCategory = \App\Models\Service::bookableAtBranch()
+        ->orderBy('name')
+        ->get()
+        ->groupBy('category');
+
+    $modalHomeServicesByCategory = \App\Models\Service::bookableAtHome()
         ->orderBy('name')
         ->get()
         ->groupBy('category');
@@ -103,20 +108,49 @@
                         @endif
                     </div>
 
-                    {{-- HOME SERVICE — stubbed for now; real Phase 3B flow
-                         still exists at account.booking.home.* routes, just
-                         not linked from this entry point yet. --}}
+                    {{-- HOME SERVICE — real, working Home Service flow --}}
                     <div class="tab-pane fade" id="bookType-home" role="tabpanel">
-                        <div class="text-center py-5">
-                            <div class="nx-value-icon mx-auto mb-3" style="width: 56px; height: 56px; font-size: 24px;">
-                                <i class="bi bi-house-heart"></i>
+                        @if($modalHomeServicesByCategory->isEmpty())
+                            <p class="text-center nx-text-secondary my-4 mb-0">No bookable services are available right now. Please check back soon.</p>
+                        @else
+                            <ul class="nav nav-pills justify-content-center mb-4 gap-2 flex-wrap" role="tablist">
+                                @foreach($modalHomeServicesByCategory as $category => $services)
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link nx-pill {{ $loop->first ? 'active' : '' }}"
+                                                data-bs-toggle="pill" data-bs-target="#modal-home-cat-{{ $loop->index }}"
+                                                type="button" role="tab">
+                                            {{ $category }}
+                                        </button>
+                                    </li>
+                                @endforeach
+                            </ul>
+                            <div class="tab-content">
+                                @foreach($modalHomeServicesByCategory as $category => $services)
+                                    <div class="tab-pane fade {{ $loop->first ? 'show active' : '' }}" id="modal-home-cat-{{ $loop->index }}" role="tabpanel">
+                                        <div class="row g-3">
+                                            @foreach($services as $service)
+                                                <div class="col-6 col-md-4">
+                                                    <a href="{{ route('account.booking.home.service.show', $service->id) }}" class="nx-card d-block h-100">
+                                                        <div class="nx-card-media" style="height: 110px;">
+                                                            @if($service->image_url)
+                                                                <img src="{{ $service->image_url }}" alt="{{ $service->name }}">
+                                                            @else
+                                                                <i class="bi bi-image fs-3 opacity-50"></i>
+                                                            @endif
+                                                        </div>
+                                                        <div class="nx-card-body" style="padding: 14px 16px 16px;">
+                                                            <h3 class="nx-card-title h6 mb-1" style="font-size: 15px;">{{ $service->name }}</h3>
+                                                            <p class="small nx-text-secondary mb-2">{{ $service->duration_minutes }} mins</p>
+                                                            <span class="nx-card-price">₱{{ number_format($service->price, 2) }}</span>
+                                                        </div>
+                                                    </a>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endforeach
                             </div>
-                            <h3 class="h5 mb-2">Coming Soon</h3>
-                            <p class="nx-text-secondary mb-0" style="max-width: 380px; margin-inline: auto;">
-                                Home Service booking through the Website is on its way. For now, please book
-                                a Home Service visit through the Perfect Nails app, or visit our branch.
-                            </p>
-                        </div>
+                        @endif
                     </div>
                 </div>
             </div>
