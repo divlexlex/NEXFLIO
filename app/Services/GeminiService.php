@@ -17,6 +17,22 @@ class GeminiService
         return ! empty(config('services.gemini.key'));
     }
 
+    private function apiUrl(string $model): string
+    {
+        return rtrim((string) config('services.gemini.base_url'), '/')."/v1beta/models/{$model}:generateContent";
+    }
+
+    private function apiHeaders(): array
+    {
+        $headers = ['x-goog-api-key' => config('services.gemini.key')];
+
+        if (! empty(config('services.gemini.relay_secret'))) {
+            $headers['x-relay-secret'] = config('services.gemini.relay_secret');
+        }
+
+        return $headers;
+    }
+
     /**
      * @param array<string, mixed> $metrics aggregated numbers only
      */
@@ -37,17 +53,17 @@ class GeminiService
             . json_encode($metrics, JSON_PRETTY_PRINT);
 
         try {
-            $response = Http::timeout(15)
-                ->withHeader('x-goog-api-key', config('services.gemini.key'))
+            $response = Http::timeout(30)->retry(2, 2500, throw: false)
+                ->withHeaders($this->apiHeaders())
                 ->post(
-                    "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent",
+                    $this->apiUrl($model),
                     [
                         'contents' => [
                             ['parts' => [['text' => $prompt]]],
                         ],
                         'generationConfig' => [
                             'temperature' => 0.4,
-                            'maxOutputTokens' => 512,
+                            'maxOutputTokens' => 512, 'thinkingConfig' => ['thinkingBudget' => 0],
                         ],
                     ]
                 );
@@ -117,16 +133,16 @@ class GeminiService
         $contents[] = ['role' => 'user', 'parts' => [['text' => $question]]];
 
         try {
-            $response = Http::timeout(15)
-                ->withHeader('x-goog-api-key', config('services.gemini.key'))
+            $response = Http::timeout(30)->retry(2, 2500, throw: false)
+                ->withHeaders($this->apiHeaders())
                 ->post(
-                    "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent",
+                    $this->apiUrl($model),
                     [
                         'systemInstruction' => ['parts' => [['text' => $system]]],
                         'contents' => $contents,
                         'generationConfig' => [
                             'temperature' => 0.4,
-                            'maxOutputTokens' => 512,
+                            'maxOutputTokens' => 512, 'thinkingConfig' => ['thinkingBudget' => 0],
                         ],
                     ]
                 );
@@ -196,16 +212,16 @@ class GeminiService
         $contents[] = ['role' => 'user', 'parts' => [['text' => $question]]];
 
         try {
-            $response = Http::timeout(15)
-                ->withHeader('x-goog-api-key', config('services.gemini.key'))
+            $response = Http::timeout(30)->retry(2, 2500, throw: false)
+                ->withHeaders($this->apiHeaders())
                 ->post(
-                    "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent",
+                    $this->apiUrl($model),
                     [
                         'systemInstruction' => ['parts' => [['text' => $system]]],
                         'contents' => $contents,
                         'generationConfig' => [
                             'temperature' => 0.4,
-                            'maxOutputTokens' => 512,
+                            'maxOutputTokens' => 512, 'thinkingConfig' => ['thinkingBudget' => 0],
                         ],
                     ]
                 );
