@@ -28,9 +28,10 @@ return [
     ],
 
     'receiving' => [
-        'gcash' => ['label' => 'GCash', 'detail' => ''],
-        'maya' => ['label' => 'Maya', 'detail' => ''],
-        'gotyme' => ['label' => 'GoTyme', 'detail' => ''],
+        'gcash' => ['label' => 'GCash', 'detail' => 'Irian P - 0905 556 3955'],
+        'maya' => ['label' => 'Maya', 'detail' => 'Irian Paguiligan - 0905 556 3955'],
+        'gotyme' => ['label' => 'GoTyme', 'detail' => 'Irian Paguiligan - Account no: 0115 7730 2692'],
+        'bank_transfer' => ['label' => 'Other Bank Transfer', 'detail' => "GCash - Irian P - 0905 556 3955\nMaya - Irian Paguiligan - 0905 556 3955\nGoTyme - Irian Paguiligan - Account no: 0115 7730 2692"],
     ],
 
     /*

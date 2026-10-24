@@ -109,7 +109,7 @@
                         @if($requiresDownPayment)
                             <p class="small nx-text-secondary mb-4">A down payment is required for this booking and must be paid online with proof of payment — Cash is not available. The remaining balance is paid at the branch on your appointment day.</p>
                         @endif
-                        <p class="small nx-text-secondary mb-4 d-none" id="pay-receiving"></p>
+                        <p class="small nx-text-secondary mb-4 d-none" id="pay-receiving" style="white-space: pre-line;"></p>
 
                         <div id="pay-proof-block">
                             <label class="form-label">Proof of payment</label>
