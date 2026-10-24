@@ -76,8 +76,7 @@
                         @endif
 
                         <div class="d-flex justify-content-between flex-wrap gap-2">
-                            <a href="{{ route('account.booking.branch.service') }}" class="nx-btn nx-btn-outline"
-                               data-bs-toggle="modal" data-bs-target="#bookServiceModal">
+                            <a href="{{ route('landing') }}" class="nx-btn nx-btn-outline">
                                 <i class="bi bi-arrow-left me-1"></i>Back
                             </a>
                             <button type="submit" class="nx-btn nx-btn-primary">

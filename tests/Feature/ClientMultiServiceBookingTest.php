@@ -130,7 +130,7 @@ class ClientMultiServiceBookingTest extends TestCase
             ->assertOk()
             ->assertSee('Add another service')
             ->assertSee('id="servicePickerModal"', false)
-            ->assertSee('id="addAnotherModal"', false)
+            ->assertDontSee('id="addAnotherModal"', false)
             ->assertSee('id="svcCardMain"', false)
             ->assertSee('id="scheduleActionBar"', false)
             ->assertSee('data-personnel-name', false)

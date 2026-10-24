@@ -32,7 +32,7 @@
                     @include('partials.package-inclusions', ['service' => $service])
                     @foreach(($extras ?? []) as $extra)
                         <div class="nx-review-row">
-                            <span class="nx-review-label">Extra service</span>
+                            <span class="nx-review-label">Add service</span>
                             <span class="nx-review-value">
                                 {{ $extra['service']->name }}@if($extra['variant_label']) — {{ $extra['variant_label'] }}@endif
                                 · {{ $extra['personnel_name'] ?? 'No preferred personnel' }}
@@ -66,8 +66,8 @@
                         <span class="nx-review-value">₱{{ number_format($balance, 2) }}</span>
                     </div>
                     <div class="nx-review-row">
-                        <span class="nx-review-label">Main service duration</span>
-                        <span class="nx-review-value">{{ $service->duration_minutes }} mins</span>
+                        <span class="nx-review-label">Duration</span>
+                        <span class="nx-review-value">{{ (int) $service->duration_minutes + collect($extras ?? [])->sum(fn ($extra) => (int) ($extra['service']->duration_minutes ?? 0)) }} mins</span>
                     </div>
                     <div class="nx-review-row">
                         <span class="nx-review-label">Date</span>

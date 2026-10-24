@@ -40,21 +40,15 @@
                     <form method="GET" action="{{ route('account.booking.home.review') }}">
                         @include('partials.booking.carry-fields', ['service' => $service->id, 'date' => $date, 'time' => $time, 'personnel' => $personnel, 'staff' => $staff ?? [], 'extras' => $extras, 'address' => $address])
 
-                        @foreach(($extras ?? []) as $extra)
+                        @if(! empty($extras))
                             <div class="nx-review-row">
-                                <span class="nx-review-label">Extra service</span>
-                                <span class="nx-review-value">
-                                    {{ $extra['service']->name }}@if($extra['variant_label']) — {{ $extra['variant_label'] }}@endif
-                                    · {{ $extra['personnel_name'] ?? 'No preferred personnel' }}
-                                    · {{ \App\Support\BookingExtras::startTimeLabel($extra['start_time'] ?? null) ?? 'Time to confirm' }}
-                                    · ₱{{ number_format($extra['price'], 2) }}
-                                </span>
+                                <span class="nx-review-label">Add service</span>
+                                <span class="nx-review-value">{{ count($extras) }}</span>
                             </div>
-                        @endforeach
-
+                        @endif
                         @if($service->variants->isEmpty())
                             <p class="small nx-text-secondary mt-2 mb-3">
-                                Down payment for this service: ₱{{ number_format(\App\Support\BookingExtras::downPaymentForService($service, (float) $service->price), 2) }} — deducted from your total, balance paid to the specialist at your home.@if(! empty($extras)) Each extra adds its own configured down payment.@endif
+                                Down payment for this service(s) — deducted from your total, balance paid to the specialist at your home.@if(! empty($extras)) Each extra adds its own configured down payment.@endif
                             </p>
                         @endif
 

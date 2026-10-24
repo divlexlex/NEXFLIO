@@ -724,13 +724,13 @@ class ReservationFeeCashTest extends TestCase
         $client->get(route('account.booking.branch.details', array_merge($base, ['service' => $kiddie->id])))
             ->assertOk()
             ->assertDontSee('name="guests"', false)
-            ->assertSee('Down payment for this service: ₱20.00');
+            ->assertSee('Down payment for this service(s)');
 
         // A regular Nails service shows the same computed note, no guests field.
         $client->get(route('account.booking.branch.details', array_merge($base, ['service' => $this->pedicure->id])))
             ->assertOk()
             ->assertDontSee('name="guests"', false)
-            ->assertSee('Down payment for this service: ₱225.00');
+            ->assertSee('Down payment for this service(s)');
     }
 
     public function test_nails_ignores_guests_and_charges_half_price(): void
@@ -780,13 +780,13 @@ class ReservationFeeCashTest extends TestCase
         $client->get(route('account.booking.branch.details', $base))
             ->assertOk()
             ->assertDontSee('name="guests"', false)
-            ->assertSee('Down payment for this service: ₱300.00');
+            ->assertSee('Down payment for this service(s)');
 
         // ...including Nails (450 -> half 225.00).
         $client->get(route('account.booking.branch.details', array_merge($base, ['service' => $this->pedicure->id])))
             ->assertOk()
             ->assertDontSee('name="guests"', false)
-            ->assertSee('Down payment for this service: ₱225.00');
+            ->assertSee('Down payment for this service(s)');
 
         // Review + payment: per-service DP, balance, and full breakdown.
         $client->get(route('account.booking.branch.review', $base))
@@ -808,7 +808,7 @@ class ReservationFeeCashTest extends TestCase
         $client->get(route('account.booking.home.details', array_merge($base, ['service' => $this->homeMassage->id], $address)))
             ->assertOk()
             ->assertDontSee('name="guests"', false)
-            ->assertSee('Down payment for this service: ₱300.00');
+            ->assertSee('Down payment for this service(s)');
 
         // Home review: per-service DP and balance.
         $client->get(route('account.booking.home.review', array_merge($base, ['service' => $this->homeMassage->id], $address)))

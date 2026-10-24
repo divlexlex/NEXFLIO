@@ -38,7 +38,8 @@ class StaffPortalTest extends TestCase
         $this->actingAs($this->staff)->get('/staff/dashboard')
             ->assertOk()
             ->assertSee('Time In')
-            ->assertSee("This Week's Pay");
+            ->assertSee("This Week's Pay", false);
+
     }
 
     public function test_non_staff_cannot_reach_the_staff_dashboard(): void

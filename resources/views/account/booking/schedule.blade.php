@@ -32,20 +32,22 @@
                         @include('partials.booking.progress-compact', ['step' => 2])
                     </div>
 
-                    {{-- DATE --}}
-                    <form method="GET" action="{{ route('account.booking.branch.schedule') }}" id="dateForm">
-                        <input type="hidden" name="service" value="{{ $service->id }}">
-                        @if($variant)<input type="hidden" name="variant" value="{{ $variant->id }}">@endif
-                        @include('partials.booking.carry-extras', ['extras' => $extras])
-                        <label class="form-label nx-eyebrow">Date</label>
-                        <div class="d-flex gap-2 flex-wrap">
-                            <input type="date" name="date" value="{{ $date }}" min="{{ $minDate }}" max="{{ $maxDate }}"
-                                   class="form-control" style="max-width: 220px;" onchange="document.getElementById('dateForm').submit()" required>
-                            <button type="submit" class="nx-btn nx-btn-outline">Update</button>
+                    {{-- MAIN SERVICE SUMMARY --}}
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="nx-card-media" style="width: 64px; height: 64px; border-radius: var(--nx-radius-md); flex-shrink: 0;">
+                            @if($service->image_url)
+                                <img src="{{ $service->image_url }}" alt="{{ $service->name }}">
+                            @else
+                                <i class="bi bi-image opacity-50"></i>
+                            @endif
                         </div>
-                    </form>
+                        <div>
+                            <p class="fw-semibold mb-0">{{ $service->name }}@if($variant) <span class="nx-text-secondary">— {{ $variant->label }}</span>@endif</p>
+                            <p class="small nx-text-secondary mb-0">{{ $service->duration_minutes }} mins &middot; ₱{{ number_format($variant?->price ?? $service->price, 2) }}</p>
+                        </div>
+                    </div>
 
-                    <hr class="my-4" style="border-color: var(--nx-border);">
+                    {{-- DATE --}}
 
                     <div id="scheduleList" class="nx-svc-list">
                         {{-- CARD #1 — MAIN SERVICE (server-rendered, unchanged) --}}
@@ -60,22 +62,16 @@
                              data-variant-label="{{ $variant?->label }}"
                              data-multistaff="{{ $isMultiStaff ? '1' : '0' }}"
                              data-time="{{ $selectedTime ?? '' }}">
-                            <div class="nx-svc-card-head">
-                                <div>
-                                    <div class="nx-svc-card-name">{{ $service->name }}@if($variant) <span class="nx-text-secondary">— {{ $variant->label }}</span>@endif</div>
-                                    <div class="nx-svc-card-meta">{{ $service->duration_minutes }} mins &middot; ₱{{ number_format($variant?->price ?? $service->price, 2) }}</div>
-                                    <div class="nx-svc-card-dp">Down payment: {{ $service->down_payment !== null ? '₱'.number_format((float) $service->down_payment, 2) : 'none' }}</div>
-                                </div>
-                                <button type="button" class="nx-svc-card-discard" data-card-discard aria-label="Discard service">&times;</button>
+                            <div class="nx-svc-card-finished fin-bar d-none" data-card-finished>
+                                <span class="fin-check">✓</span>
+                                <span data-finished-summary></span>
+                                <span class="nx-svc-card-finished-actions fin-actions">
+                                    <span class="nx-svc-card-edit fin-done">✓ Done</span>
+                                </span>
                             </div>
 
-                            <div class="nx-svc-card-finished d-none" data-card-finished>
-                                <span data-finished-summary></span>
-                                <span class="nx-svc-card-edit">tap to edit</span>
-                            </div>
 
                             <div class="nx-svc-card-body" data-card-body>
-                                <p class="nx-eyebrow mb-2">Preferred Spa Personnel</p>
                                 <form method="GET" action="{{ route('account.booking.branch.schedule') }}" id="personnelForm">
                                     <input type="hidden" name="service" value="{{ $service->id }}">
                                     @if($variant)<input type="hidden" name="variant" value="{{ $variant->id }}">@endif
@@ -107,21 +103,30 @@
                             </div>
                         </div>
                     </div>
+                    <hr class="my-4" style="border-color: var(--nx-border);">
 
-                    {{-- BOTTOM ACTION BAR (2+ services) --}}
-                    <div class="nx-svc-actionbar d-none" id="scheduleActionBar">
-                        <button type="button" class="nx-btn nx-btn-outline" id="backFirstBtn">&larr; Back to service</button>
-                        <div class="d-flex flex-wrap gap-2 ms-auto">
-                            <button type="button" class="nx-btn nx-btn-outline" id="discardActiveBtn">Discard</button>
-                            <button type="button" class="nx-btn nx-btn-outline" id="addServiceBtn2">+ Add another service</button>
-                            <button type="button" class="nx-btn nx-btn-primary" id="scheduleContinueBtn">Continue &rarr;</button>
-                        </div>
-                    </div>
+                            <form method="GET" action="{{ route('account.booking.branch.schedule') }}" id="dateForm">
+                            <input type="hidden" name="service" value="{{ $service->id }}">
+                            @if($variant)<input type="hidden" name="variant" value="{{ $variant->id }}">@endif
+                            @include('partials.booking.carry-extras', ['extras' => $extras])
+                            <label class="form-label nx-eyebrow">Date</label>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <input type="date" name="date" value="{{ $date }}" min="{{ $minDate }}" max="{{ $maxDate }}"
+                                    class="form-control" style="max-width: 220px;" onchange="document.getElementById('dateForm').submit()" required>
+                                <button type="submit" class="nx-btn nx-btn-outline">Update</button>
+                            </div>
+                        </form>
                 </div>
 
-                <a href="{{ route('account.booking.branch.service.show', $service->id) }}" class="nx-btn nx-btn-outline">
-                    <i class="bi bi-arrow-left me-1"></i>Back
-                </a>
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                    <a href="{{ route('account.booking.branch.service.show', $service->id) }}" class="nx-btn nx-btn-outline">
+                        <i class="bi bi-arrow-left me-1"></i>Back
+                    </a>
+                    <div class="d-flex flex-wrap gap-2 ms-auto d-none" id="scheduleActionBar">
+                        <button type="button" class="nx-btn nx-btn-outline" id="addServiceBtn2">+ Add service</button>
+                        <button type="button" class="nx-btn nx-btn-primary" id="scheduleContinueBtn">Continue &rarr;</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -129,24 +134,6 @@
     {{-- SUBMIT FORM — JS maps the built list onto the existing field names. --}}
     <form method="GET" action="{{ route('account.booking.branch.details') }}" id="scheduleSubmitForm" class="d-none"></form>
 
-    {{-- POPUP #1 — after a time is picked on the active card. --}}
-    <div class="modal fade" id="addAnotherModal" tabindex="-1" aria-hidden="true" aria-labelledby="addAnotherLabel">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 nx-body" style="border-radius: var(--nx-radius-lg); overflow: hidden;">
-                <div class="modal-header" style="border-color: var(--nx-border);">
-                    <h2 id="addAnotherLabel" class="h5 mb-0">Add another service?</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="mb-0" id="addAnotherSummary"></p>
-                </div>
-                <div class="modal-footer" style="border-color: var(--nx-border);">
-                    <button type="button" class="nx-btn nx-btn-outline" id="addAnotherContinue">Not now — Continue</button>
-                    <button type="button" class="nx-btn nx-btn-primary" id="addAnotherOpenPicker">+ Add another service</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     {{-- POPUP #2 — services picker (same cards/pills as the booking modal). --}}
     <div class="modal fade" id="servicePickerModal" tabindex="-1" aria-hidden="true" aria-labelledby="servicePickerLabel">
@@ -169,23 +156,28 @@
 </section>
 @endsection
 
-@push('styles')
+@push('head')
 <style>
     .nx-svc-list { display: flex; flex-direction: column; gap: 16px; }
-    .nx-svc-card { border: 1px solid var(--nx-border); border-radius: var(--nx-radius-lg); padding: 18px; background: var(--nx-surface, #fff); transition: box-shadow .2s ease, border-color .2s ease, background .2s ease, transform .2s ease; }
+    .nx-svc-card { border: 1px solid var(--nx-border); border-radius: var(--nx-radius-lg); padding: 18px; background: transparent; transition: box-shadow .2s ease, border-color .2s ease, background .2s ease, transform .2s ease; }
     .nx-svc-card.is-active { border-color: var(--nx-accent); box-shadow: 0 0 0 1px var(--nx-accent); }
     .nx-svc-card.is-finished { padding: 12px 16px; background: rgba(0,0,0,.025); }
-    .nx-svc-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .nx-svc-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .nx-svc-card-name { font-weight: 600; }
     .nx-svc-card-meta { font-size: 13px; color: var(--nx-text-secondary); }
-    .nx-svc-card-dp { font-size: 12px; color: var(--nx-text-secondary); }
-    .nx-svc-card-discard { background: none; border: 0; color: var(--nx-text-secondary); font-size: 20px; line-height: 1; }
-    .nx-svc-card-discard:hover { color: var(--nx-danger, #c0392b); }
     .nx-svc-card-finished { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; cursor: pointer; }
+    .nx-svc-card-finished-actions { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; }
     .nx-svc-card-edit { font-size: 12px; color: var(--nx-accent); }
+    .nx-svc-card-discard-text { background: none; border: 0; color: var(--nx-danger, #c0392b); font: inherit; font-size: 13.5px; padding: 2px 4px; cursor: pointer; }
+    .nx-svc-card-discard-text:hover { text-decoration: underline; }
+    .fin-bar { display: flex; align-items: center; gap: 12px; background: rgba(0,0,0,.28); border: 1px solid var(--nx-border); border-radius: 12px; padding: 12px 16px; cursor: pointer; }
+    .fin-bar:hover { border-color: var(--nx-accent); }
+    .fin-check { width: 26px; height: 26px; flex: 0 0 auto; border-radius: 50%; border: 1.5px solid var(--nx-accent); color: var(--nx-accent); display: inline-flex; align-items: center; justify-content: center; font-size: 14px; background: rgba(224,183,116,.10); }
+    .fin-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 14px; }
+    .fin-done { letter-spacing: 2px; font-size: 10.5px; text-transform: uppercase; font-weight: 600; color: var(--nx-accent); border: 1px solid var(--nx-accent); background: rgba(224,183,116,.10); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+    .fin-discard { background: none !important; border: 0 !important; box-shadow: none !important; color: var(--nx-danger, #c0392b); font: inherit; font-size: 13.5px; padding: 2px; cursor: pointer; }
+    .fin-discard:hover { text-decoration: underline; }
     .nx-svc-card-body { margin-top: 14px; }
-    .nx-svc-personnel { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
-    .nx-svc-personnel .nx-select-card { padding: 8px 12px; }
     .nx-slot-btn { transition: background .18s ease, color .18s ease, border-color .18s ease, transform .12s ease; }
     .nx-slot-btn.is-selected { transform: translateY(-1px); }
     .nx-svc-actionbar { position: sticky; bottom: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 18px; padding: 12px; border: 1px solid var(--nx-border); border-radius: var(--nx-radius-lg); background: var(--nx-surface, #fff); box-shadow: 0 6px 18px rgba(0,0,0,.08); }
@@ -222,7 +214,6 @@
         var activeCard = mainCard;
         var pickerBuilt = false;
 
-        var addAnotherModal = new bootstrap.Modal(document.getElementById('addAnotherModal'));
         var pickerModal = new bootstrap.Modal(document.getElementById('servicePickerModal'));
 
         function serviceData(id) { return catalog[String(id)] || null; }
@@ -319,7 +310,8 @@
 
         function refresh() {
             var cards = getCards();
-            if (actionBar) actionBar.classList.toggle('d-none', cards.length < 2);
+            var multiple = cards.length >= 2;
+            if (actionBar) actionBar.classList.toggle('d-none', cards.length === 1 && !cards[0].classList.contains('is-finished'));
             if (backFirstBtn && cards.length) {
                 backFirstBtn.textContent = '← Back to ' + cards[0].dataset.name;
             }
@@ -327,6 +319,9 @@
                 continueBtn.disabled = cards.length === 0 || cards.some(function (card) { return !card.dataset.time; });
             }
             if (discardActiveBtn) discardActiveBtn.disabled = !activeCard;
+            list.querySelectorAll('.nx-svc-card-discard-text').forEach(function (button) {
+                button.classList.toggle('d-none', !multiple);
+            });
         }
 
         function optionPill(category, first) {
@@ -436,20 +431,22 @@
 
             var personnel = service.personnel || [];
             var personnelHtml =
-                '<div class="mb-3">' +
-                    '<label class="form-label small mb-1">Preferred Spa Personnel</label>' +
-                    '<div class="nx-svc-personnel">' +
+                '<label class="form-label nx-eyebrow">Preferred Spa Personnel</label>' +
+                '<div class="row g-2">' +
+                    '<div class="col-sm-6 col-lg-4">' +
                         '<label class="nx-select-card d-flex align-items-center gap-2">' +
                             '<input type="radio" name="svc_personnel_' + (++uid) + '" value="" checked data-card-personnel data-personnel-name="No preferred personnel">' +
-                            '<span>No preferred personnel</span>' +
+                            '<span>No preferred personnel<br><small class="nx-text-secondary">Manager will assign staff</small></span>' +
                         '</label>' +
-                        personnel.map(function (member, index) {
-                            return '<label class="nx-select-card d-flex align-items-center gap-2">' +
+                    '</div>' +
+                    personnel.map(function (member) {
+                        return '<div class="col-sm-6 col-lg-4">' +
+                            '<label class="nx-select-card d-flex align-items-center gap-2">' +
                                 '<input type="radio" name="svc_personnel_' + uid + '" value="' + member.id + '" data-card-personnel data-personnel-name="' + escapeHtml(member.name) + '">' +
                                 '<span>' + escapeHtml(member.name) + '</span>' +
-                            '</label>';
-                        }).join('') +
-                    '</div>' +
+                            '</label>' +
+                        '</div>';
+                    }).join('') +
                 '</div>';
 
             var slotsHtml = slotOptions.filter(function (option) {
@@ -460,20 +457,28 @@
             }).join('');
 
             card.innerHTML =
-                '<div class="nx-svc-card-head">' +
-                    '<div>' +
-                        '<div class="nx-svc-card-name">' + escapeHtml(service.name) + '</div>' +
-                        '<div class="nx-svc-card-meta">' + service.duration_minutes + ' mins · ' + money(service.price) + '</div>' +
-                        '<div class="nx-svc-card-dp">Down payment: ' + (service.down_payment == null ? 'none' : money(service.down_payment)) + '</div>' +
+                '<div class="d-flex align-items-center gap-3 mb-4">' +
+                    '<div class="nx-card-media" style="width: 64px; height: 64px; border-radius: var(--nx-radius-md); flex-shrink: 0;">' +
+                        (service.image_url
+                            ? '<img src="' + escapeHtml(service.image_url) + '" alt="' + escapeHtml(service.name) + '">'
+                            : '<i class="bi bi-image opacity-50"></i>') +
                     '</div>' +
-                    '<button type="button" class="nx-svc-card-discard" data-card-discard aria-label="Discard service">&times;</button>' +
+                    '<div>' +
+                        '<p class="fw-semibold mb-0">' + escapeHtml(service.name) + '</p>' +
+                        '<p class="small nx-text-secondary mb-0">' + service.duration_minutes + ' mins · ' + money(service.price) + '</p>' +
+                    '</div>' +
                 '</div>' +
-                '<div class="nx-svc-card-finished d-none" data-card-finished>' +
-                    '<span data-finished-summary></span><span class="nx-svc-card-edit">tap to edit</span>' +
+                '<div class="nx-svc-card-finished fin-bar d-none" data-card-finished>' +
+                    '<span class="fin-check">✓</span>' +
+                    '<span data-finished-summary></span>' +
+                    '<span class="nx-svc-card-finished-actions fin-actions">' +
+                        '<span class="nx-svc-card-edit fin-done">✓ Done</span>' +
+                        '<button type="button" class="nx-svc-card-discard-text fin-discard" data-card-discard>Discard ✕</button>' +
+                    '</span>' +
                 '</div>' +
                 '<div class="nx-svc-card-body" data-card-body>' +
                     variantHtml + personnelHtml +
-                    '<label class="form-label small mb-1">Time</label>' +
+                    '<p class="nx-eyebrow mb-2 mt-3">Time</p>' +
                     '<div class="nx-slot-grid">' + slotsHtml + '</div>' +
                 '</div>';
 
@@ -523,14 +528,6 @@
             return card;
         }
 
-        function showAddAnother(card) {
-            activeCard = card;
-            var summary = document.getElementById('addAnotherSummary');
-            if (summary) {
-                summary.textContent = card.dataset.name + ' with ' + personnelLabel(card) + ' at ' + labelOf(card.dataset.time) + '.';
-            }
-            addAnotherModal.show();
-        }
 
         function addHidden(name, value) {
             if (value === null || value === undefined || value === '') return;
@@ -582,7 +579,9 @@
                 var card = slot.closest('[data-card]');
                 if (!card || card.classList.contains('is-finished')) return;
                 setSelectedTime(card, slot.dataset.slotTime);
-                showAddAnother(card);
+                finishCard(card);
+                activeCard = null;
+                refresh();
                 return;
             }
 
@@ -599,34 +598,9 @@
             }
         });
 
-        document.getElementById('addAnotherContinue').addEventListener('click', function () {
-            addAnotherModal.hide();
-            submitList();
-        });
-
-        document.getElementById('addAnotherOpenPicker').addEventListener('click', function () {
-            addAnotherModal.hide();
-            buildPicker();
-            pickerModal.show();
-        });
-
         addServiceBtn2.addEventListener('click', function () {
             buildPicker();
             pickerModal.show();
-        });
-
-        backFirstBtn.addEventListener('click', function () {
-            var cards = getCards();
-            if (!cards.length) return;
-            cards.forEach(function (card) {
-                if (card !== cards[0]) finishCard(card);
-            });
-            reopenCard(cards[0]);
-            refresh();
-        });
-
-        discardActiveBtn.addEventListener('click', function () {
-            discardCard(activeCard);
         });
 
         continueBtn.addEventListener('click', submitList);
