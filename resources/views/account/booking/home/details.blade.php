@@ -52,6 +52,10 @@
                             </p>
                         @endif
 
+                        <div class="alert alert-warning py-2 px-3 small mt-2 mb-3" role="note">
+                            <i class="bi bi-geo-alt-fill me-1"></i><strong>Travel fee excluded.</strong> Travel rate will be based on the Move It rate.
+                        </div>
+
                         <label for="notes" class="form-label">Notes for the specialist <span class="nx-text-secondary" style="font-weight:400;">(optional)</span></label>
                         <textarea name="notes" id="notes" rows="4" maxlength="1000" class="form-control" placeholder="Landmarks, gate/unit access instructions, or anything the specialist should know?">{{ $notes }}</textarea>
 
