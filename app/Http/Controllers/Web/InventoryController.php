@@ -42,7 +42,7 @@ class InventoryController extends Controller
                 ->orderBy('received_at')
                 ->orderBy('id');
         }])
-            ->when($category !== null, fn ($query) => $query->whereRaw('LOWER(category) = ?', [mb_strtolower($category)]))
+            ->when($category !== null && $q === '', fn ($query) => $query->whereRaw('LOWER(category) = ?', [mb_strtolower($category)]))
             ->when($q !== '', fn ($query) => $query->where('item_name', 'like', '%'.$q.'%'))
             ->when($stock === 'in', fn ($query) => $query->whereColumn('quantity', '>', 'reorder_point'))
             ->when($stock === 'low', fn ($query) => $query->whereColumn('quantity', '<=', 'reorder_point'))

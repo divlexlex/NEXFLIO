@@ -131,7 +131,9 @@
     </div>
 </form>
 <div class="mb-3 d-flex justify-content-end align-items-center flex-wrap gap-2">
-    @if($filtersActive)
+    @if($currentQ !== '')
+        <span class="small text-muted">Showing {{ $items->total() }} result(s) for "{{ $currentQ }}" across all categories</span>
+    @elseif($filtersActive)
         <span class="small text-muted">Showing {{ $items->total() }} of {{ $totalInCategory }} items</span>
     @else
         <span class="small text-muted">{{ $totalInCategory }} item(s) in this category</span>
