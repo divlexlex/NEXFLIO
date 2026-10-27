@@ -86,7 +86,10 @@ class ClientBookingWindowTest extends TestCase
             'service_id' => $service->id,
             'personnel_id' => 'any',
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            // Tomorrow is kept as the point of this test; 13:00 is valid
+            // whether tomorrow is a weekday (opens 12:00) or a weekend
+            // (opens 10:00).
+            'start_time' => '13:00',
             'method' => 'gcash',
             'guests' => 1,
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),

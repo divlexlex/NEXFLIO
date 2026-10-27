@@ -131,7 +131,10 @@ class ReservationFeeCashTest extends TestCase
             'service_id' => $this->manicure->id,
             'personnel_id' => 'any',
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            // 13:00 is inside both the weekday (12:00-22:00) and weekend
+            // (10:00-22:00) business-hours windows, so "tomorrow" books on
+            // any day of the week.
+            'start_time' => '13:00',
             'method' => 'gcash',
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ], $overrides);
@@ -219,7 +222,7 @@ class ReservationFeeCashTest extends TestCase
         // Submitted guests -> still ignored, fee unchanged.
         $this->actingAs($this->client)->post(
             route('account.booking.branch.store'),
-            $this->branchPayload(['service_id' => $this->massage->id, 'guests' => 5, 'start_time' => '11:00'])
+            $this->branchPayload(['service_id' => $this->massage->id, 'guests' => 5, 'start_time' => '14:00'])
         )->assertRedirect()->assertSessionHasNoErrors();
 
         $second = Appointment::latest('id')->firstOrFail();
@@ -303,7 +306,7 @@ class ReservationFeeCashTest extends TestCase
         // Cancel a fresh Cash request the same way (drawer asks for a reason).
         $this->actingAs($this->client)->post(
             route('account.booking.branch.store'),
-            $this->branchPayload(['method' => 'cash', 'payment_proof' => null, 'start_time' => '11:00'])
+            $this->branchPayload(['method' => 'cash', 'payment_proof' => null, 'start_time' => '14:00'])
         );
         $cancelled = Appointment::latest('id')->firstOrFail();
 

@@ -358,13 +358,13 @@ class ClientMultiServiceBookingTest extends TestCase
 
         $this->store([
             'service_id' => $main->id,
-            'start_time' => '10:00',
-            'extras' => [['service_id' => $extra->id, 'start_time' => '12:00']],
+            'start_time' => '13:00',
+            'extras' => [['service_id' => $extra->id, 'start_time' => '14:00']],
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $response = $this->store([
             'service_id' => $main->id,
-            'start_time' => '12:00',
+            'start_time' => '14:00',
         ]);
 
         $response->assertSessionHasErrors([

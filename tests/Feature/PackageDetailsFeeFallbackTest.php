@@ -247,7 +247,7 @@ class PackageDetailsFeeFallbackTest extends TestCase
             'variant_id' => $variant->id,
             'personnel_id' => 'any',
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '13:00',
             'method' => 'gcash',
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ])->assertRedirect()->assertSessionHasNoErrors();
@@ -277,7 +277,7 @@ class PackageDetailsFeeFallbackTest extends TestCase
             'variant_id' => $variant->id,
             'personnel_id' => 'any',
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '13:00',
             'method' => 'gcash',
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
             'street_address' => '123 Test St',
@@ -310,7 +310,7 @@ class PackageDetailsFeeFallbackTest extends TestCase
             'variant_id' => $variant->id,
             'personnel_id' => 'any',
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '13:00',
             'method' => 'cash',
             'payment_proof' => null,
         ])->assertRedirect()->assertSessionHasNoErrors();

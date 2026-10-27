@@ -60,7 +60,9 @@ class PaymentsSettleMoveTest extends TestCase
                 'variant_id' => $this->samCoupleId,
                 'personnel_id' => 'any',
                 'appointment_date' => now()->addDay()->toDateString(),
-                'start_time' => '10:00',
+                // 13:00 is inside both the weekday (12:00-22:00) and weekend
+                // (10:00-22:00) windows, so "tomorrow" is valid any day.
+                'start_time' => '13:00',
                 'method' => 'gcash',
                 'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
             ]
@@ -168,7 +170,7 @@ class PaymentsSettleMoveTest extends TestCase
             'service_id' => $this->manicure->id,
             'personnel_id' => 'any',
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '13:00',
             'method' => 'cash',
             'guests' => 1,
         ])->assertRedirect();
@@ -250,7 +252,7 @@ class PaymentsSettleMoveTest extends TestCase
             'service_id' => $this->manicure->id,
             'personnel_id' => 'any',
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '11:00',
+            'start_time' => '14:00',
             'method' => 'gcash',
             'guests' => 1,
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),

@@ -60,7 +60,7 @@ class PaymentsAppointmentCardsTest extends TestCase
             'variant_id' => $this->coupleVariantId,
             'personnel_id' => 'any',
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '13:00',
             'method' => 'gcash',
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ])->assertRedirect();
@@ -108,7 +108,7 @@ class PaymentsAppointmentCardsTest extends TestCase
             'variant_id' => $this->coupleVariantId,
             'personnel_id' => 'any',
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '13:00',
             'method' => 'gcash',
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ])->assertRedirect();
@@ -145,7 +145,7 @@ class PaymentsAppointmentCardsTest extends TestCase
             'variant_id' => $this->coupleVariantId,
             'personnel_id' => 'any',
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '13:00',
             'method' => 'gcash',
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ])->assertRedirect();
@@ -174,7 +174,7 @@ class PaymentsAppointmentCardsTest extends TestCase
             'variant_id' => $this->coupleVariantId,
             'personnel_id' => 'any',
             'appointment_date' => now()->addDay()->toDateString(),
-            'start_time' => '10:00',
+            'start_time' => '13:00',
             'method' => 'gcash',
             'payment_proof' => UploadedFile::fake()->image('proof.jpg'),
         ])->assertRedirect();
