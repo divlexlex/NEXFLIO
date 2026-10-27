@@ -192,13 +192,19 @@
                             <th>SL remaining</th>
                             <th>VL consumed</th>
                             <th>VL remaining</th>
+                            <th class="text-end"></th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($employees as $employee)
-                            @php($bal = $leaveBalances[$employee->id] ?? ['sl_used' => 0, 'sl_remaining' => 12, 'vl_used' => 0, 'vl_remaining' => 12])
+                        @forelse($leaveEmployees as $employee)
+                            @php($bal = $leaveBalances[$employee->id] ?? ['sl_used' => 0, 'sl_remaining' => 12, 'sl_adjustment' => 0, 'vl_used' => 0, 'vl_remaining' => 12, 'vl_adjustment' => 0])
                             <tr>
-                                <td><strong>{{ $employee->fullName() }}</strong></td>
+                                <td>
+                                    <strong>{{ $employee->fullName() }}</strong>
+                                    @if($employee->role_id === \App\Models\User::ROLE_MANAGER)
+                                        <span class="badge text-bg-light border ms-1">Manager</span>
+                                    @endif
+                                </td>
                                 <td>{{ $bal['sl_used'] }}</td>
                                 <td>
                                     {{ $bal['sl_remaining'] }}
@@ -217,9 +223,21 @@
                                         <span class="badge text-bg-warning ms-1">Low</span>
                                     @endif
                                 </td>
+                                <td class="text-end">
+                                    @if(auth()->user()->role_id === \App\Models\User::ROLE_SUPER_ADMIN)
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                data-bs-toggle="modal" data-bs-target="#leaveAdjustmentModal"
+                                                data-id="{{ $employee->id }}"
+                                                data-name="{{ $employee->fullName() }}"
+                                                data-sl="{{ $bal['sl_remaining'] }}"
+                                                data-vl="{{ $bal['vl_remaining'] }}">
+                                            Edit
+                                        </button>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
-                            <tr><td colspan="5" class="text-center text-muted py-4">No staff yet</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted py-4">No staff yet</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -396,6 +414,47 @@
         </form>
     </div>
 </div>
+{{-- LEAVE ADJUSTMENT MODAL (OWNER ONLY): signed correction rows, never an
+     overwrite of the computed consumed days — see LeaveBalances. --}}
+@if(auth()->user()->role_id === \App\Models\User::ROLE_SUPER_ADMIN)
+<div class="modal fade" id="leaveAdjustmentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST" id="leaveAdjustmentForm" class="modal-content">
+            @csrf @method('PATCH')
+            <div class="modal-header">
+                <h5 class="modal-title">Adjust Leave — <span id="leave-adjust-name"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">
+                    Current remaining: <strong id="leave-adjust-current"></strong>.
+                    Negative days reduce the balance, positive days add back.
+                    This is recorded as a separate, reasoned entry — approved leave days are never overwritten.
+                </p>
+                <div class="row">
+                    <div class="col mb-2">
+                        <label class="form-label" for="leave-adjust-sl">SL adjustment (days)</label>
+                        <input type="number" step="1" name="sl_days" id="leave-adjust-sl" class="form-control" placeholder="e.g. -1 or +2">
+                    </div>
+                    <div class="col mb-2">
+                        <label class="form-label" for="leave-adjust-vl">VL adjustment (days)</label>
+                        <input type="number" step="1" name="vl_days" id="leave-adjust-vl" class="form-control" placeholder="e.g. -1 or +2">
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label" for="leave-adjust-reason">Reason <span class="text-danger">*</span></label>
+                    <textarea name="reason" id="leave-adjust-reason" class="form-control" rows="3" required
+                              placeholder="Why is this balance being corrected?"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-spa">Save Adjustment</button>
+            </div>
+        </form>
+    </div>
+</div>
+@endif
 @endsection
 
 @push('scripts')
@@ -415,6 +474,25 @@
         document.getElementById('deleteEmployeeForm').action = "{{ url('admin/employees') }}/" + btn.dataset.id;
         document.getElementById('delete-emp-name').textContent = btn.dataset.name;
     });
+
+    // Owner-only leave adjustment modal: point the form at the employee and
+    // show their current remaining balances for context.
+    @if(auth()->user()->role_id === \App\Models\User::ROLE_SUPER_ADMIN)
+    const leaveAdjustModal = document.getElementById('leaveAdjustmentModal');
+    if (leaveAdjustModal) {
+        leaveAdjustModal.addEventListener('show.bs.modal', (event) => {
+            const btn = event.relatedTarget;
+            document.getElementById('leaveAdjustmentForm').action =
+                "{{ url('admin/employees') }}/" + btn.dataset.id + "/leave-adjustment";
+            document.getElementById('leave-adjust-name').textContent = btn.dataset.name;
+            document.getElementById('leave-adjust-current').textContent =
+                'SL ' + btn.dataset.sl + ' day(s), VL ' + btn.dataset.vl + ' day(s)';
+            document.getElementById('leave-adjust-sl').value = '';
+            document.getElementById('leave-adjust-vl').value = '';
+            document.getElementById('leave-adjust-reason').value = '';
+        });
+    }
+    @endif
 </script>
 <script>
     // Automatic employees filter bar (same pattern as the Admin Services

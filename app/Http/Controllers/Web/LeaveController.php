@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\LeaveRequest;
+use App\Models\User;
 use App\Services\NotificationService;
+use App\Support\LeaveConflicts;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -18,13 +20,18 @@ class LeaveController extends Controller
     {
         $status = $request->query('status', LeaveRequest::STATUS_PENDING);
 
+        $leaves = LeaveRequest::with(['user:id,name,role_id', 'reviewer:id,name'])
+            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->orderByDesc('created_at')
+            ->paginate(15)
+            ->withQueryString();
+
         return view('admin.leaves.index', [
-            'leaves' => LeaveRequest::with(['user:id,name', 'reviewer:id,name'])
-                ->when($status !== 'all', fn ($query) => $query->where('status', $status))
-                ->orderByDesc('created_at')
-                ->paginate(15)
-                ->withQueryString(),
+            'leaves' => $leaves,
             'currentStatus' => $status,
+            // Display-only: the requester's own active appointments inside
+            // the requested dates, so the approver decides informed.
+            'leaveConflicts' => LeaveConflicts::forLeaves($leaves->getCollection()),
         ]);
     }
 
@@ -35,7 +42,25 @@ class LeaveController extends Controller
             'review_notes' => 'nullable|string|max:1000',
         ]);
 
-        $leave = LeaveRequest::findOrFail($id);
+        $leave = LeaveRequest::with('user')->findOrFail($id);
+
+        // Managers' leave is the owner's call: a manager can never approve
+        // (or deny) their own request, and no other manager can do it for
+        // them. Enforced here, server-side — hiding the button is not enough.
+        if ($leave->user
+            && $leave->user->role_id === User::ROLE_MANAGER
+            && $request->user()->role_id !== User::ROLE_SUPER_ADMIN) {
+            return back()->withErrors([
+                'status' => "A manager's leave request can only be reviewed by the owner.",
+            ]);
+        }
+
+        // Nobody reviews their own leave.
+        if ($leave->user_id === $request->user()->id) {
+            return back()->withErrors([
+                'status' => 'You cannot review your own leave request.',
+            ]);
+        }
 
         if ($leave->status !== LeaveRequest::STATUS_PENDING) {
             return back()->withErrors(['status' => 'This leave request has already been reviewed.']);

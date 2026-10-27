@@ -138,7 +138,7 @@
 
 <div class="row g-3 mb-3">
     {{-- RECENT COMMISSIONS --}}
-    <div class="col-lg-6">
+    <div class="col-lg-4">
         <div class="card p-3 h-100">
             <h2 class="h6 text-uppercase text-muted mb-3">Recent Commissions</h2>
             @if($recentCommissions->isEmpty())
@@ -162,8 +162,39 @@
         </div>
     </div>
 
+    {{-- MY LEAVES (own balances only — derived from the logged-in user) --}}
+    <div class="col-lg-4">
+        <div class="card p-3 h-100">
+            <h2 class="h6 text-uppercase text-muted mb-3">My Leaves — {{ $leaveYear }}</h2>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-2">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th class="text-end">Consumed</th>
+                            <th class="text-end">Remaining</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Sick Leave</td>
+                            <td class="text-end">{{ $myLeaveBalances['sl_used'] }}</td>
+                            <td class="text-end">{{ $myLeaveBalances['sl_remaining'] }}</td>
+                        </tr>
+                        <tr>
+                            <td>Vacation Leave</td>
+                            <td class="text-end">{{ $myLeaveBalances['vl_used'] }}</td>
+                            <td class="text-end">{{ $myLeaveBalances['vl_remaining'] }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted mb-0">12 Sick Leave + 12 Vacation Leave per year, consumable only — not convertible to cash. Unused leaves reset every January.</p>
+        </div>
+    </div>
+
     {{-- LEAVE REQUESTS --}}
-    <div class="col-lg-6">
+    <div class="col-lg-4">
         <div class="card p-3 h-100">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="h6 text-uppercase text-muted mb-0">Leave Requests</h2>
@@ -209,27 +240,54 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                @php($leaveConflicts = session('leaveConflicts'))
+                @if($leaveConflicts)
+                    <div class="alert alert-warning" id="leave-conflicts">
+                        <p class="fw-semibold mb-2">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            This leave overlaps {{ count($leaveConflicts) === 1 ? 'an existing booking' : 'existing bookings' }}:
+                        </p>
+                        <ul class="small mb-3">
+                            @foreach($leaveConflicts as $conflict)
+                                <li>
+                                    <strong>{{ $conflict['date_label'] }}</strong> at {{ $conflict['time_label'] }}
+                                    — {{ $conflict['service'] }} ({{ $conflict['client'] }})
+                                </li>
+                            @endforeach
+                        </ul>
+                        <div class="d-flex gap-2">
+                            <button type="submit" name="confirm_conflicts" value="1" class="btn btn-sm btn-spa">
+                                Proceed anyway
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    onclick="document.getElementById('leave-conflicts').classList.add('d-none')">
+                                Change dates
+                            </button>
+                        </div>
+                        <p class="small text-muted mt-2 mb-0">Conflicts do not block the request — you can still file it.</p>
+                    </div>
+                @endif
                 <div class="row">
                     <div class="col mb-2">
                         <label class="form-label">Start Date</label>
-                        <input type="date" name="start_date" class="form-control" min="{{ now()->toDateString() }}" required>
+                        <input type="date" name="start_date" class="form-control" min="{{ now()->toDateString() }}" value="{{ old('start_date') }}" required>
                     </div>
                     <div class="col mb-2">
                         <label class="form-label">End Date</label>
-                        <input type="date" name="end_date" class="form-control" min="{{ now()->toDateString() }}" required>
+                        <input type="date" name="end_date" class="form-control" min="{{ now()->toDateString() }}" value="{{ old('end_date') }}" required>
                     </div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Type</label>
                     <select name="type" class="form-select" required>
                         @foreach(\App\Models\LeaveRequest::TYPES as $type)
-                            <option value="{{ $type }}">{{ ucfirst($type) }}</option>
+                            <option value="{{ $type }}" {{ old('type') === $type ? 'selected' : '' }}>{{ ucfirst($type) }}</option>
                         @endforeach
                     </select>
                 </div>
                 <div class="mb-2">
                     <label class="form-label">Reason</label>
-                    <textarea name="reason" class="form-control" rows="3" required></textarea>
+                    <textarea name="reason" class="form-control" rows="3" required>{{ old('reason') }}</textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -240,3 +298,18 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+@if(session('leaveConflicts'))
+<script>
+    // A conflict warning was flashed: reopen the Request Leave form with the
+    // typed values so the staff member can review it and choose.
+    document.addEventListener('DOMContentLoaded', function () {
+        const modal = document.getElementById('leaveModal');
+        if (modal) {
+            new bootstrap.Modal(modal).show();
+        }
+    });
+</script>
+@endif
+@endpush

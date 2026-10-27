@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Models\Attendance;
+use App\Models\LeaveAdjustment;
 use App\Models\Position;
 use App\Models\StaffProfile;
 use App\Models\User;
@@ -67,10 +68,19 @@ class EmployeeController extends Controller
             ->orderBy('first_name')
             ->get();
 
-        $leaveBalances = LeaveBalances::forUsers($employees, now()->year);
+        // The Leaves tab has its own collection: Staff AND Managers (each
+        // with their own 12 SL + 12 VL). The Roster & Attendance tab above
+        // stays STAFF-ONLY, so it keeps using $employees.
+        $leaveEmployees = User::whereIn('role_id', [User::ROLE_STAFF, User::ROLE_MANAGER])
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get();
+
+        $leaveBalances = LeaveBalances::forUsers($leaveEmployees, now()->year);
 
         return view('admin.employees.index', [
             'employees' => $employees,
+            'leaveEmployees' => $leaveEmployees,
             'attendances' => Attendance::with('user:id,name')
                 ->whereDate('work_date', $date)
                 ->orderBy('time_in')
@@ -156,6 +166,60 @@ class EmployeeController extends Controller
         $user->delete();
 
         return back()->with('success', 'Employee removed.');
+    }
+
+    /**
+     * Owner-only leave correction. Adjustments are separate, auditable rows
+     * (signed days + reason + author) rather than an overwrite of the
+     * computed consumed number, so a later approval can never clobber them.
+     * See App\Support\LeaveBalances for the math.
+     */
+    public function adjustLeave(Request $request, $id)
+    {
+        // The route sits in the owner-only group; this guard keeps the rule
+        // enforced server-side even if the route is ever moved.
+        abort_unless($request->user()->role_id === User::ROLE_SUPER_ADMIN, 403);
+
+        $employee = User::whereIn('role_id', [User::ROLE_STAFF, User::ROLE_MANAGER])->findOrFail($id);
+
+        $validated = $request->validate([
+            'sl_days' => 'nullable|integer',
+            'vl_days' => 'nullable|integer',
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        $slDays = (int) ($validated['sl_days'] ?? 0);
+        $vlDays = (int) ($validated['vl_days'] ?? 0);
+
+        if ($slDays === 0 && $vlDays === 0) {
+            return back()->withInput()->withErrors([
+                'sl_days' => 'Enter a non-zero adjustment for SL or VL.',
+            ]);
+        }
+
+        $year = now()->year;
+
+        DB::transaction(function () use ($employee, $slDays, $vlDays, $validated, $request, $year) {
+            foreach ([
+                LeaveAdjustment::TYPE_SICK => $slDays,
+                LeaveAdjustment::TYPE_VACATION => $vlDays,
+            ] as $type => $days) {
+                if ($days === 0) {
+                    continue;
+                }
+
+                LeaveAdjustment::create([
+                    'user_id' => $employee->id,
+                    'type' => $type,
+                    'days' => $days,
+                    'reason' => $validated['reason'],
+                    'created_by' => $request->user()->id,
+                    'year' => $year,
+                ]);
+            }
+        });
+
+        return back()->with('success', 'Leave adjustment saved for '.$employee->fullName().'.');
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\LeaveAdjustment;
 use App\Models\LeaveRequest;
 use App\Models\User;
 use Carbon\Carbon;
@@ -13,7 +14,12 @@ class LeaveBalances
     public const ANNUAL_VL = 12;
 
     /**
-     * Get leave balances for a collection of staff users for a given year.
+     * Get leave balances for a collection of staff/manager users for a given
+     * year.
+     *
+     * Remaining = max(0, 12 - approved days consumed + owner adjustments),
+     * where adjustments are the signed rows in leave_adjustments for that
+     * user, type and year. The consumed figure itself is never overwritten.
      */
     public static function forUsers(Collection $users, ?int $year = null): array
     {
@@ -35,6 +41,13 @@ class LeaveBalances
                     });
             })
             ->get();
+
+        // Owner corrections for this year, grouped per user. Signed rows:
+        // negative reduces remaining, positive adds back.
+        $adjustments = LeaveAdjustment::whereIn('user_id', $userIds)
+            ->where('year', $year)
+            ->get()
+            ->groupBy('user_id');
 
         $balances = [];
 
@@ -79,14 +92,19 @@ class LeaveBalances
                 }
             }
 
-            $slRemaining = max(0, self::ANNUAL_SL - $slUsed);
-            $vlRemaining = max(0, self::ANNUAL_VL - $vlUsed);
+            $slAdjustment = (int) ($adjustments->get($user->id)?->where('type', LeaveAdjustment::TYPE_SICK)->sum('days') ?? 0);
+            $vlAdjustment = (int) ($adjustments->get($user->id)?->where('type', LeaveAdjustment::TYPE_VACATION)->sum('days') ?? 0);
+
+            $slRemaining = max(0, self::ANNUAL_SL - $slUsed + $slAdjustment);
+            $vlRemaining = max(0, self::ANNUAL_VL - $vlUsed + $vlAdjustment);
 
             $balances[$user->id] = [
                 'sl_used' => $slUsed,
                 'sl_remaining' => $slRemaining,
+                'sl_adjustment' => $slAdjustment,
                 'vl_used' => $vlUsed,
                 'vl_remaining' => $vlRemaining,
+                'vl_adjustment' => $vlAdjustment,
             ];
         }
 
@@ -102,8 +120,10 @@ class LeaveBalances
         return $result[$user->id] ?? [
             'sl_used' => 0,
             'sl_remaining' => self::ANNUAL_SL,
+            'sl_adjustment' => 0,
             'vl_used' => 0,
             'vl_remaining' => self::ANNUAL_VL,
+            'vl_adjustment' => 0,
         ];
     }
 }

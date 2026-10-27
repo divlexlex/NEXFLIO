@@ -57,11 +57,29 @@ class EmployeeFiltersTest extends TestCase
             ->getContent();
     }
 
+    /**
+     * The Roster & Attendance pane only.
+     *
+     * The Leaves tab deliberately lists every staff member (and managers)
+     * regardless of the roster filters, so "this filtered row is absent"
+     * assertions must be scoped to the roster pane rather than the page.
+     */
+    private function rosterHtml(string $html): string
+    {
+        $start = strpos($html, 'id="roster-tab-pane"');
+        $end = strpos($html, 'id="leaves-tab-pane"');
+
+        $this->assertNotFalse($start, 'Roster tab pane not found.');
+        $this->assertNotFalse($end, 'Leaves tab pane not found.');
+
+        return substr($html, $start, $end - $start);
+    }
+
     public function test_search_narrows_by_name_and_username(): void
     {
         $this->makeStaff('Wanda', 'Searchwick', 'wanda.s');
 
-        $byName = $this->listHtml(['q' => 'Searchwick']);
+        $byName = $this->rosterHtml($this->listHtml(['q' => 'Searchwick']));
         $this->assertStringContainsString('Wanda Searchwick', $byName);
         $this->assertStringNotContainsString('Sheila Marie Dela Cruz', $byName);
 
@@ -69,7 +87,7 @@ class EmployeeFiltersTest extends TestCase
         $byUsername = $this->listHtml(['q' => 'WANDA']);
         $this->assertStringContainsString('Wanda Searchwick', $byUsername);
 
-        $seeded = $this->listHtml(['q' => 'delacruz.sheila']);
+        $seeded = $this->rosterHtml($this->listHtml(['q' => 'delacruz.sheila']));
         $this->assertStringContainsString('Sheila Marie Dela Cruz', $seeded);
         $this->assertStringNotContainsString('Wanda Searchwick', $seeded);
     }
@@ -79,11 +97,11 @@ class EmployeeFiltersTest extends TestCase
         Position::create(['name' => 'Lash Artist', 'service_category' => 'Lashes & Brows']);
         $this->makeStaff('Lena', 'Lasher', 'lena.l', 'Lash Artist');
 
-        $custom = $this->listHtml(['position' => 'Lash Artist']);
+        $custom = $this->rosterHtml($this->listHtml(['position' => 'Lash Artist']));
         $this->assertStringContainsString('Lena Lasher', $custom);
         $this->assertStringNotContainsString('Sheila Marie Dela Cruz', $custom);
 
-        $classic = $this->listHtml(['position' => 'Massage Technician']);
+        $classic = $this->rosterHtml($this->listHtml(['position' => 'Massage Technician']));
         $this->assertStringContainsString('Sheila Marie Dela Cruz', $classic);
         $this->assertStringNotContainsString('Lena Lasher', $classic);
     }
@@ -93,16 +111,16 @@ class EmployeeFiltersTest extends TestCase
         $this->makeStaff('Ivy', 'Inactive', 'ivy.i', 'Massage Technician', 'inactive');
         $this->makeStaff('Tina', 'Terminated', 'tina.t', 'Massage Technician', 'terminated');
 
-        $inactive = $this->listHtml(['status' => 'inactive']);
+        $inactive = $this->rosterHtml($this->listHtml(['status' => 'inactive']));
         $this->assertStringContainsString('Ivy Inactive', $inactive);
         $this->assertStringNotContainsString('Sheila Marie Dela Cruz', $inactive);
         $this->assertStringNotContainsString('Tina Terminated', $inactive);
 
-        $terminated = $this->listHtml(['status' => 'terminated']);
+        $terminated = $this->rosterHtml($this->listHtml(['status' => 'terminated']));
         $this->assertStringContainsString('Tina Terminated', $terminated);
         $this->assertStringNotContainsString('Ivy Inactive', $terminated);
 
-        $active = $this->listHtml(['status' => 'active']);
+        $active = $this->rosterHtml($this->listHtml(['status' => 'active']));
         $this->assertStringContainsString('Sheila Marie Dela Cruz', $active);
         $this->assertStringNotContainsString('Ivy Inactive', $active);
     }
@@ -113,7 +131,7 @@ class EmployeeFiltersTest extends TestCase
         $this->makeStaff('Nina', 'Offduty', 'nina.o', 'Nail Technician', 'inactive');
 
         // Seeded staff + 2 created = 3 total.
-        $html = $this->listHtml(['position' => 'Nail Technician', 'status' => 'inactive', 'q' => 'nina']);
+        $html = $this->rosterHtml($this->listHtml(['position' => 'Nail Technician', 'status' => 'inactive', 'q' => 'nina']));
 
         $this->assertStringContainsString('Nina Offduty', $html);
         $this->assertStringNotContainsString('Andy Active', $html);
@@ -140,7 +158,7 @@ class EmployeeFiltersTest extends TestCase
 
         $this->listHtml(['status' => 'inactive']);
 
-        $html = $this->listHtml();
+        $html = $this->rosterHtml($this->listHtml());
 
         $this->assertStringContainsString('Ivy Inactive', $html);
         $this->assertStringNotContainsString('Sheila Marie Dela Cruz', $html);

@@ -269,5 +269,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:1,2'])->group(
         Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs');
         Route::get('/reports/financial', [ReportController::class, 'financial'])->name('reports.financial');
         Route::get('/reports/financial/export/{format}', [ReportController::class, 'export'])->name('reports.financial.export');
+
+        // Owner-only leave correction (signed adjustment rows, never an
+        // overwrite of the computed consumed days). See
+        // EmployeeController::adjustLeave().
+        Route::patch('/employees/{id}/leave-adjustment', [EmployeeController::class, 'adjustLeave'])->name('employees.leave-adjustment');
     });
 });

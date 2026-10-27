@@ -29,6 +29,11 @@
             </thead>
             <tbody>
                 @forelse($leaves as $leave)
+                    @php($isManagerLeave = ($leave->user->role_id ?? null) === \App\Models\User::ROLE_MANAGER)
+                    @php($canReview = $leave->status === 'pending'
+                        && $leave->user_id !== auth()->id()
+                        && (! $isManagerLeave || auth()->user()->role_id === \App\Models\User::ROLE_SUPER_ADMIN))
+                    @php($conflicts = $leaveConflicts[$leave->id] ?? [])
                     <tr>
                         <td>{{ $leave->user->name ?? '—' }}</td>
                         <td>
@@ -40,7 +45,22 @@
                             @endif
                         </td>
                         <td><span class="badge text-bg-light border">{{ ucfirst($leave->type) }}</span></td>
-                        <td class="text-muted small" style="max-width: 260px;">{{ $leave->reason }}</td>
+                        <td class="text-muted small" style="max-width: 260px;">
+                            {{ $leave->reason }}
+                            @if(! empty($conflicts))
+                                <div class="alert alert-warning py-1 px-2 mt-2 mb-0" style="max-width: 320px;">
+                                    <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Overlapping bookings</div>
+                                    <ul class="mb-0 ps-3">
+                                        @foreach($conflicts as $conflict)
+                                            <li>
+                                                {{ $conflict['date_label'] }} at {{ $conflict['time_label'] }}
+                                                — {{ $conflict['service'] }} ({{ $conflict['client'] }})
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+                        </td>
                         <td>
                             <span class="badge {{ match($leave->status) {
                                 'approved' => 'text-bg-success',
@@ -52,13 +72,15 @@
                             @endif
                         </td>
                         <td class="text-end">
-                            @if($leave->status === 'pending')
+                            @if($canReview)
                                 <button class="btn btn-sm btn-success"
                                         data-bs-toggle="modal" data-bs-target="#reviewModal"
                                         data-id="{{ $leave->id }}" data-decision="approved">Approve</button>
                                 <button class="btn btn-sm btn-outline-danger"
                                         data-bs-toggle="modal" data-bs-target="#reviewModal"
                                         data-id="{{ $leave->id }}" data-decision="denied">Deny</button>
+                            @elseif($leave->status === 'pending' && $isManagerLeave)
+                                <span class="small text-muted">Owner review only</span>
                             @endif
                         </td>
                     </tr>

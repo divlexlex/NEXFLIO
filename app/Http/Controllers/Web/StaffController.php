@@ -11,6 +11,8 @@ use App\Models\LeaveRequest;
 use App\Models\StaffShiftAssignment;
 use App\Services\AppointmentService;
 use App\Services\WeeklyPayrollService;
+use App\Support\LeaveBalances;
+use App\Support\LeaveConflicts;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -63,6 +65,10 @@ class StaffController extends Controller
                 ->take(10)
                 ->get(),
             'leaves' => LeaveRequest::where('user_id', $user->id)->latest()->take(10)->get(),
+            // Own balances only — derived from the logged-in id, never from
+            // a request parameter, so no other employee's numbers can leak.
+            'myLeaveBalances' => LeaveBalances::forUser($user, now()->year),
+            'leaveYear' => now()->year,
         ]);
     }
 
@@ -397,10 +403,28 @@ class StaffController extends Controller
 
     public function storeLeave(StoreLeaveRequest $request)
     {
+        $user = $request->user();
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+
+        // Booking-conflict warning: if the staff member already has active
+        // appointments (Unverified / Booked / In-Service) inside the
+        // requested dates, do not file yet. Re-render the dashboard's form
+        // with the conflict list; "Proceed anyway" resubmits with
+        // confirm_conflicts=1, "Change dates" keeps the typed values.
+        // Conflicts never block filing outright.
+        $conflicts = LeaveConflicts::forUser($user->id, $startDate, $endDate);
+
+        if ($conflicts->isNotEmpty() && ! $request->boolean('confirm_conflicts')) {
+            return redirect()->route('staff.dashboard')
+                ->withInput()
+                ->with('leaveConflicts', LeaveConflicts::describe($conflicts));
+        }
+
         LeaveRequest::create([
-            'user_id' => $request->user()->id,
-            'start_date' => $request->input('start_date'),
-            'end_date' => $request->input('end_date'),
+            'user_id' => $user->id,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
             'type' => $request->input('type'),
             'reason' => $request->input('reason'),
             'status' => LeaveRequest::STATUS_PENDING,
