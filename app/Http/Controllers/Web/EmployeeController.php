@@ -8,6 +8,7 @@ use App\Models\Attendance;
 use App\Models\Position;
 use App\Models\StaffProfile;
 use App\Models\User;
+use App\Support\LeaveBalances;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -48,24 +49,28 @@ class EmployeeController extends Controller
 
         $totalEmployees = User::where('role_id', User::ROLE_STAFF)->count();
 
+        $employees = User::where('role_id', User::ROLE_STAFF)
+            ->with('staffProfile')
+            ->when($q !== '', fn ($query) => $query->where(function ($query) use ($q) {
+                $query->where('name', 'like', '%'.$q.'%')
+                    ->orWhere('username', 'like', '%'.$q.'%');
+            }))
+            ->when($position !== 'all', fn ($query) => $query->whereHas(
+                'staffProfile',
+                fn ($query) => $query->where('position', $position)
+            ))
+            ->when($status !== 'all', fn ($query) => $query->whereHas(
+                'staffProfile',
+                fn ($query) => $query->where('employment_status', $status)
+            ))
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get();
+
+        $leaveBalances = LeaveBalances::forUsers($employees, now()->year);
+
         return view('admin.employees.index', [
-            'employees' => User::where('role_id', User::ROLE_STAFF)
-                ->with('staffProfile')
-                ->when($q !== '', fn ($query) => $query->where(function ($query) use ($q) {
-                    $query->where('name', 'like', '%'.$q.'%')
-                        ->orWhere('username', 'like', '%'.$q.'%');
-                }))
-                ->when($position !== 'all', fn ($query) => $query->whereHas(
-                    'staffProfile',
-                    fn ($query) => $query->where('position', $position)
-                ))
-                ->when($status !== 'all', fn ($query) => $query->whereHas(
-                    'staffProfile',
-                    fn ($query) => $query->where('employment_status', $status)
-                ))
-                ->orderBy('last_name')
-                ->orderBy('first_name')
-                ->get(),
+            'employees' => $employees,
             'attendances' => Attendance::with('user:id,name')
                 ->whereDate('work_date', $date)
                 ->orderBy('time_in')
@@ -78,6 +83,8 @@ class EmployeeController extends Controller
             'currentStatus' => $status,
             'totalEmployees' => $totalEmployees,
             'filtersActive' => $q !== '' || $position !== 'all' || $status !== 'all',
+            'leaveBalances' => $leaveBalances,
+            'leaveYear' => now()->year,
         ]);
     }
 

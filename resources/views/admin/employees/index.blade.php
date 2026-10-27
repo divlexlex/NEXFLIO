@@ -41,15 +41,26 @@
     </div>
 @endif
 
-<div class="card p-3 mb-4">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h2 class="h6 text-muted mb-0">Roster & Attendance</h2>
-        <form method="GET" class="d-flex align-items-center gap-2">
-            <label class="small text-muted">Attendance for</label>
-            <input type="date" name="date" value="{{ $attendanceDate }}" class="form-control form-control-sm w-auto"
-                   onchange="this.form.submit()">
-        </form>
-    </div>
+<ul class="nav nav-tabs mb-3" id="employeesTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="roster-tab" data-bs-toggle="tab" data-bs-target="#roster-tab-pane" type="button" role="tab" aria-controls="roster-tab-pane" aria-selected="true">Roster & Attendance</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="leaves-tab" data-bs-toggle="tab" data-bs-target="#leaves-tab-pane" type="button" role="tab" aria-controls="leaves-tab-pane" aria-selected="false">Leaves</button>
+    </li>
+</ul>
+
+<div class="tab-content" id="employeesTabsContent">
+    <div class="tab-pane fade show active" id="roster-tab-pane" role="tabpanel" aria-labelledby="roster-tab" tabindex="0">
+        <div class="card p-3 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h2 class="h6 text-muted mb-0">Roster & Attendance</h2>
+                <form method="GET" class="d-flex align-items-center gap-2">
+                    <label class="small text-muted">Attendance for</label>
+                    <input type="date" name="date" value="{{ $attendanceDate }}" class="form-control form-control-sm w-auto"
+                           onchange="this.form.submit()">
+                </form>
+            </div>
     {{-- FILTER BAR (one GET form, auto-submit — same pattern as
          Services/Change Requests: selects submit immediately, search
          ~500ms after the last keystroke; no buttons). The date rides
@@ -164,6 +175,57 @@
                 @endforelse
             </tbody>
         </table>
+    </div>
+        </div>
+    </div>
+    <div class="tab-pane fade" id="leaves-tab-pane" role="tabpanel" aria-labelledby="leaves-tab" tabindex="0">
+        <div class="card p-3 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h2 class="h6 text-muted mb-0">Leaves — {{ $leaveYear ?? now()->year }}</h2>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>SL consumed</th>
+                            <th>SL remaining</th>
+                            <th>VL consumed</th>
+                            <th>VL remaining</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($employees as $employee)
+                            @php($bal = $leaveBalances[$employee->id] ?? ['sl_used' => 0, 'sl_remaining' => 12, 'vl_used' => 0, 'vl_remaining' => 12])
+                            <tr>
+                                <td><strong>{{ $employee->fullName() }}</strong></td>
+                                <td>{{ $bal['sl_used'] }}</td>
+                                <td>
+                                    {{ $bal['sl_remaining'] }}
+                                    @if($bal['sl_remaining'] <= 0)
+                                        <span class="badge text-bg-secondary ms-1">Exhausted</span>
+                                    @elseif($bal['sl_remaining'] <= 2)
+                                        <span class="badge text-bg-warning ms-1">Low</span>
+                                    @endif
+                                </td>
+                                <td>{{ $bal['vl_used'] }}</td>
+                                <td>
+                                    {{ $bal['vl_remaining'] }}
+                                    @if($bal['vl_remaining'] <= 0)
+                                        <span class="badge text-bg-secondary ms-1">Exhausted</span>
+                                    @elseif($bal['vl_remaining'] <= 2)
+                                        <span class="badge text-bg-warning ms-1">Low</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5" class="text-center text-muted py-4">No staff yet</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted mb-0">12 Sick Leave + 12 Vacation Leave per year, consumable only — not convertible to cash. Unused leaves reset every January.</p>
+        </div>
     </div>
 </div>
 
