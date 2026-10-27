@@ -401,6 +401,32 @@ class StaffController extends Controller
         return back()->with('success', 'Service marked as completed.');
     }
 
+    /**
+     * Pre-submit booking-conflict check for the Request Leave modal.
+     *
+     * Scoped to the logged-in staff member: there is deliberately no
+     * user-id parameter, so this can never expose another employee's
+     * appointments. Reuses App\Support\LeaveConflicts (own active bookings
+     * only; Cancelled / No-Show / Completed never conflict).
+     */
+    public function leaveConflicts(Request $request)
+    {
+        $validated = $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $conflicts = LeaveConflicts::forUser(
+            $request->user()->id,
+            $validated['start_date'],
+            $validated['end_date'],
+        );
+
+        return response()->json([
+            'conflicts' => LeaveConflicts::describe($conflicts),
+        ]);
+    }
+
     public function storeLeave(StoreLeaveRequest $request)
     {
         $user = $request->user();

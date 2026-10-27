@@ -240,6 +240,18 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                {{-- Pre-submit conflict warning: filled by the script as soon as
+                     both dates are chosen. No Proceed/Change buttons here — the
+                     form is still open, so Submit is the proceed action and the
+                     date fields are the change action. --}}
+                <div class="alert alert-warning d-none" id="leave-conflict-check">
+                    <p class="fw-semibold mb-2">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <span id="leave-conflict-check-title">This leave overlaps an existing booking:</span>
+                    </p>
+                    <ul class="small mb-3" id="leave-conflict-check-list"></ul>
+                    <p class="small text-muted mt-2 mb-0">Conflicts do not block the request — you can still file it.</p>
+                </div>
                 @php($leaveConflicts = session('leaveConflicts'))
                 @if($leaveConflicts)
                     <div class="alert alert-warning" id="leave-conflicts">
@@ -300,16 +312,126 @@
 @endsection
 
 @push('scripts')
-@if(session('leaveConflicts'))
 <script>
-    // A conflict warning was flashed: reopen the Request Leave form with the
-    // typed values so the staff member can review it and choose.
-    document.addEventListener('DOMContentLoaded', function () {
-        const modal = document.getElementById('leaveModal');
-        if (modal) {
-            new bootstrap.Modal(modal).show();
+document.addEventListener('DOMContentLoaded', function () {
+    const modal = document.getElementById('leaveModal');
+    if (!modal) {
+        return;
+    }
+
+    const form = modal.querySelector('form');
+    const startInput = form.querySelector('input[name="start_date"]');
+    const endInput = form.querySelector('input[name="end_date"]');
+    const box = document.getElementById('leave-conflict-check');
+    const title = document.getElementById('leave-conflict-check-title');
+    const list = document.getElementById('leave-conflict-check-list');
+    const serverBlock = document.getElementById('leave-conflicts');
+    const endpoint = @json(route('staff.leave-conflicts'));
+
+    // Guards against out-of-order responses when the dates change quickly.
+    let requestSeq = 0;
+
+    function removeConfirmFlag() {
+        form.querySelectorAll('input[data-leave-conflict-flag]').forEach(function (input) {
+            input.remove();
+        });
+    }
+
+    // The hidden flag is what makes the next submit file immediately: the
+    // staff member has already seen the warning for these exact dates.
+    function addConfirmFlag() {
+        if (form.querySelector('input[data-leave-conflict-flag]')) {
+            return;
         }
-    });
+
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'confirm_conflicts';
+        input.value = '1';
+        input.setAttribute('data-leave-conflict-flag', '1');
+        form.appendChild(input);
+    }
+
+    function hideWarning() {
+        box.classList.add('d-none');
+        list.textContent = '';
+    }
+
+    function showWarning(conflicts) {
+        list.textContent = '';
+
+        conflicts.forEach(function (conflict) {
+            const item = document.createElement('li');
+            const date = document.createElement('strong');
+            date.textContent = conflict.date_label;
+            item.appendChild(date);
+            item.appendChild(document.createTextNode(
+                ' at ' + conflict.time_label + ' — ' + conflict.service + ' (' + conflict.client + ')'
+            ));
+            list.appendChild(item);
+        });
+
+        title.textContent = 'This leave overlaps '
+            + (conflicts.length === 1 ? 'an existing booking' : 'existing bookings') + ':';
+        box.classList.remove('d-none');
+    }
+
+    function checkConflicts() {
+        // A flashed post-submit warning describes the dates it was rendered
+        // for; once a date changes it is stale.
+        if (serverBlock) {
+            serverBlock.classList.add('d-none');
+        }
+
+        removeConfirmFlag();
+        hideWarning();
+
+        const startDate = startInput.value;
+        const endDate = endInput.value;
+
+        // Wait until both dates are chosen.
+        if (!startDate || !endDate) {
+            return;
+        }
+
+        const seq = ++requestSeq;
+
+        fetch(endpoint + '?start_date=' + encodeURIComponent(startDate) + '&end_date=' + encodeURIComponent(endDate), {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        })
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Conflict check failed');
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                if (seq !== requestSeq) {
+                    return;
+                }
+
+                const conflicts = data.conflicts || [];
+
+                if (conflicts.length > 0) {
+                    showWarning(conflicts);
+                    addConfirmFlag();
+                }
+            })
+            .catch(function () {
+                // Leave the flag unset: the server-side post-submit gate is
+                // still there for no-JS / failed-request cases.
+            });
+    }
+
+    startInput.addEventListener('change', checkConflicts);
+    endInput.addEventListener('change', checkConflicts);
+
+    @if(session('leaveConflicts'))
+    // Post-submit fallback warning was flashed: reopen the modal with the
+    // typed values so the staff member sees it (the fallback gate stays).
+    new bootstrap.Modal(modal).show();
+    @endif
+});
 </script>
-@endif
 @endpush

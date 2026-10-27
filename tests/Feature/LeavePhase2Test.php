@@ -438,4 +438,120 @@ class LeavePhase2Test extends TestCase
         $this->assertSame(LeaveRequest::STATUS_PENDING, $leave->refresh()->status);
         $this->assertStringContainsString('Approve', $html);
     }
+
+    // ---- D: pre-submit conflict check endpoint ---------------------------
+
+    public function test_conflict_endpoint_returns_the_logged_in_staffs_overlapping_booking(): void
+    {
+        $date = now()->addWeeks(5)->toDateString();
+        $this->bookAppointment($this->staff, $date, '09:15:00', AppointmentStatus::Booked);
+
+        $response = $this->actingAs($this->staff)->getJson(route('staff.leave-conflicts', [
+            'start_date' => $date,
+            'end_date' => $date,
+        ]));
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'conflicts')
+            ->assertJsonPath('conflicts.0.date', $date)
+            ->assertJsonPath('conflicts.0.date_label', Carbon::parse($date)->format('M j, Y'))
+            ->assertJsonPath('conflicts.0.time_label', '9:15 AM')
+            ->assertJsonPath('conflicts.0.service', $this->service->name)
+            ->assertJsonPath('conflicts.0.client', $this->client->name);
+    }
+
+    public function test_conflict_endpoint_returns_empty_when_nothing_overlaps(): void
+    {
+        $date = now()->addWeeks(5)->toDateString();
+
+        $this->actingAs($this->staff)
+            ->getJson(route('staff.leave-conflicts', [
+                'start_date' => $date,
+                'end_date' => $date,
+            ]))
+            ->assertOk()
+            ->assertExactJson(['conflicts' => []]);
+    }
+
+    public function test_conflict_endpoint_only_returns_the_logged_in_staffs_own_appointments(): void
+    {
+        $date = now()->addWeeks(6)->toDateString();
+
+        $other = User::create([
+            'name' => 'Zara Other',
+            'email' => 'zara.other@nexflio.test',
+            'password' => bcrypt('password'),
+            'role_id' => User::ROLE_STAFF,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->bookAppointment($this->staff, $date, '10:00:00', AppointmentStatus::Booked);
+        $this->bookAppointment($other, $date, '11:00:00', AppointmentStatus::Booked);
+
+        // No user-id parameter is accepted: passing one is ignored and the
+        // logged-in id is the only id used.
+        $this->actingAs($this->staff)
+            ->getJson(route('staff.leave-conflicts', [
+                'start_date' => $date,
+                'end_date' => $date,
+                'user_id' => $other->id,
+            ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'conflicts')
+            ->assertJsonPath('conflicts.0.time_label', '10:00 AM')
+            ->assertJsonPath('conflicts.0.service', $this->service->name);
+
+        // The other staff member sees their own booking, not the first one's.
+        $this->actingAs($other)
+            ->getJson(route('staff.leave-conflicts', [
+                'start_date' => $date,
+                'end_date' => $date,
+                'user_id' => $this->staff->id,
+            ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'conflicts')
+            ->assertJsonPath('conflicts.0.time_label', '11:00 AM');
+    }
+
+    public function test_conflict_endpoint_excludes_cancelled_no_show_and_completed(): void
+    {
+        $date = now()->addWeeks(6)->toDateString();
+
+        $this->bookAppointment($this->staff, $date, '08:00:00', AppointmentStatus::Cancelled);
+        $this->bookAppointment($this->staff, $date, '09:00:00', AppointmentStatus::NoShow);
+        $this->bookAppointment($this->staff, $date, '10:00:00', AppointmentStatus::Completed);
+
+        $this->actingAs($this->staff)
+            ->getJson(route('staff.leave-conflicts', [
+                'start_date' => $date,
+                'end_date' => $date,
+            ]))
+            ->assertOk()
+            ->assertExactJson(['conflicts' => []]);
+
+        // An active booking on the same day is still reported.
+        $this->bookAppointment($this->staff, $date, '11:00:00', AppointmentStatus::InService);
+
+        $this->actingAs($this->staff)
+            ->getJson(route('staff.leave-conflicts', [
+                'start_date' => $date,
+                'end_date' => $date,
+            ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'conflicts')
+            ->assertJsonPath('conflicts.0.time_label', '11:00 AM');
+    }
+
+    public function test_conflict_endpoint_requires_authentication_and_a_staff_account(): void
+    {
+        $date = now()->addWeeks(5)->toDateString();
+        $params = ['start_date' => $date, 'end_date' => $date];
+
+        $this->getJson(route('staff.leave-conflicts', $params))->assertRedirect(route('login'));
+
+        // Owner/manager accounts are outside the staff portal.
+        $this->actingAs($this->owner)
+            ->getJson(route('staff.leave-conflicts', $params))
+            ->assertForbidden();
+    }
 }

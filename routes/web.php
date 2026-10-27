@@ -164,6 +164,9 @@ Route::prefix('staff')->name('staff.')->middleware(['auth', 'role:3'])->group(fu
     Route::post('/attendance/time-out', [StaffController::class, 'timeOut'])->name('attendance.time-out');
     Route::post('/attendance/break', [StaffController::class, 'toggleBreak'])->name('attendance.break');
     Route::post('/leaves', [StaffController::class, 'storeLeave'])->name('leaves.store');
+    // Pre-submit conflict check for the Request Leave modal (logged-in
+    // staff only, no user-id parameter).
+    Route::get('/leave-conflicts', [StaffController::class, 'leaveConflicts'])->name('leave-conflicts');
     Route::patch('/password', [StaffController::class, 'updatePassword'])->name('password.update');
     Route::patch('/appointments/{id}/complete', [StaffController::class, 'completeService'])->name('appointments.complete');
 });
