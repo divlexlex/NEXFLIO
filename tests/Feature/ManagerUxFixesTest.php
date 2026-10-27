@@ -312,7 +312,10 @@ class ManagerUxFixesTest extends TestCase
         $this->assertMatchesRegularExpression('/<option value="approved"[^>]*selected/', $html);
     }
 
-    public function test_services_category_filter_persists_in_session(): void
+    // The services category filter is URL-only (ffb07b8 removed the session
+    // persistence): a selection made on one request must not stick for a
+    // later parameter-less request.
+    public function test_services_category_filter_does_not_persist_between_requests(): void
     {
         Service::create([
             'name' => 'UX Test Massage', 'category' => 'Massage', 'price' => 500,
@@ -325,10 +328,12 @@ class ManagerUxFixesTest extends TestCase
             ->assertSee('<strong>UX Test Massage</strong>', false)
             ->assertDontSee('<strong>Manager UX Facial</strong>', false);
 
+        // No category in the URL: everything shows again, the previous
+        // selection is not carried over through the session.
         $this->actingAs($this->manager)->get(route('admin.services'))
             ->assertOk()
             ->assertSee('<strong>UX Test Massage</strong>', false)
-            ->assertDontSee('<strong>Manager UX Facial</strong>', false);
+            ->assertSee('<strong>Manager UX Facial</strong>', false);
     }
 
     public function test_appointments_status_filter_persists_in_session(): void

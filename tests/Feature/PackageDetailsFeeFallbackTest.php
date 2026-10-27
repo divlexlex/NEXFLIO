@@ -177,23 +177,31 @@ class PackageDetailsFeeFallbackTest extends TestCase
 
     public function test_public_services_page_renders_package_inclusions(): void
     {
-        $this->makeService([
+        $package = $this->makeService([
             'name' => 'Nx Inclusions Package',
             'category' => 'Packages',
             'package_details' => "NxInclusion Alpha\nNxInclusion Beta",
         ]);
         // A non-Packages service with details set directly must NOT render them.
-        $this->makeService([
+        $nonPackage = $this->makeService([
             'name' => 'Nx Non Package',
             'category' => 'Facial',
             'package_details' => 'NxHiddenInclusion',
         ]);
 
-        $html = $this->get('/services')->assertOk()->getContent();
+        // f6f3531 moved inclusions off the /services list cards and onto the
+        // service detail page, so the grid must not carry them anymore.
+        $listHtml = $this->get('/services')->assertOk()->getContent();
+        $this->assertStringNotContainsString('NxInclusion Alpha', $listHtml);
+        $this->assertStringNotContainsString('NxInclusion Beta', $listHtml);
 
-        $this->assertStringContainsString('NxInclusion Alpha', $html);
-        $this->assertStringContainsString('NxInclusion Beta', $html);
-        $this->assertStringNotContainsString('NxHiddenInclusion', $html);
+        $detailHtml = $this->get(route('catalog.service', $package->id))->assertOk()->getContent();
+        $this->assertStringContainsString('NxInclusion Alpha', $detailHtml);
+        $this->assertStringContainsString('NxInclusion Beta', $detailHtml);
+
+        // Non-Packages services keep their details out of the inclusions list.
+        $nonPackageHtml = $this->get(route('catalog.service', $nonPackage->id))->assertOk()->getContent();
+        $this->assertStringNotContainsString('NxHiddenInclusion', $nonPackageHtml);
     }
 
     public function test_booking_review_shows_package_inclusions(): void

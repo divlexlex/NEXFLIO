@@ -9,9 +9,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Admin Inventory list filtration + pagination: category/search/stock
- * combine (AND), paginate(10) keeps name order with params in page URLs,
- * and the count line reflects the filtered set.
+ * Admin Inventory list filtration + pagination. A search term spans ALL
+ * categories (the selected category is ignored while `q` is present) and
+ * swaps the counter for the "result(s) for …" copy; otherwise the category
+ * and stock filters narrow the list. paginate(10) keeps name order with
+ * params in page URLs, and the count line reflects the filtered set.
  */
 class InventoryFiltersTest extends TestCase
 {
@@ -87,7 +89,8 @@ class InventoryFiltersTest extends TestCase
 
         $this->assertStringContainsString('Alpha Polish', $html);
         $this->assertStringNotContainsString('Beta Cream', $html);
-        $this->assertStringContainsString('Showing 1 of 2 items', $html);
+        // A search swaps the counter for the "across all categories" copy.
+        $this->assertStringContainsString('Showing 1 result(s) for "alpha" across all categories', $html);
     }
 
     public function test_stock_filters_follow_the_badge_rule(): void
@@ -129,12 +132,17 @@ class InventoryFiltersTest extends TestCase
         $plain = $this->listHtml(['category' => 'Geltest']);
         $this->assertStringContainsString('2 item(s) in this category', $plain);
 
-        // All three filters combine (AND).
+        // A search term spans every category (the selected category is
+        // ignored while `q` is present), so the Nails item is included;
+        // the stock filter still applies to the matched set.
         $html = $this->listHtml(['category' => 'Geltest', 'q' => 'gel', 'stock' => 'out']);
 
         $this->assertStringContainsString('Gel B Empty', $html);
+        $this->assertStringContainsString('Gel C Other', $html);
         $this->assertStringNotContainsString('Gel A Plenty', $html);
-        $this->assertStringNotContainsString('Gel C Other', $html);
-        $this->assertStringContainsString('Showing 1 of 2 items', $html);
+        // 2 test rows (B + C) plus the 4 seeded Nails "gel" items, all of
+        // which are out of stock and now match because search is not scoped
+        // to the selected category.
+        $this->assertStringContainsString('Showing 6 result(s) for "gel" across all categories', $html);
     }
 }
