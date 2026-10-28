@@ -5,6 +5,11 @@
 @section('content')
 <h1 class="h3 mb-4">Payment Verification</h1>
 
+{{-- Refreshable region: the filter form + cards + pagination. Swapped in
+     place by nx-refresh.js (no page reload). The modals below stay outside
+     the region; the settle-summary listener is delegated on document so it
+     keeps working after a swap. --}}
+<div id="nx-refresh-region">
 <form method="GET" action="{{ route('admin.payments') }}" class="d-flex align-items-end flex-wrap gap-2 mb-3">
     <div>
         <label class="form-label small text-muted mb-0" for="status-filter">Status</label>
@@ -325,6 +330,7 @@
 </div>
 
 <div class="mt-3">{{ $appointments->links() }}</div>
+</div>
 
 {{-- SHARED ADD-SERVICE MODAL (same partial the Appointments drawer uses) --}}
 @include('admin.partials.added-service-modal')
@@ -372,24 +378,24 @@
     // Record-confirmation summaries: each settle modal reads the LIVE
     // amount + method from its own branch-payment form on show, so an
     // edited figure is what the manager confirms.
-    (function () {
-        document.querySelectorAll('[data-settle-modal]').forEach(function (modal) {
-            modal.addEventListener('show.bs.modal', function () {
-                var form = document.getElementById(modal.dataset.form);
-                var summary = modal.querySelector('[data-settle-summary]');
-                if (!form || !summary) return;
-                var amount = form.querySelector('input[name="amount"]');
-                var method = form.querySelector('select[name="method"]');
-                var amountText = '₱' + Number(amount ? amount.value : 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
-                var methodText = method && method.options[method.selectedIndex]
-                    ? method.options[method.selectedIndex].textContent.trim()
-                    : '';
-                summary.textContent = 'Record ' + amountText + ' via ' + methodText
-                    + ' for ' + (modal.dataset.client || '—')
-                    + ' — ' + (modal.dataset.service || '—') + '?';
-            });
-        });
-    })();
+    // Delegated on document (not bound per modal) so the summaries keep
+    // working after the refresh button swaps the cards grid.
+    document.addEventListener('show.bs.modal', function (event) {
+        var modal = event.target.closest ? event.target.closest('[data-settle-modal]') : null;
+        if (!modal) return;
+        var form = document.getElementById(modal.dataset.form);
+        var summary = modal.querySelector('[data-settle-summary]');
+        if (!form || !summary) return;
+        var amount = form.querySelector('input[name="amount"]');
+        var method = form.querySelector('select[name="method"]');
+        var amountText = '₱' + Number(amount ? amount.value : 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+        var methodText = method && method.options[method.selectedIndex]
+            ? method.options[method.selectedIndex].textContent.trim()
+            : '';
+        summary.textContent = 'Record ' + amountText + ' via ' + methodText
+            + ' for ' + (modal.dataset.client || '—')
+            + ' — ' + (modal.dataset.service || '—') + '?';
+    });
 </script>
 <script>
     (function () {

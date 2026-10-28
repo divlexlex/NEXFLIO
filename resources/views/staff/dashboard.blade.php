@@ -17,6 +17,11 @@
     </p>
 </div>
 
+{{-- Refreshable region: all data cards (attendance, pay, appointments,
+     commissions, My Leaves, leave requests). Swapped in place by
+     nx-refresh.js (no page reload). The Request Leave modal below stays
+     outside on purpose, so its conflict-check listeners survive a refresh. --}}
+<div id="nx-refresh-region">
 <div class="row g-3 mb-3">
     {{-- ATTENDANCE --}}
     <div class="col-md-6">
@@ -228,6 +233,7 @@
             @endif
         </div>
     </div>
+</div>
 </div>
 
 {{-- REQUEST LEAVE MODAL --}}

@@ -95,6 +95,10 @@
     <div id="calendar"></div>
 </div>
 
+{{-- Refreshable region: the filter form + table + pagination. Swapped in
+     place by nx-refresh.js (no page reload). The calendar above, the
+     drawer and all modals below stay outside the region. --}}
+<div id="nx-refresh-region">
 <div class="card p-3">
     <form method="GET" class="d-flex gap-2 mb-3">
         <select name="status" class="form-select w-auto" onchange="this.form.submit()">
@@ -167,6 +171,7 @@
         </table>
     </div>
     {{ $appointments->links() }}
+</div>
 </div>
 
 {{-- APPOINTMENT DETAILS DRAWER --}}
@@ -491,6 +496,10 @@
             },
         });
         calendar.render();
+
+        // Manual refresh button (nx-refresh.js): re-pull the calendar feed
+        // after the table region swaps, so new bookings appear here too.
+        document.addEventListener('nx:refreshed', () => calendar.refetchEvents());
 
         // Shared: staff who offer positions linked to a service category
         // (Facial → Facial Technician, etc.). No linked positions or no

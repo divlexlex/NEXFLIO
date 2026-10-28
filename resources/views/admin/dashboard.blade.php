@@ -5,6 +5,10 @@
 @section('content')
 <h1 class="h3 mb-4">Dashboard</h1>
 
+{{-- Refreshable region: swapped in place by nx-refresh.js (no page reload).
+     The charts below are deliberately excluded — their canvases are bound
+     to Chart.js instances that a markup swap would destroy. --}}
+<div id="nx-refresh-region">
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl-3">
         <div class="card p-3">
@@ -42,6 +46,7 @@
         <a href="{{ route('admin.inventory') }}" class="ms-2 small">Manage inventory →</a>
     </div>
 @endif
+</div>
 
 <div class="row g-3">
     <div class="col-lg-7">

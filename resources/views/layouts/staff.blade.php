@@ -323,6 +323,14 @@
             .sidebar > .nav { flex: 0 0 auto; overflow-y: visible; overflow-x: hidden; }
             .main-content { margin-left: 0; }
         }
+
+        /* Manual refresh button, Design C (dark rounded square, gold icon,
+           icon only) — see partials/refresh-button + public/js/nx-refresh.js.
+           Lives in the topbar beside the user dropdown; spins while loading. */
+        .nx-refresh-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 12px; border: 1px solid #3A2F27; background: #2B211B; color: #D4A94E; font-size: 20px; line-height: 1; cursor: pointer; flex-shrink: 0; }
+        .nx-refresh-btn:disabled { opacity: .7; cursor: wait; }
+        .nx-refresh-btn.nx-spinning [data-nx-refresh-icon] { display: inline-block; animation: nx-spin 1s cubic-bezier(.65, 0, .35, 1) infinite; }
+        @keyframes nx-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     </style>
     <script>
         (function () {
@@ -368,7 +376,8 @@
         @endphp
         <header class="nx-topbar d-flex align-items-center justify-content-between gap-2 mb-3 px-3 py-2">
             <span id="nxClock" class="small fw-semibold">{{ now()->format('l, F j, Y · g:i:s A') }}</span>
-            <div class="dropdown">
+            <div class="dropdown d-flex align-items-center gap-2">
+                @include('partials.refresh-button')
                 <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2 dropdown-toggle"
                         data-bs-toggle="dropdown" aria-expanded="false">
                     <span class="nx-avatar">{{ $topbarInitials }}</span>
@@ -490,6 +499,8 @@
         });
     })();
 </script>
+{{-- Manual refresh script: no-ops on pages without the button + region. --}}
+<script src="{{ asset('js/nx-refresh.js') }}" defer></script>
 @stack('scripts')
 </body>
 </html>

@@ -27,6 +27,12 @@
         <input type="search" id="filter-q" name="q" value="{{ $currentQ }}" class="form-control" placeholder="Search client or service…" autocomplete="off">
     </div>
 </form>
+{{-- Refreshable region: the count line + table + pagination. Swapped in
+     place by nx-refresh.js (no page reload). The filter form above stays
+     outside on purpose, so text being typed in the search box never resets
+     on refresh (the pending count inside its dropdown therefore does not
+     update — the table itself does). --}}
+<div id="nx-refresh-region">
 @if($requests->total() > 0 || $totalRequests > 0)
     <p class="text-muted small mb-2">Showing {{ $requests->total() }} of {{ $totalRequests }} requests</p>
 @endif
@@ -129,6 +135,7 @@
         </table>
     </div>
     {{ $requests->links() }}
+</div>
 </div>
 
 {{-- REVIEW MODAL --}}
