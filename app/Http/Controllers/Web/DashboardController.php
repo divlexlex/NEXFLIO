@@ -45,13 +45,20 @@ class DashboardController extends Controller
         $topServices = collect();
         $topNearMiss = collect();
         $topPeriodLabel = 'MTD · '.$now->format('F Y');
+        // Entry thresholds are per period (sha, 2026-10-29).
+        $topThreshold = match ($topPeriod) {
+            'wtd' => 7,
+            'mtd' => 21,
+            'ytd' => 219,
+            default => 21,
+        };
         if ($isOwner) {
             [$topStart, $topPeriodLabel] = match ($topPeriod) {
                 'wtd' => [$wtdStart, 'WTD · Week of '.$wtdStart->format('M j, Y')],
                 'ytd' => [$ytdStart, 'YTD · '.$now->format('Y')],
                 default => [$mtdStart, 'MTD · '.$now->format('F Y')],
             };
-            [$topServices, $topNearMiss] = $this->topServices($topStart, $end);
+            [$topServices, $topNearMiss] = $this->topServices($topStart, $end, $topThreshold);
         }
 
         return view('admin.dashboard', [
@@ -68,6 +75,7 @@ class DashboardController extends Controller
             'isOwner' => $isOwner,
             'topPeriod' => $topPeriod,
             'topPeriodLabel' => $topPeriodLabel,
+            'topThreshold' => $topThreshold,
             'topServices' => $topServices,
             'topNearMiss' => $topNearMiss,
         ]);
@@ -75,16 +83,16 @@ class DashboardController extends Controller
 
     /**
      * Top Services: completed appointments performed in the period,
-     * grouped by service. Entry is >= 15 completed services; ranking is
-     * completed count desc with revenue as tie-breaker. Revenue is the
-     * verified payments of those appointments; shares are relative to
-     * all completed services in the period (same basis), and badges are
-     * labels only (Green >= 15%, Blue 5–14.9%, Amber < 5% of the higher
-     * of the revenue and volume shares).
+     * grouped by service. Entry thresholds are per period (sha,
+     * 2026-10-29): WTD >= 7, MTD >= 21, YTD >= 219 completed services;
+     * ranking is completed count desc with revenue as tie-breaker.
+     * Revenue is the verified payments of those appointments. No
+     * badges: inclusion in this table is itself the top-performer
+     * signal (sha, 2026-10-29).
      *
      * @return array{0: Collection, 1: Collection} [qualifiers, near-miss]
      */
-    private function topServices(Carbon $start, Carbon $end): array
+    private function topServices(Carbon $start, Carbon $end, int $threshold): array
     {
         $performed = Appointment::with(['service:id,name,category', 'payments'])
             ->where('status', AppointmentStatus::Completed)
@@ -111,28 +119,12 @@ class DashboardController extends Controller
                 ];
             });
 
-        $totalCount = $grouped->sum('count');
-        $totalRevenue = $grouped->sum('revenue');
-
-        $ranked = $grouped->map(function ($row) use ($totalCount, $totalRevenue) {
-            $revShare = $totalRevenue > 0 ? $row['revenue'] / $totalRevenue * 100 : 0;
-            $volShare = $totalCount > 0 ? $row['count'] / $totalCount * 100 : 0;
-            $row['revShare'] = round($revShare, 1);
-            $row['volShare'] = round($volShare, 1);
-            $row['badge'] = $this->shareBadge(max($revShare, $volShare));
-
-            return $row;
-        })->sort(fn ($a, $b) => [$b['count'], $b['revenue']] <=> [$a['count'], $a['revenue']]);
+        $ranked = $grouped->sort(fn ($a, $b) => [$b['count'], $b['revenue']] <=> [$a['count'], $a['revenue']]);
 
         return [
-            $ranked->filter(fn ($row) => $row['count'] >= 15),
-            $ranked->filter(fn ($row) => $row['count'] > 0 && $row['count'] < 15)->take(5),
+            $ranked->filter(fn ($row) => $row['count'] >= $threshold),
+            $ranked->filter(fn ($row) => $row['count'] > 0 && $row['count'] < $threshold)->take(5),
         ];
-    }
-
-    private function shareBadge(float $share): string
-    {
-        return $share >= 15 ? 'green' : ($share >= 5 ? 'blue' : 'amber');
     }
 
     /**

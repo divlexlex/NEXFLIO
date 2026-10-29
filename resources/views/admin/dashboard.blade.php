@@ -82,7 +82,7 @@
     <div class="table-responsive">
         <table class="table table-sm align-middle">
             <thead>
-                <tr><th>#</th><th>Service</th><th>Completed</th><th class="text-end">Revenue</th><th>Badge</th></tr>
+                <tr><th>#</th><th>Service</th><th>Completed</th><th class="text-end">Revenue</th></tr>
             </thead>
             <tbody>
                 @foreach($topServices as $name => $row)
@@ -101,23 +101,14 @@
                         </td>
                         <td>{{ $row['count'] }}</td>
                         <td class="text-end">₱{{ number_format($row['revenue'], 2) }}</td>
-                        <td>
-                            @if($row['badge'] === 'green')
-                                <span class="badge text-bg-success">Top Performer</span>
-                            @elseif($row['badge'] === 'blue')
-                                <span class="badge text-bg-info">Core</span>
-                            @else
-                                <span class="badge text-bg-warning">Low</span>
-                            @endif
-                        </td>
                     </tr>
                 @endforeach
             </tbody>
         </table>
     </div>
-    <div class="text-muted small">Entry: at least 15 completed services in the period. Badges are labels only — Green ≥ 15%, Blue 5–14.9%, Amber &lt; 5% of the higher share.</div>
+    <div class="text-muted small">Entry: at least {{ $topThreshold }} completed services in the period.</div>
     @else
-    <p class="text-muted mt-3 mb-1">No service has reached 15 completed services in this period yet.</p>
+    <p class="text-muted mt-3 mb-1">No service has reached {{ $topThreshold }} completed services in this period yet.</p>
     @if($topNearMiss->isNotEmpty())
     <details class="mt-2">
         <summary class="btn btn-outline-warning btn-sm">Track service status</summary>
@@ -131,7 +122,7 @@
                         <tr>
                             <td>{{ $name }}</td>
                             <td>{{ $row['count'] }}</td>
-                            <td>{{ 15 - $row['count'] }} more</td>
+                            <td>{{ $topThreshold - $row['count'] }} more</td>
                         </tr>
                     @endforeach
                 </tbody>

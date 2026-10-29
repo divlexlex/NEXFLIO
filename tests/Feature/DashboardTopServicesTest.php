@@ -15,8 +15,10 @@ use Tests\TestCase;
 /**
  * Dashboard analytics, step 1 (sha, 2026-10-29): WTD/MTD/YTD revenue
  * cards shown together, plus Top Services (owner only) with WTD | MTD |
- * YTD pills. Top Services entry is >= 15 completed services in the
- * period; badges are labels only. Time is frozen to Wed 2026-10-28 so
+ * YTD pills. Top Services entry thresholds are per period (sha,
+ * 2026-10-29): WTD >= 7, MTD >= 21, YTD >= 219 completed services in
+ * the period. No badges: inclusion in the table is itself the
+ * top-performer signal. Time is frozen to Wed 2026-10-28 so
  * week/month/year boundaries are deterministic no matter when the
  * suite runs.
  */
@@ -118,43 +120,78 @@ class DashboardTopServicesTest extends TestCase
             ->assertSee('Year to Date');
     }
 
-    public function test_top_services_requires_fifteen_completed(): void
+    public function test_top_services_wtd_threshold_is_seven(): void
     {
-        $service = $this->service('Gate Service', 100);
-        $this->completedFor($service, 14, now(), 100);
+        $service = $this->service('WTD Gate Service', 100);
+        $this->completedFor($service, 6, now(), 100);
 
-        $this->actingAs($this->owner)->get(route('admin.dashboard'))
+        $this->actingAs($this->owner)->get(route('admin.dashboard', ['top_period' => 'wtd']))
             ->assertOk()
-            ->assertSee('1 more')
-            ->assertDontSee('>Top Performer<', false)
-            ->assertDontSee('>Core<', false)
-            ->assertDontSee('>Low<', false);
+            ->assertSee('No service has reached 7 completed services in this period yet.')
+            ->assertSee('1 more');
 
         $this->completedFor($service, 1, now(), 100);
 
-        $this->actingAs($this->owner)->get(route('admin.dashboard'))
+        $this->actingAs($this->owner)->get(route('admin.dashboard', ['top_period' => 'wtd']))
             ->assertOk()
-            ->assertSee('Gate Service')
-            ->assertSee('>Top Performer<', false)
+            ->assertDontSee('No service has reached 7 completed services in this period yet.')
+            ->assertDontSee('More needed');
+    }
+
+    public function test_top_services_mtd_threshold_is_twenty_one(): void
+    {
+        $service = $this->service('MTD Gate Service', 100);
+        $this->completedFor($service, 20, now(), 100);
+
+        $this->actingAs($this->owner)->get(route('admin.dashboard', ['top_period' => 'mtd']))
+            ->assertOk()
+            ->assertSee('No service has reached 21 completed services in this period yet.')
+            ->assertSee('1 more');
+
+        $this->completedFor($service, 1, now(), 100);
+
+        $this->actingAs($this->owner)->get(route('admin.dashboard', ['top_period' => 'mtd']))
+            ->assertOk()
+            ->assertDontSee('No service has reached 21 completed services in this period yet.')
+            ->assertDontSee('More needed');
+    }
+
+    public function test_top_services_ytd_threshold_is_two_hundred_nineteen(): void
+    {
+        $service = $this->service('YTD Gate Service', 100);
+        $this->completedFor($service, 218, now(), 100);
+
+        $this->actingAs($this->owner)->get(route('admin.dashboard', ['top_period' => 'ytd']))
+            ->assertOk()
+            ->assertSee('No service has reached 219 completed services in this period yet.')
+            ->assertSee('1 more');
+
+        $this->completedFor($service, 1, now(), 100);
+
+        $this->actingAs($this->owner)->get(route('admin.dashboard', ['top_period' => 'ytd']))
+            ->assertOk()
+            ->assertDontSee('No service has reached 219 completed services in this period yet.')
             ->assertDontSee('More needed');
     }
 
     public function test_top_services_ranks_by_count_then_revenue(): void
     {
-        $this->completedFor($this->service('Rank Fifteen', 100), 15, now(), 100);
-        $this->completedFor($this->service('Rank Twenty Low', 100), 20, now(), 100);
-        $this->completedFor($this->service('Rank Twenty High', 500), 20, now(), 500);
+        $this->completedFor($this->service('Rank Twenty One', 100), 21, now(), 100);
+        $this->completedFor($this->service('Rank Twenty Five Low', 100), 25, now(), 100);
+        $this->completedFor($this->service('Rank Twenty Five High', 500), 25, now(), 500);
         $this->completedFor($this->service('Rank Thirty', 100), 30, now(), 100);
 
         $this->actingAs($this->owner)->get(route('admin.dashboard'))
             ->assertOk()
-            ->assertSeeInOrder(['Rank Thirty', 'Rank Twenty High', 'Rank Twenty Low', 'Rank Fifteen']);
+            ->assertSeeInOrder(['Rank Thirty', 'Rank Twenty Five High', 'Rank Twenty Five Low', 'Rank Twenty One']);
     }
 
     public function test_top_services_follows_the_period_pills(): void
     {
-        $this->completedFor($this->service('Period This Week', 100), 16, Carbon::create(2026, 10, 28, 10, 0, 0), 100);
-        $this->completedFor($this->service('Period Last Week', 100), 16, Carbon::create(2026, 10, 22, 10, 0, 0), 100);
+        // 219 each so both qualify in every period they fall in,
+        // including YTD (>= 219); the WTD split still comes from dates.
+        $this->completedFor($this->service('Period This Week', 100), 219, Carbon::create(2026, 10, 28, 10, 0, 0), 100);
+        $this->completedFor($this->service('Period Last Week', 100), 219, Carbon::create(2026, 10, 22, 10, 0, 0), 100);
 
         $wtd = $this->actingAs($this->owner)->get(route('admin.dashboard', ['top_period' => 'wtd']));
         $wtd->assertOk();
@@ -173,23 +210,6 @@ class DashboardTopServicesTest extends TestCase
             ->assertSee('YTD · 2026')
             ->assertSee('Period This Week')
             ->assertSee('Period Last Week');
-    }
-
-    public function test_top_services_badges(): void
-    {
-        // 400 completed at ₱100: revenue shares equal volume shares.
-        $this->completedFor($this->service('Badge Alpha', 100), 200, now(), 100);
-        $this->completedFor($this->service('Badge Beta', 100), 100, now(), 100);
-        $this->completedFor($this->service('Badge Gamma', 100), 50, now(), 100);
-        $this->completedFor($this->service('Badge Delta', 100), 35, now(), 100);
-        $this->completedFor($this->service('Badge Epsilon', 100), 15, now(), 100);
-
-        $this->actingAs($this->owner)->get(route('admin.dashboard'))
-            ->assertOk()
-            ->assertSeeInOrder(['Badge Alpha', 'Badge Beta', 'Badge Gamma', 'Badge Delta', 'Badge Epsilon'])
-            ->assertSee('>Top Performer<', false)
-            ->assertSee('>Core<', false)
-            ->assertSee('>Low<', false);
     }
 
     public function test_revenue_cards_show_exact_period_sums(): void
