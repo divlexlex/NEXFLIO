@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Web;
 
 use App\Enums\AppointmentStatus;
+use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Inventory;
+use App\Models\User;
 use App\Services\GeminiService;
 use App\Services\RevenueRecognitionService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
@@ -17,9 +21,38 @@ class DashboardController extends Controller
     ) {
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $today = now()->toDateString();
+        $now = now();
+
+        // Revenue cards (Rule A: verified payments by verified_at).
+        // WTD = Monday→today, MTD = 1st→today, YTD = Jan 1→today.
+        $wtdStart = $now->copy()->startOfWeek(Carbon::MONDAY);
+        $mtdStart = $now->copy()->startOfMonth();
+        $ytdStart = $now->copy()->startOfYear();
+        $end = $now->copy()->endOfDay();
+
+        // Top Services is owner-only (sha, 2026-10-29): managers never
+        // get the section rendered, not merely hidden.
+        $isOwner = auth()->user()?->role_id === User::ROLE_SUPER_ADMIN;
+
+        $topPeriod = $request->query('top_period', 'mtd');
+        if (! in_array($topPeriod, ['wtd', 'mtd', 'ytd'], true)) {
+            $topPeriod = 'mtd';
+        }
+
+        $topServices = collect();
+        $topNearMiss = collect();
+        $topPeriodLabel = 'MTD · '.$now->format('F Y');
+        if ($isOwner) {
+            [$topStart, $topPeriodLabel] = match ($topPeriod) {
+                'wtd' => [$wtdStart, 'WTD · Week of '.$wtdStart->format('M j, Y')],
+                'ytd' => [$ytdStart, 'YTD · '.$now->format('Y')],
+                default => [$mtdStart, 'MTD · '.$now->format('F Y')],
+            };
+            [$topServices, $topNearMiss] = $this->topServices($topStart, $end);
+        }
 
         return view('admin.dashboard', [
             'todayBookings' => Appointment::whereDate('appointment_date', $today)->count(),
@@ -29,7 +62,97 @@ class DashboardController extends Controller
                 ->count(),
             'monthRevenue' => $this->revenue->sumForMonth((int) now()->year, (int) now()->month),
             'lowStocks' => Inventory::whereColumn('quantity', '<=', 'reorder_point')->get(),
+            'wtdRevenue' => $this->revenue->sumBetween($wtdStart, $end),
+            'mtdRevenue' => $this->revenue->sumBetween($mtdStart, $end),
+            'ytdRevenue' => $this->revenue->sumBetween($ytdStart, $end),
+            'isOwner' => $isOwner,
+            'topPeriod' => $topPeriod,
+            'topPeriodLabel' => $topPeriodLabel,
+            'topServices' => $topServices,
+            'topNearMiss' => $topNearMiss,
         ]);
+    }
+
+    /**
+     * Top Services: completed appointments performed in the period,
+     * grouped by service. Entry is >= 15 completed services; ranking is
+     * completed count desc with revenue as tie-breaker. Revenue is the
+     * verified payments of those appointments; shares are relative to
+     * all completed services in the period (same basis), and badges are
+     * labels only (Green >= 15%, Blue 5–14.9%, Amber < 5% of the higher
+     * of the revenue and volume shares).
+     *
+     * @return array{0: Collection, 1: Collection} [qualifiers, near-miss]
+     */
+    private function topServices(Carbon $start, Carbon $end): array
+    {
+        $performed = Appointment::with(['service:id,name,category', 'payments'])
+            ->where('status', AppointmentStatus::Completed)
+            // appointment_date is a DATETIME column: comparing it to
+            // date-only strings drops every appointment on the end date
+            // in SQLite (the test DB), because '2026-10-28 00:00:00' is
+            // lexicographically greater than '2026-10-28'. Compare full
+            // datetimes instead, so the end date is fully included.
+            ->whereBetween('appointment_date', [$start->copy()->startOfDay(), $end->copy()->endOfDay()])
+            ->get();
+
+        $grouped = $performed->groupBy(fn ($appointment) => $appointment->service->name ?? 'Unknown')
+            ->map(function ($group) {
+                $service = $group->first()->service;
+
+                return [
+                    'category' => $service->category ?? '',
+                    'initials' => $this->serviceInitials($service->name ?? 'Unknown'),
+                    'count' => $group->count(),
+                    'revenue' => round((float) $group
+                        ->flatMap(fn ($appointment) => $appointment->payments)
+                        ->filter(fn ($payment) => $payment->status === PaymentStatus::Verified)
+                        ->sum('amount'), 2),
+                ];
+            });
+
+        $totalCount = $grouped->sum('count');
+        $totalRevenue = $grouped->sum('revenue');
+
+        $ranked = $grouped->map(function ($row) use ($totalCount, $totalRevenue) {
+            $revShare = $totalRevenue > 0 ? $row['revenue'] / $totalRevenue * 100 : 0;
+            $volShare = $totalCount > 0 ? $row['count'] / $totalCount * 100 : 0;
+            $row['revShare'] = round($revShare, 1);
+            $row['volShare'] = round($volShare, 1);
+            $row['badge'] = $this->shareBadge(max($revShare, $volShare));
+
+            return $row;
+        })->sort(fn ($a, $b) => [$b['count'], $b['revenue']] <=> [$a['count'], $a['revenue']]);
+
+        return [
+            $ranked->filter(fn ($row) => $row['count'] >= 15),
+            $ranked->filter(fn ($row) => $row['count'] > 0 && $row['count'] < 15)->take(5),
+        ];
+    }
+
+    private function shareBadge(float $share): string
+    {
+        return $share >= 15 ? 'green' : ($share >= 5 ? 'blue' : 'amber');
+    }
+
+    /**
+     * Thumbnail placeholder initials for the Top Services table
+     * (design v2, sha 2026-10-29): first letters of up to 3 words, or
+     * the first 3 letters of a single-word name. No image column is
+     * required, so this needs no migration.
+     */
+    private function serviceInitials(string $name): string
+    {
+        $words = preg_split('/\s+/', trim($name)) ?: [];
+
+        if (count($words) > 1) {
+            return strtoupper(implode('', array_map(
+                fn ($word) => substr($word, 0, 1),
+                array_slice($words, 0, 3)
+            )));
+        }
+
+        return strtoupper(substr($name, 0, 3));
     }
 
     /**

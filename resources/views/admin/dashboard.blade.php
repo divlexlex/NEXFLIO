@@ -46,6 +46,102 @@
         <a href="{{ route('admin.inventory') }}" class="ms-2 small">Manage inventory →</a>
     </div>
 @endif
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-4">
+        <div class="card p-3">
+            <div class="text-muted small">Revenue · Week to Date</div>
+            <div class="fs-2 fw-bold text-gold">₱{{ number_format($wtdRevenue, 2) }}</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="card p-3">
+            <div class="text-muted small">Revenue · Month to Date</div>
+            <div class="fs-2 fw-bold text-gold">₱{{ number_format($mtdRevenue, 2) }}</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="card p-3">
+            <div class="text-muted small">Revenue · Year to Date</div>
+            <div class="fs-2 fw-bold text-gold">₱{{ number_format($ytdRevenue, 2) }}</div>
+        </div>
+    </div>
+</div>
+
+@if($isOwner)
+<div class="card p-3 mb-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h2 class="h6 text-muted mb-0">Top Services ({{ $topPeriodLabel }})</h2>
+        <ul class="nav nav-pills">
+            <li class="nav-item"><a class="nav-link {{ $topPeriod === 'wtd' ? 'active' : '' }}" href="{{ route('admin.dashboard', ['top_period' => 'wtd']) }}">WTD</a></li>
+            <li class="nav-item"><a class="nav-link {{ $topPeriod === 'mtd' ? 'active' : '' }}" href="{{ route('admin.dashboard', ['top_period' => 'mtd']) }}">MTD</a></li>
+            <li class="nav-item"><a class="nav-link {{ $topPeriod === 'ytd' ? 'active' : '' }}" href="{{ route('admin.dashboard', ['top_period' => 'ytd']) }}">YTD</a></li>
+        </ul>
+    </div>
+    @if($topServices->isNotEmpty())
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr><th>#</th><th>Service</th><th>Completed</th><th class="text-end">Revenue</th><th>Badge</th></tr>
+            </thead>
+            <tbody>
+                @foreach($topServices as $name => $row)
+                    <tr>
+                        <td>{{ $loop->iteration }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <span style="width:38px;height:38px;background:#3A2F27;color:#D4A94E;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0;">{{ $row['initials'] }}</span>
+                                <span>
+                                    <span class="d-block">{{ $name }}</span>
+                                    @if($row['category'] !== '')
+                                        <small class="text-muted">{{ $row['category'] }}</small>
+                                    @endif
+                                </span>
+                            </div>
+                        </td>
+                        <td>{{ $row['count'] }}</td>
+                        <td class="text-end">₱{{ number_format($row['revenue'], 2) }}</td>
+                        <td>
+                            @if($row['badge'] === 'green')
+                                <span class="badge text-bg-success">Top Performer</span>
+                            @elseif($row['badge'] === 'blue')
+                                <span class="badge text-bg-info">Core</span>
+                            @else
+                                <span class="badge text-bg-warning">Low</span>
+                            @endif
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+    <div class="text-muted small">Entry: at least 15 completed services in the period. Badges are labels only — Green ≥ 15%, Blue 5–14.9%, Amber &lt; 5% of the higher share.</div>
+    @else
+    <p class="text-muted mt-3 mb-1">No service has reached 15 completed services in this period yet.</p>
+    @if($topNearMiss->isNotEmpty())
+    <details class="mt-2">
+        <summary class="btn btn-outline-warning btn-sm">Track service status</summary>
+        <div class="table-responsive mt-2">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr><th>Closest services</th><th>Completed</th><th>More needed</th></tr>
+                </thead>
+                <tbody>
+                    @foreach($topNearMiss as $name => $row)
+                        <tr>
+                            <td>{{ $name }}</td>
+                            <td>{{ $row['count'] }}</td>
+                            <td>{{ 15 - $row['count'] }} more</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </details>
+    @endif
+    @endif
+</div>
+@endif
 </div>
 
 <div class="row g-3">
