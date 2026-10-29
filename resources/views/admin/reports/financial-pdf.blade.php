@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Financial Report {{ $year }}</title>
+    <title>Financial Report {{ $periodLabel }}</title>
     <style>
         * { font-family: DejaVu Sans, sans-serif; }
         body { color: #2f2925; font-size: 12px; margin: 0; }
@@ -19,13 +19,13 @@
 </head>
 <body>
     <h1>Perfect Nails — Financial Report</h1>
-    <div class="muted">Year {{ $year }} &middot; Generated {{ now()->toDayDateTimeString() }}</div>
+    <div class="muted">{{ $periodLabel }} &middot; Generated {{ now()->toDayDateTimeString() }}</div>
 
     <h2>Summary</h2>
     <table class="summary">
-        <tr><td>Revenue (YTD)</td><td>&#8369;{{ number_format($yearRevenue, 2) }}</td></tr>
-        <tr><td>Commissions Accrued (YTD)</td><td>&#8369;{{ number_format($yearCommissions, 2) }}</td></tr>
-        <tr><td>Net of Commissions</td><td>&#8369;{{ number_format($yearRevenue - $yearCommissions, 2) }}</td></tr>
+        <tr><td>Revenue ({{ $periodShort }})</td><td>&#8369;{{ number_format($periodRevenue, 2) }}</td></tr>
+        <tr><td>Commissions Accrued ({{ $periodShort }})</td><td>&#8369;{{ number_format($periodCommissions, 2) }}</td></tr>
+        <tr><td>Net of Commissions</td><td>&#8369;{{ number_format($periodRevenue - $periodCommissions, 2) }}</td></tr>
     </table>
 
     <h2>Monthly Revenue — last 12 months</h2>
@@ -41,18 +41,34 @@
         </tbody>
     </table>
 
-    <h2>Top Services by Revenue ({{ $year }})</h2>
+    <h2>Services by Revenue ({{ $periodLabel }})</h2>
     <table>
-        <thead><tr><th>Service</th><th class="num">Completed Sessions</th><th class="num">Revenue</th></tr></thead>
+        <thead><tr><th>Service</th><th class="num">Sessions</th><th class="num">Revenue</th></tr></thead>
         <tbody>
-            @forelse($topServices as $name => $row)
+            @forelse($services as $name => $row)
                 <tr>
                     <td>{{ $name }}</td>
                     <td class="num">{{ $row['count'] }}</td>
                     <td class="num">&#8369;{{ number_format($row['revenue'], 2) }}</td>
                 </tr>
             @empty
-                <tr><td colspan="3">No completed services this year.</td></tr>
+                <tr><td colspan="3">No revenue in this period.</td></tr>
+            @endforelse
+        </tbody>
+    </table>
+
+    <h2>In-Demand Staff ({{ $periodLabel }})</h2>
+    <table>
+        <thead><tr><th>Staff</th><th class="num">Completed Services</th><th class="num">Revenue</th></tr></thead>
+        <tbody>
+            @forelse($staff as $name => $row)
+                <tr>
+                    <td>{{ $name }}</td>
+                    <td class="num">{{ $row['count'] }}</td>
+                    <td class="num">&#8369;{{ number_format($row['revenue'], 2) }}</td>
+                </tr>
+            @empty
+                <tr><td colspan="3">No completed services in this period.</td></tr>
             @endforelse
         </tbody>
     </table>

@@ -31,9 +31,9 @@ class FinancialReportExportTest extends TestCase
         $response->assertHeader('content-type', 'text/csv; charset=UTF-8');
         $this->assertStringContainsString('financial-report-'.now()->year.'.csv', $response->headers->get('content-disposition'));
         $body = $response->streamedContent();
-        $this->assertStringContainsString('Revenue (YTD)', $body);
+        $this->assertStringContainsString('Revenue (Monthly)', $body);
         $this->assertStringContainsString('Monthly Revenue', $body);
-        $this->assertStringContainsString('Top Services by Revenue', $body);
+        $this->assertStringContainsString('Services by Revenue', $body);
     }
 
     public function test_owner_can_download_the_pdf(): void
