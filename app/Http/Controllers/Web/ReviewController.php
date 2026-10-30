@@ -9,9 +9,10 @@ use App\Models\Review;
 use Illuminate\Http\Request;
 
 /**
- * Client ratings of Completed visits from My Bookings — 1–5 stars for the
- * service and the personnel plus an optional comment. One review per
+ * Client feedback on Completed visits from My Bookings — a comment
+ * only, no star ratings (sha, 2026-10-30). One feedback entry per
  * appointment: resubmitting edits the existing row via updateOrCreate.
+ * Legacy rating columns are left untouched (NULL for new rows).
  */
 class ReviewController extends Controller
 {
@@ -21,23 +22,17 @@ class ReviewController extends Controller
         abort_unless($appointment->status === AppointmentStatus::Completed, 403);
 
         $validated = $request->validate([
-            'service_rating' => 'required|integer|min:1|max:5',
-            'personnel_rating' => $appointment->personnel_id
-                ? 'required|integer|min:1|max:5'
-                : 'nullable|integer|min:1|max:5',
-            'comment' => 'nullable|string|max:1000',
+            'comment' => 'required|string|max:1000',
         ]);
 
         Review::updateOrCreate(
             ['appointment_id' => $appointment->id],
             [
                 'user_id' => $request->user()->id,
-                'service_rating' => $validated['service_rating'],
-                'personnel_rating' => $validated['personnel_rating'] ?? null,
-                'comment' => $validated['comment'] ?? null,
+                'comment' => $validated['comment'],
             ]
         );
 
-        return back()->with('success', 'Thank you! Your review has been saved.');
+        return back()->with('success', 'Thank you! Your feedback has been saved.');
     }
 }

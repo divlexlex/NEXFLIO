@@ -11,8 +11,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Client ratings of Completed visits — one review per appointment, editable
- * by resubmitting, personnel rating required only when staff was assigned.
+ * Client feedback on Completed visits — a comment only, no star
+ * ratings (sha, 2026-10-30). One feedback entry per appointment,
+ * editable by resubmitting. New rows carry NULL ratings (see
+ * 2026_10_30_000001_make_review_ratings_nullable).
  */
 class ReviewSubmissionTest extends TestCase
 {
@@ -57,66 +59,64 @@ class ReviewSubmissionTest extends TestCase
         ]);
     }
 
-    private function reviewPayload(array $overrides = []): array
+    private function feedbackPayload(array $overrides = []): array
     {
         return array_merge([
-            'service_rating' => 5,
-            'personnel_rating' => 4,
             'comment' => 'Great visit!',
         ], $overrides);
     }
 
-    public function test_client_can_review_their_completed_appointment(): void
+    public function test_client_can_leave_feedback_on_completed_appointment(): void
     {
         $appointment = $this->makeAppointment($this->client);
 
         $this->actingAs($this->client)
-            ->post(route('account.bookings.review.store', $appointment->id), $this->reviewPayload())
+            ->post(route('account.bookings.review.store', $appointment->id), $this->feedbackPayload())
             ->assertRedirect()
-            ->assertSessionHas('success', 'Thank you! Your review has been saved.');
+            ->assertSessionHas('success', 'Thank you! Your feedback has been saved.');
 
         $this->assertDatabaseHas('reviews', [
             'appointment_id' => $appointment->id,
             'user_id' => $this->client->id,
-            'service_rating' => 5,
-            'personnel_rating' => 4,
+            'service_rating' => null,
+            'personnel_rating' => null,
             'comment' => 'Great visit!',
         ]);
     }
 
-    public function test_review_on_non_completed_appointment_is_forbidden(): void
+    public function test_feedback_on_non_completed_appointment_is_forbidden(): void
     {
         $appointment = $this->makeAppointment($this->client, AppointmentStatus::Booked);
 
         $this->actingAs($this->client)
-            ->post(route('account.bookings.review.store', $appointment->id), $this->reviewPayload())
+            ->post(route('account.bookings.review.store', $appointment->id), $this->feedbackPayload())
             ->assertForbidden();
 
         $this->assertSame(0, Review::where('appointment_id', $appointment->id)->count());
     }
 
-    public function test_review_on_another_clients_appointment_is_forbidden(): void
+    public function test_feedback_on_another_clients_appointment_is_forbidden(): void
     {
         $appointment = $this->makeAppointment($this->otherClient);
 
         $this->actingAs($this->client)
-            ->post(route('account.bookings.review.store', $appointment->id), $this->reviewPayload())
+            ->post(route('account.bookings.review.store', $appointment->id), $this->feedbackPayload())
             ->assertForbidden();
 
         $this->assertSame(0, Review::where('appointment_id', $appointment->id)->count());
     }
 
-    public function test_out_of_range_service_rating_fails_validation(): void
+    public function test_feedback_validation_rejects_empty_and_too_long(): void
     {
-        foreach ([0, 6] as $rating) {
+        foreach (['', str_repeat('a', 1001)] as $comment) {
             $appointment = $this->makeAppointment($this->client);
 
             $this->actingAs($this->client)
                 ->post(
                     route('account.bookings.review.store', $appointment->id),
-                    $this->reviewPayload(['service_rating' => $rating])
+                    $this->feedbackPayload(['comment' => $comment])
                 )
-                ->assertSessionHasErrors('service_rating');
+                ->assertSessionHasErrors('comment');
 
             $this->assertSame(0, Review::where('appointment_id', $appointment->id)->count());
         }
@@ -127,82 +127,51 @@ class ReviewSubmissionTest extends TestCase
         $appointment = $this->makeAppointment($this->client);
 
         $this->actingAs($this->client)
-            ->post(route('account.bookings.review.store', $appointment->id), $this->reviewPayload())
+            ->post(route('account.bookings.review.store', $appointment->id), $this->feedbackPayload())
             ->assertRedirect();
 
         $this->actingAs($this->client)
             ->post(
                 route('account.bookings.review.store', $appointment->id),
-                $this->reviewPayload(['service_rating' => 3, 'comment' => 'Changed my mind.'])
+                $this->feedbackPayload(['comment' => 'Changed my mind.'])
             )
             ->assertRedirect();
 
         $this->assertSame(1, Review::where('appointment_id', $appointment->id)->count());
         $this->assertDatabaseHas('reviews', [
             'appointment_id' => $appointment->id,
-            'service_rating' => 3,
             'comment' => 'Changed my mind.',
         ]);
     }
 
-    public function test_personnel_rating_optional_without_personnel_required_with(): void
-    {
-        $noPersonnel = Appointment::create([
-            'user_id' => $this->client->id,
-            'service_id' => $this->service->id,
-            'personnel_id' => null,
-            'appointment_date' => now()->subDay()->toDateString(),
-            'start_time' => '14:00:00',
-            'status' => AppointmentStatus::Completed,
-        ]);
-
-        $this->actingAs($this->client)
-            ->post(
-                route('account.bookings.review.store', $noPersonnel->id),
-                ['service_rating' => 5, 'comment' => 'No staff assigned.']
-            )
-            ->assertRedirect()
-            ->assertSessionHasNoErrors();
-
-        $this->assertDatabaseHas('reviews', [
-            'appointment_id' => $noPersonnel->id,
-            'service_rating' => 5,
-            'personnel_rating' => null,
-        ]);
-
-        $withPersonnel = $this->makeAppointment($this->client);
-
-        $this->actingAs($this->client)
-            ->post(
-                route('account.bookings.review.store', $withPersonnel->id),
-                ['service_rating' => 5, 'comment' => 'Missing personnel rating.']
-            )
-            ->assertSessionHasErrors('personnel_rating');
-
-        $this->assertSame(0, Review::where('appointment_id', $withPersonnel->id)->count());
-    }
-
-    public function test_bookings_page_shows_rate_or_review_only_on_completed(): void
+    public function test_bookings_page_shows_feedback_button_only_on_completed(): void
     {
         $completed = $this->makeAppointment($this->client);
         $booked = $this->makeAppointment($this->client, AppointmentStatus::Booked);
 
         $html = $this->actingAs($this->client)->get(route('account.bookings'))->assertOk()->getContent();
 
-        $this->assertStringContainsString('Rate your visit', $html);
-        $this->assertStringNotContainsString('Your review', $html);
+        $this->assertStringContainsString('Leave feedback', $html);
+        $this->assertStringNotContainsString('Your feedback', $html);
+        $this->assertStringNotContainsString('Rate your visit', $html);
 
-        // The Booked card carries neither string: count occurrences — exactly
-        // one "Rate your visit" (the completed card) and no "Your review".
-        $this->assertSame(1, substr_count($html, 'Rate your visit'));
+        // The Booked card carries neither string: count occurrences —
+        // exactly two "Leave feedback" on the completed card (its
+        // button plus its modal title, which now matches the button;
+        // the old modal title "How was your visit?" was why this
+        // count used to be one).
+        $this->assertSame(2, substr_count($html, 'Leave feedback'));
 
         $this->actingAs($this->client)
-            ->post(route('account.bookings.review.store', $completed->id), $this->reviewPayload())
+            ->post(route('account.bookings.review.store', $completed->id), $this->feedbackPayload())
             ->assertRedirect();
 
         $after = $this->actingAs($this->client)->get(route('account.bookings'))->assertOk()->getContent();
 
-        $this->assertStringContainsString('Your review', $after);
+        $this->assertStringContainsString('Your feedback', $after);
+        $this->assertStringContainsString('Great visit!', $after);
+        $this->assertStringContainsString('Edit feedback', $after);
+        $this->assertStringNotContainsString('Leave feedback', $after);
         $this->assertStringNotContainsString('Rate your visit', $after);
         // The Booked card gets no modal at all.
         $this->assertStringNotContainsString('id="reviewModal-'.$booked->id.'"', $after);

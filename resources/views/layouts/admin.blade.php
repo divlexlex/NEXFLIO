@@ -479,7 +479,7 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link {{ request()->routeIs('admin.reviews*') ? 'active' : '' }}" href="{{ route('admin.reviews') }}">
-                    <i class="bi bi-star me-2"></i>Reviews
+                    <i class="bi bi-chat-left-text me-2"></i>Feedback
                 </a>
             </li>
             <li class="nav-item">

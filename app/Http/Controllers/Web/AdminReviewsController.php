@@ -8,9 +8,11 @@ use App\Models\User;
 use Illuminate\Http\Request;
 
 /**
- * Admin Reviews page (Owner / Manager) — read-only monitoring of client
- * ratings from completed appointments: overall averages, an optional
- * personnel filter, and the newest-first review list. No moderation here.
+ * Admin Feedback page (Owner / Manager) — read-only monitoring of
+ * client feedback from completed appointments: total count, an
+ * optional personnel filter, and the newest-first feedback list. No
+ * moderation here. Star ratings are no longer collected or shown
+ * (sha, 2026-10-30); legacy rating columns are ignored.
  */
 class AdminReviewsController extends Controller
 {
@@ -19,9 +21,6 @@ class AdminReviewsController extends Controller
         $filter = $request->query('personnel_id');
         $hasFilter = $filter !== null && $filter !== '';
         $personnelId = (int) $filter;
-
-        $serviceAvg = Review::avg('service_rating');
-        $personnelAvg = Review::whereNotNull('personnel_rating')->avg('personnel_rating');
 
         $reviews = Review::with(['user', 'appointment.service', 'appointment.personnel', 'appointment.user'])
             ->when(
@@ -41,9 +40,7 @@ class AdminReviewsController extends Controller
             ->get(['id', 'name']);
 
         return view('admin.reviews.index', [
-            'totalReviews' => Review::count(),
-            'serviceAvg' => $serviceAvg !== null ? round((float) $serviceAvg, 1) : null,
-            'personnelAvg' => $personnelAvg !== null ? round((float) $personnelAvg, 1) : null,
+            'totalFeedback' => Review::count(),
             'reviews' => $reviews,
             'personnelOptions' => $personnelOptions,
             'personnelId' => $personnelId,

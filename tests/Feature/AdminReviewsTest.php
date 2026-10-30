@@ -11,8 +11,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Admin Reviews page — read-only monitoring of client ratings: overall
- * averages, personnel filter, and the newest-first review list.
+ * Admin Feedback page — read-only monitoring of client feedback:
+ * total count, personnel filter, and the newest-first feedback list.
+ * No star ratings and no averages (sha, 2026-10-30): feedback only.
  */
 class AdminReviewsTest extends TestCase
 {
@@ -41,11 +42,10 @@ class AdminReviewsTest extends TestCase
         $this->service = Service::where('status', 'active')->firstOrFail();
     }
 
-    private function makeReviewedAppointment(
+    private function makeFeedbackAppointment(
         User $client,
         User $personnel,
-        int $serviceRating,
-        ?int $personnelRating,
+        string $comment,
         int $daysAgo = 1
     ): Review {
         $appointment = Appointment::create([
@@ -60,9 +60,9 @@ class AdminReviewsTest extends TestCase
         $review = Review::create([
             'appointment_id' => $appointment->id,
             'user_id' => $client->id,
-            'service_rating' => $serviceRating,
-            'personnel_rating' => $personnelRating,
-            'comment' => 'Comment '.$appointment->id,
+            'service_rating' => null,
+            'personnel_rating' => null,
+            'comment' => $comment,
         ]);
         $review->created_at = now()->subDays($daysAgo);
         $review->save();
@@ -79,22 +79,23 @@ class AdminReviewsTest extends TestCase
         $this->actingAs($this->clientUser)->get(route('admin.reviews'))->assertForbidden();
     }
 
-    public function test_stats_list_and_newest_first_order(): void
+    public function test_total_list_and_newest_first_order(): void
     {
-        $oldest = $this->makeReviewedAppointment($this->clientUser, $this->staff, 5, 5, 3);
-        $middle = $this->makeReviewedAppointment($this->clientUser, $this->staff, 4, null, 2);
-        $newest = $this->makeReviewedAppointment($this->clientUser, $this->staff, 3, 3, 1);
+        $oldest = $this->makeFeedbackAppointment($this->clientUser, $this->staff, 'Oldest feedback', 3);
+        $middle = $this->makeFeedbackAppointment($this->clientUser, $this->staff, 'Middle feedback', 2);
+        $newest = $this->makeFeedbackAppointment($this->clientUser, $this->staff, 'Newest feedback', 1);
 
         $html = $this->actingAs($this->manager)->get(route('admin.reviews'))->assertOk()->getContent();
 
-        // Total 3; service avg (5+4+3)/3 = 4.0; personnel avg (5+3)/2 = 4.0.
         $this->assertStringContainsString('<div class="display-6">3</div>', $html);
-        $this->assertSame(2, substr_count($html, '4.0 / 5'));
+        $this->assertStringContainsString('Total feedback', $html);
+        $this->assertStringContainsString('Oldest feedback', $html);
+        $this->assertStringContainsString('Middle feedback', $html);
+        $this->assertStringContainsString('Newest feedback', $html);
 
-        $this->assertStringContainsString($this->clientUser->name, $html);
-        $this->assertStringContainsString($this->service->name, $html);
-        $this->assertStringContainsString($newest->appointment->referenceCode(), $html);
-        $this->assertStringContainsString($oldest->appointment->referenceCode(), $html);
+        // No averages, no stars anywhere on the page.
+        $this->assertStringNotContainsString('Average', $html);
+        $this->assertStringNotContainsString('★', $html);
 
         $newestPos = strpos($html, $newest->appointment->referenceCode());
         $middlePos = strpos($html, $middle->appointment->referenceCode());
@@ -102,7 +103,7 @@ class AdminReviewsTest extends TestCase
         $this->assertTrue($newestPos < $middlePos && $middlePos < $oldestPos);
     }
 
-    public function test_personnel_filter_scopes_list_but_not_stats(): void
+    public function test_personnel_filter_scopes_list_but_not_total(): void
     {
         $otherStaff = User::create([
             'name' => 'Review Other Staff',
@@ -112,8 +113,8 @@ class AdminReviewsTest extends TestCase
             'email_verified_at' => now(),
         ]);
 
-        $mine = $this->makeReviewedAppointment($this->clientUser, $this->staff, 5, 5, 2);
-        $theirs = $this->makeReviewedAppointment($this->clientUser, $otherStaff, 3, 3, 1);
+        $mine = $this->makeFeedbackAppointment($this->clientUser, $this->staff, 'Mine feedback', 2);
+        $theirs = $this->makeFeedbackAppointment($this->clientUser, $otherStaff, 'Theirs feedback', 1);
 
         $html = $this->actingAs($this->manager)
             ->get(route('admin.reviews', ['personnel_id' => $this->staff->id]))
@@ -123,17 +124,42 @@ class AdminReviewsTest extends TestCase
         $this->assertStringContainsString($mine->appointment->referenceCode(), $html);
         $this->assertStringNotContainsString($theirs->appointment->referenceCode(), $html);
 
-        // Stats still reflect ALL reviews.
-        $this->assertStringContainsString('4.0 / 5', $html);
+        // Total still reflects ALL feedback.
+        $this->assertStringContainsString('<div class="display-6">2</div>', $html);
     }
 
-    public function test_empty_state_shows_dashes(): void
+    public function test_empty_state(): void
     {
         $this->assertSame(0, Review::count());
 
         $html = $this->actingAs($this->manager)->get(route('admin.reviews'))->assertOk()->getContent();
 
-        $this->assertStringContainsString('No reviews yet', $html);
-        $this->assertStringContainsString('—', $html);
+        $this->assertStringContainsString('No feedback yet', $html);
+        $this->assertStringContainsString('<div class="display-6">0</div>', $html);
+    }
+
+    public function test_legacy_star_only_row_shows_dash_not_stars(): void
+    {
+        $appointment = Appointment::create([
+            'user_id' => $this->clientUser->id,
+            'service_id' => $this->service->id,
+            'personnel_id' => $this->staff->id,
+            'appointment_date' => now()->subDay()->toDateString(),
+            'start_time' => '14:00:00',
+            'status' => AppointmentStatus::Completed,
+        ]);
+
+        Review::create([
+            'appointment_id' => $appointment->id,
+            'user_id' => $this->clientUser->id,
+            'service_rating' => 5,
+            'personnel_rating' => 5,
+            'comment' => null,
+        ]);
+
+        $html = $this->actingAs($this->manager)->get(route('admin.reviews'))->assertOk()->getContent();
+
+        $this->assertStringContainsString($appointment->referenceCode(), $html);
+        $this->assertStringNotContainsString('★', $html);
     }
 }
