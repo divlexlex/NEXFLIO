@@ -61,6 +61,30 @@ class DashboardController extends Controller
             [$topServices, $topNearMiss] = $this->topServices($topStart, $end, $topThreshold);
         }
 
+        // Revenue overview custom date filter (Lyka, 2026-10-30): a
+        // specific From–To window for peak-season tracking. It drives
+        // ONLY the revenue overview (custom total + peak day + the
+        // Weekly Revenue chart); the WTD/MTD/YTD cards and Top
+        // Services above are never changed by it.
+        $revFilter = $this->revenueFilterFromRequest($request);
+        $revFilterTotal = null;
+        $revPeak = null;
+        $revFilterLabel = null;
+        if ($revFilter['from'] !== null && $revFilter['to'] !== null) {
+            $revFilterTotal = $this->revenue->sumBetween($revFilter['from'], $revFilter['to']);
+            $daily = $this->revenue->dailyTotals($revFilter['from'], $revFilter['to']);
+            // Earliest day wins a tie (daily buckets are date-ordered
+            // and only a strictly larger total replaces the peak).
+            $peakDay = null;
+            foreach ($daily as $day) {
+                if ($peakDay === null || $day['total'] > $peakDay['total']) {
+                    $peakDay = $day;
+                }
+            }
+            $revPeak = $revFilterTotal > 0 ? $peakDay : null;
+            $revFilterLabel = $revFilter['from']->format('M j, Y').' – '.$revFilter['to']->format('M j, Y');
+        }
+
         return view('admin.dashboard', [
             'todayBookings' => Appointment::whereDate('appointment_date', $today)->count(),
             'awaitingVerification' => Appointment::where('status', AppointmentStatus::Unverified)->count(),
@@ -78,7 +102,60 @@ class DashboardController extends Controller
             'topThreshold' => $topThreshold,
             'topServices' => $topServices,
             'topNearMiss' => $topNearMiss,
+            // Revenue filter: $revFrom/$revTo are the validated
+            // Y-m-d values (null when no valid filter) for the Top
+            // Services pill links; $revFromInput/$revToInput are the
+            // raw inputs so an invalid typed date stays visible.
+            'revFrom' => $revFilter['from'] !== null ? $revFilter['from']->toDateString() : null,
+            'revTo' => $revFilter['to'] !== null ? $revFilter['to']->toDateString() : null,
+            'revFromInput' => $revFilter['fromInput'],
+            'revToInput' => $revFilter['toInput'],
+            'revFilterTotal' => $revFilterTotal,
+            'revPeak' => $revPeak,
+            'revFilterLabel' => $revFilterLabel,
+            'revFilterError' => $revFilter['error'],
         ]);
+    }
+
+    /**
+     * Parse the revenue overview custom date filter (rev_from/rev_to
+     * query params). Returns null bounds with no error when neither
+     * param is present, and null bounds with an error message when
+     * the pair is incomplete or invalid — the dashboard then falls
+     * back to its default Weekly Revenue view instead of breaking.
+     *
+     * @return array{from: ?Carbon, to: ?Carbon, error: ?string, fromInput: ?string, toInput: ?string}
+     */
+    private function revenueFilterFromRequest(Request $request): array
+    {
+        $fromInput = $request->query('rev_from');
+        $toInput = $request->query('rev_to');
+        $fromInput = is_string($fromInput) ? $fromInput : null;
+        $toInput = is_string($toInput) ? $toInput : null;
+
+        if ($fromInput === null && $toInput === null) {
+            return ['from' => null, 'to' => null, 'error' => null, 'fromInput' => null, 'toInput' => null];
+        }
+
+        if ($fromInput === null || $fromInput === '' || $toInput === null || $toInput === '') {
+            return ['from' => null, 'to' => null, 'error' => 'Select both a From date and a To date.', 'fromInput' => $fromInput, 'toInput' => $toInput];
+        }
+
+        try {
+            $from = Carbon::createFromFormat('Y-m-d', $fromInput);
+            $to = Carbon::createFromFormat('Y-m-d', $toInput);
+            if ($from === false || $to === false || $from->format('Y-m-d') !== $fromInput || $to->format('Y-m-d') !== $toInput) {
+                throw new \InvalidArgumentException('Invalid date.');
+            }
+        } catch (\Throwable) {
+            return ['from' => null, 'to' => null, 'error' => 'Invalid date selected.', 'fromInput' => $fromInput, 'toInput' => $toInput];
+        }
+
+        if ($from->gt($to)) {
+            return ['from' => null, 'to' => null, 'error' => 'From date must be on or before To date.', 'fromInput' => $fromInput, 'toInput' => $toInput];
+        }
+
+        return ['from' => $from->copy()->startOfDay(), 'to' => $to->copy()->endOfDay(), 'error' => null, 'fromInput' => $fromInput, 'toInput' => $toInput];
     }
 
     /**
@@ -151,10 +228,23 @@ class DashboardController extends Controller
      * Chart.js data — grouped in PHP so the queries stay portable across
      * MySQL and Azure SQL.
      */
-    public function chartData()
+    public function chartData(Request $request)
     {
-        // Revenue per week, last 8 weeks (verified payments).
-        $revenueByWeek = $this->revenue->weeklyTotals(8);
+        // Revenue chart: daily totals when a valid custom date filter
+        // is in the URL (Lyka, 2026-10-30), otherwise revenue per
+        // week, last 8 weeks (verified payments). An invalid filter
+        // falls back to the weekly view — the page itself shows the
+        // error. Bookings-by-service and staff charts below are NOT
+        // filtered: this filter is revenue-only.
+        $revFilter = $this->revenueFilterFromRequest($request);
+        if ($revFilter['from'] !== null && $revFilter['to'] !== null) {
+            $revenueByWeek = array_map(
+                fn ($day) => ['label' => $day['label'], 'total' => $day['total']],
+                $this->revenue->dailyTotals($revFilter['from'], $revFilter['to'])
+            );
+        } else {
+            $revenueByWeek = $this->revenue->weeklyTotals(8);
+        }
 
         // Bookings per service and completions per staff, last 30 days.
         $recent = Appointment::with(['service:id,name', 'personnel:id,name'])

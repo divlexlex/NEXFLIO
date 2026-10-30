@@ -69,13 +69,13 @@
 </div>
 
 @if($isOwner)
-<div class="card p-3 mb-4">
+<div class="card p-3 mb-4" id="top-services-card">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h2 class="h6 text-muted mb-0">Top Services ({{ $topPeriodLabel }})</h2>
         <ul class="nav nav-pills">
-            <li class="nav-item"><a class="nav-link {{ $topPeriod === 'wtd' ? 'active' : '' }}" href="{{ route('admin.dashboard', ['top_period' => 'wtd']) }}">WTD</a></li>
-            <li class="nav-item"><a class="nav-link {{ $topPeriod === 'mtd' ? 'active' : '' }}" href="{{ route('admin.dashboard', ['top_period' => 'mtd']) }}">MTD</a></li>
-            <li class="nav-item"><a class="nav-link {{ $topPeriod === 'ytd' ? 'active' : '' }}" href="{{ route('admin.dashboard', ['top_period' => 'ytd']) }}">YTD</a></li>
+            <li class="nav-item"><a class="nav-link {{ $topPeriod === 'wtd' ? 'active' : '' }}" href="{{ route('admin.dashboard', array_filter(['top_period' => 'wtd', 'rev_from' => $revFrom, 'rev_to' => $revTo])) }}">WTD</a></li>
+            <li class="nav-item"><a class="nav-link {{ $topPeriod === 'mtd' ? 'active' : '' }}" href="{{ route('admin.dashboard', array_filter(['top_period' => 'mtd', 'rev_from' => $revFrom, 'rev_to' => $revTo])) }}">MTD</a></li>
+            <li class="nav-item"><a class="nav-link {{ $topPeriod === 'ytd' ? 'active' : '' }}" href="{{ route('admin.dashboard', array_filter(['top_period' => 'ytd', 'rev_from' => $revFrom, 'rev_to' => $revTo])) }}">YTD</a></li>
         </ul>
     </div>
     @if($topServices->isNotEmpty())
@@ -137,8 +137,37 @@
 
 <div class="row g-3">
     <div class="col-lg-7">
-        <div class="card p-3 h-100">
-            <h2 class="h6 text-muted">Weekly Revenue (verified payments)</h2>
+        <div class="card p-3 h-100" id="revenue-overview-card">
+            <h2 class="h6 text-muted">@if($revFilterLabel) Revenue · {{ $revFilterLabel }} (verified payments) @else Weekly Revenue (verified payments) @endif</h2>
+            {{-- Revenue overview custom date filter (Lyka, 2026-10-30):
+                 a specific From–To window for peak-season tracking.
+                 Revenue-only: WTD/MTD/YTD cards and Top Services are
+                 not changed by this filter. Full-page GET, so the
+                 Chart.js chart below reloads with the same window. --}}
+            <form method="GET" action="{{ route('admin.dashboard') }}" id="revenue-filter-form" class="d-flex flex-wrap align-items-end gap-2 mb-2">
+                <input type="hidden" name="top_period" value="{{ $topPeriod }}">
+                <div>
+                    <label for="rev_from" class="form-label small text-muted mb-0">From</label>
+                    <input type="date" id="rev_from" name="rev_from" value="{{ $revFromInput }}" class="form-control form-control-sm">
+                </div>
+                <div>
+                    <label for="rev_to" class="form-label small text-muted mb-0">To</label>
+                    <input type="date" id="rev_to" name="rev_to" value="{{ $revToInput }}" class="form-control form-control-sm">
+                </div>
+                <button type="submit" class="btn btn-warning btn-sm">Apply filter</button>
+                @if($revFilterLabel)
+                    <a href="{{ route('admin.dashboard', ['top_period' => $topPeriod]) }}" data-dashboard-clear class="btn btn-outline-secondary btn-sm">Clear</a>
+                @endif
+            </form>
+            @if($revFilterError)
+                <div class="alert alert-warning py-2 small mb-2">{{ $revFilterError }}</div>
+            @endif
+            @if($revFilterLabel)
+                <div class="d-flex flex-wrap gap-3 mb-2">
+                    <div><span class="text-muted small">Revenue in selected range</span><div class="fw-bold text-gold">₱{{ number_format($revFilterTotal, 2) }}</div></div>
+                    <div><span class="text-muted small">Peak day</span><div class="fw-bold">@if($revPeak) {{ $revPeak['label'] }} — ₱{{ number_format($revPeak['total'], 2) }} @else No verified revenue in this range. @endif</div></div>
+                </div>
+            @endif
             <canvas id="revenueChart" height="130"></canvas>
         </div>
     </div>
@@ -172,24 +201,129 @@
     const spaEspresso = '#3D2817';
     const spaTan = '#E8D5C4';
 
-    fetch("{{ route('admin.dashboard.data') }}", { headers: { 'Accept': 'application/json' } })
+    // Pass the revenue custom date filter to the chart endpoint so
+    // the chart shows the same window as the page (daily totals);
+    // with no valid filter the endpoint returns the weekly view.
+    function revenueChartQuery() {
+        const chartParams = new URLSearchParams(window.location.search);
+        return (chartParams.get('rev_from') && chartParams.get('rev_to'))
+            ? '?rev_from=' + encodeURIComponent(chartParams.get('rev_from')) + '&rev_to=' + encodeURIComponent(chartParams.get('rev_to'))
+            : '';
+    }
+
+    let revenueChart = null;
+
+    function renderRevenueChart(labels, totals) {
+        if (revenueChart) { revenueChart.destroy(); revenueChart = null; }
+        const canvas = document.getElementById('revenueChart');
+        if (!canvas) return;
+        revenueChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Revenue (₱)',
+                    data: totals,
+                    borderColor: spaGold,
+                    backgroundColor: 'rgba(156,122,84,0.15)',
+                    fill: true,
+                    tension: 0.35,
+                }],
+            },
+            options: { plugins: { legend: { display: false } } },
+        });
+    }
+
+    function loadRevenueChart() {
+        return fetch("{{ route('admin.dashboard.data') }}" + revenueChartQuery(), { headers: { 'Accept': 'application/json' } })
+            .then(response => response.json())
+            .then(data => { renderRevenueChart(data.revenue_weeks, data.revenue_totals); });
+    }
+
+    // Dashboard AJAX (sha, 2026-10-30): period pills, revenue
+    // filter Apply, and Clear update in place — no full browser
+    // reload. Same pattern as nx-refresh.js: fetch this page's HTML,
+    // swap only the period and revenue cards, then re-render
+    // the revenue chart. Delegated listeners survive the swaps, so
+    // the new pills/form keep working without rebinding. Any failure
+    // falls back to a real navigation, so the user is never stuck
+    // on a half-updated page.
+    let dashboardAjaxLoading = false;
+
+    function dashboardAjaxLoad(url, push) {
+        if (dashboardAjaxLoading) return;
+        dashboardAjaxLoading = true;
+        const target = new URL(url, window.location.origin);
+        const pathQuery = target.pathname + target.search;
+        fetch(pathQuery, { credentials: 'same-origin', headers: { 'Accept': 'text/html' } })
+            .then(function (response) {
+                if (!response.ok) throw new Error('Dashboard fetch failed');
+                return response.text();
+            })
+            .then(function (html) {
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const freshTop = doc.getElementById('top-services-card');
+                const freshRevenue = doc.getElementById('revenue-overview-card');
+                const currentTop = document.getElementById('top-services-card');
+                const currentRevenue = document.getElementById('revenue-overview-card');
+                // Managers have no period card; only the revenue
+                // card is required. Anything else means the server did
+                // not return the dashboard (e.g. login page).
+                if (!freshRevenue || !currentRevenue) {
+                    window.location.href = pathQuery;
+                    return;
+                }
+                if (revenueChart) { revenueChart.destroy(); revenueChart = null; }
+                if (freshTop && currentTop) { currentTop.innerHTML = freshTop.innerHTML; }
+                currentRevenue.innerHTML = freshRevenue.innerHTML;
+                if (push) { window.history.pushState(null, '', pathQuery); }
+                return loadRevenueChart();
+            })
+            .catch(function () {
+                window.location.href = pathQuery;
+            })
+            .finally(function () {
+                dashboardAjaxLoading = false;
+            });
+    }
+
+    document.addEventListener('click', function (event) {
+        const pill = event.target.closest('#top-services-card .nav-link');
+        if (pill) {
+            event.preventDefault();
+            dashboardAjaxLoad(pill.href, true);
+            return;
+        }
+        const clear = event.target.closest('#revenue-overview-card a[data-dashboard-clear]');
+        if (clear) {
+            event.preventDefault();
+            dashboardAjaxLoad(clear.href, true);
+        }
+    });
+
+    document.addEventListener('submit', function (event) {
+        if (event.target.id !== 'revenue-filter-form') return;
+        event.preventDefault();
+        const params = new URLSearchParams(new FormData(event.target));
+        // Both dates empty = Clear, not an error: drop the params so
+        // the server shows the default weekly view.
+        if (!params.get('rev_from') && !params.get('rev_to')) {
+            params.delete('rev_from');
+            params.delete('rev_to');
+        }
+        const actionUrl = new URL(event.target.action, window.location.origin);
+        actionUrl.search = params.toString();
+        dashboardAjaxLoad(actionUrl.toString(), true);
+    });
+
+    window.addEventListener('popstate', function () {
+        dashboardAjaxLoad(window.location.pathname + window.location.search, false);
+    });
+
+    fetch("{{ route('admin.dashboard.data') }}" + revenueChartQuery(), { headers: { 'Accept': 'application/json' } })
         .then(response => response.json())
         .then(data => {
-            new Chart(document.getElementById('revenueChart'), {
-                type: 'line',
-                data: {
-                    labels: data.revenue_weeks,
-                    datasets: [{
-                        label: 'Revenue (₱)',
-                        data: data.revenue_totals,
-                        borderColor: spaGold,
-                        backgroundColor: 'rgba(156,122,84,0.15)',
-                        fill: true,
-                        tension: 0.35,
-                    }],
-                },
-                options: { plugins: { legend: { display: false } } },
-            });
+            renderRevenueChart(data.revenue_weeks, data.revenue_totals);
 
             new Chart(document.getElementById('serviceChart'), {
                 type: 'doughnut',

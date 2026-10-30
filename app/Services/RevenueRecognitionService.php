@@ -88,6 +88,40 @@ class RevenueRecognitionService
     }
 
     /**
+     * Daily totals for an inclusive date window, one bucket per day
+     * (days with no verified payments get 0, so a range chart never
+     * skips a day). Used by the dashboard revenue overview custom
+     * date filter (Lyka, 2026-10-30) for its peak-day and chart data.
+     *
+     * @return list<array{date: string, label: string, total: float}>
+     */
+    public function dailyTotals(Carbon $from, Carbon $to): array
+    {
+        $start = $from->copy()->startOfDay();
+        $end = $to->copy()->endOfDay();
+        $payments = $this->verifiedQuery($start, $end)->get(['amount', 'verified_at']);
+
+        $byDate = $payments
+            ->filter(fn (Payment $payment) => $payment->verified_at !== null)
+            ->groupBy(fn (Payment $payment) => $payment->verified_at->toDateString())
+            ->map(fn (Collection $group) => round((float) $group->sum('amount'), 2));
+
+        $buckets = [];
+        $day = $start->copy();
+        while ($day->lessThanOrEqualTo($end)) {
+            $date = $day->toDateString();
+            $buckets[] = [
+                'date' => $date,
+                'label' => $day->format('M j'),
+                'total' => $byDate->get($date, 0.0),
+            ];
+            $day->addDay();
+        }
+
+        return $buckets;
+    }
+
+    /**
      * Last N calendar weeks ending with the current week. Each bucket is
      * [label, total] keyed for chart consumers.
      *
